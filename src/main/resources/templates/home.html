@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <title>首页</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif; margin: 40px; }
+    .box { max-width: 680px; margin: 0 auto; }
+    a.btn { display:inline-block; padding:8px 12px; background:#1677ff; color:#fff; border-radius:6px; text-decoration:none; }
+    .muted { color:#666; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>欢迎登录</h2>
+    <p class="muted">这是受保护页面（需要登录）。</p>
+
+    <p>
+      <a class="btn" th:href="@{/logout}">退出登录</a>
+      <a class="btn" style="background:#52c41a" th:href="@{/hello}">去 Hello 页面</a>
+    </p>
+  </div>
+</body>
+</html>
+

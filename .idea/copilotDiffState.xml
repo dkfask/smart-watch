@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/src/main/java/com/example/demo/Controller/AuthController.java">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/src/main/java/com/example/demo/Controller/AuthController.java" />
+              <option name="updatedContent" value="package com.example.demo.controller;&#10;&#10;import org.springframework.stereotype.Controller;&#10;import org.springframework.web.bind.annotation.GetMapping;&#10;&#10;@Controller&#10;public class AuthController {&#10;&#10;    @GetMapping(&quot;/login&quot;)&#10;    public String login() {&#10;        return &quot;login&quot;; // 返回登录页面模板&#10;    }&#10;&#10;    @GetMapping(&quot;/home&quot;)&#10;    public String home() {&#10;        return &quot;home&quot;; // 返回登录后主页模板&#10;    }&#10;}&#10;" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+        <entry key="$PROJECT_DIR$/src/main/java/com/example/demo/Controller/HelloController.java">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/src/main/java/com/example/demo/Controller/HelloController.java" />
+              <option name="originalContent" value="package com.example.demo.Controller;&#10;&#10;import org.springframework.stereotype.Controller;&#10;import org.springframework.web.bind.annotation.GetMapping;&#10;import org.springframework.web.bind.annotation.RestController;&#10;&#10;@Controller&#10;public class HelloController {&#10;&#10;        @GetMapping(&quot;/hello&quot;)&#10;        public String hello() {&#10;            return &quot;hello&quot;; // 返回视图的名称&#10;    }&#10;}&#10;" />
+              <option name="updatedContent" value="package com.example.demo.controller;&#10;&#10;import org.springframework.stereotype.Controller;&#10;import org.springframework.web.bind.annotation.GetMapping;&#10;&#10;@Controller&#10;public class HelloController {&#10;&#10;    @GetMapping(&quot;/hello&quot;)&#10;    public String hello() {&#10;        return &quot;hello&quot;; // 返回视图的名称&#10;    }&#10;}" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>
