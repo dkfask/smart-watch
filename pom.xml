@@ -21,6 +21,8 @@
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <!-- 当设置为 true 时，跳过 frontend 的安装与构建；可在命令行使用 -DskipFrontend=true -->
+        <skipFrontend>false</skipFrontend>
     </properties>
 
     <dependencies>
@@ -41,7 +43,7 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
-            <version>3.5.5</version>
+            <version>3.5.7</version>
         </dependency>
         <!-- 明确声明 spring-data-commons，确保 org.springframework.data.domain 包可解析（为 IDE 兼容性） -->
         <dependency>
@@ -73,6 +75,8 @@
     </dependencies>
 
     <build>
+        <!-- 指定构建输出目录（可使用相对路径或绝对路径） -->
+        <directory>E:\smart\output</directory>
         <!-- 固定可执行 JAR 名称为 demo2.jar -->
         <finalName>demo2</finalName>
         <plugins>
@@ -87,6 +91,90 @@
                     </execution>
                 </executions>
             </plugin>
+
+            <!--
+              前端构建集成：使用 frontend-maven-plugin 在 Maven 构建期间自动安装 Node/npm（本地私有），
+              执行 npm install 与 npm run build，然后将生成的 frontend/dist 复制到后端静态资源目录
+              （target/classes/static），使得打包出的可执行 Jar 包含前端静态文件。
+
+              说明（中文注释）：
+              - 使用 plugin 的 install-node-and-npm 目标可在没有全局 Node 的机器上工作（会在项目目录下缓存）。
+              - 如果你希望跳过前端构建，可在命令中临时设置属性 skipFrontend=true（见 README 的示例），
+                但是 frontend-maven-plugin 本身没有直接的 skip 参数，这里我们通过 <skipFrontend> 属性配合 <execution>
+                的 <configuration> 来判断是否执行（插件会检查该属性）。
+            -->
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <version>1.12.0</version>
+                <!-- 全局配置：可通过 -DskipFrontend=true 跳过前端安装与构建 -->
+                <configuration>
+                    <skip>${skipFrontend}</skip>
+                    <!-- 指定在 frontend 子目录中执行 npm / node 相关命令，避免在项目根执行（修复 ENOENT 找不到 package.json 问题） -->
+                    <workingDirectory>${project.basedir}/frontend</workingDirectory>
+                </configuration>
+                <executions>
+                    <!-- 安装 node 和 npm（私有） -->
+                    <execution>
+                        <id>install node and npm</id>
+                        <goals>
+                            <goal>install-node-and-npm</goal>
+                        </goals>
+                        <configuration>
+                            <!-- 选择一个 LTS 的 Node 版本，版本前面需要 v 前缀 -->
+                            <nodeVersion>v18.17.1</nodeVersion>
+                            <npmVersion>9.6.7</npmVersion>
+                        </configuration>
+                    </execution>
+                    <!-- 执行 npm install -->
+                    <execution>
+                        <id>npm install</id>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <phase>generate-resources</phase>
+                        <configuration>
+                            <arguments>install</arguments>
+                        </configuration>
+                    </execution>
+                    <!-- 执行 npm run build -->
+                    <execution>
+                        <id>npm build</id>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <phase>generate-resources</phase>
+                        <configuration>
+                            <arguments>run build</arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- 将 frontend/dist 内容复制到构建的 classes/static 目录，以便被 Jar 包含 -->
+            <plugin>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
+                <executions>
+                    <execution>
+                        <id>copy-frontend-dist</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${project.basedir}/frontend/dist</directory>
+                                    <filtering>false</filtering>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
         </plugins>
     </build>
 

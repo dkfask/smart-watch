@@ -1,0 +1,43 @@
+<!--
+  文件: menu.html
+  说明:
+  - 主菜单页面，用于在用户登录成功后展示。
+  - 该页面演示了如何从控制器中读取用户名并显示简单菜单项。
+  - 使用 Thymeleaf 模板语法渲染（项目默认使用 Spring Boot 的视图解析器）。
+-->
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>主菜单</title>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; padding: 2rem; }
+        header { margin-bottom: 1rem; }
+        nav ul { list-style: none; padding: 0; }
+        nav li { margin: 0.5rem 0; }
+        .username { color: #2b6cb0; font-weight: bold; }
+        .logout { margin-top: 1rem; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>欢迎, <span class="username" th:text="${username}">用户</span></h1>
+    <p>这是主菜单页面，登录成功后会重定向到这里。</p>
+</header>
+<nav>
+    <ul>
+        <li><a th:href="@{/dashboard}">仪表盘</a></li>
+        <li><a th:href="@{/profile}">个人资料</a></li>
+        <li><a th:href="@{/settings}">设置</a></li>
+    </ul>
+</nav>
+<div class="logout">
+    <!-- 提供一个退出登录链接，SecurityConfig 中配置了 /logout -->
+    <form th:action="@{/logout}" method="post">
+        <button type="submit">退出登录</button>
+    </form>
+</div>
+</body>
+</html>
+

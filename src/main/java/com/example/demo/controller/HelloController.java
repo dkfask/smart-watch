@@ -6,8 +6,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 @Controller
 public class HelloController {
 
-    @GetMapping("/hello")
-    public String hello() {
-        return "hello"; // 返回视图的名称
-    }
+//    @GetMapping("/hello")
+//    public String hello() {
+//        return "hello"; // 返回视图的名称
+//    }
 }

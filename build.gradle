@@ -38,3 +38,65 @@ tasks.named('test') {
 bootJar {
 	archiveFileName = 'demo2.jar'
 }
+
+tasks.register('npmBuild') {
+    group = 'build'
+    description = 'Build frontend using npm (Vite)'
+    doLast {
+        // 支持通过 Gradle 属性 skipFrontend=true 跳过前端构建（CI 或无 Node 环境时非常有用）
+        if (project.hasProperty('skipFrontend') && project.property('skipFrontend') == 'true') {
+            println 'skipFrontend=true，跳过前端构建'
+            return
+        }
+        def frontendDir = file("${projectDir}/frontend")
+        if (!frontendDir.exists()) {
+            println "frontend 目录不存在，跳过前端构建"
+            return
+        }
+        println 'Running npm install and npm run build in frontend...'
+        if (org.apache.tools.ant.taskdefs.condition.Os.isFamily(org.apache.tools.ant.taskdefs.condition.Os.FAMILY_WINDOWS)) {
+            exec {
+                workingDir frontendDir
+                // 在 Windows 上分别执行两次 exec，避免 shell 链接导致 Gradle 在 settings 阶段误判子目录为另一个构建
+                commandLine 'cmd', '/c', 'npm', 'install'
+            }
+            exec {
+                workingDir frontendDir
+                commandLine 'cmd', '/c', 'npm', 'run', 'build'
+            }
+        } else {
+            exec {
+                workingDir frontendDir
+                // Unix-like 系统上也分别执行两次命令以更稳健
+                commandLine 'sh', '-c', 'npm install'
+             }
+            exec {
+                workingDir frontendDir
+                commandLine 'sh', '-c', 'npm run build'
+            }
+        }
+    }
+}
+
+tasks.register('copyFrontendDist') {
+    group = 'build'
+    description = 'Copy frontend/dist to src/main/resources/static'
+    dependsOn tasks.named('npmBuild')
+    doLast {
+        def distDir = file("${projectDir}/frontend/dist")
+        def targetDir = file("${projectDir}/src/main/resources/static")
+        if (!distDir.exists()) {
+            println "frontend/dist 不存在，跳过复制"
+            return
+        }
+        println "Copying frontend/dist to ${targetDir} ..."
+        copy {
+            from distDir
+            into targetDir
+        }
+    }
+}
+
+tasks.named('bootJar') {
+    dependsOn tasks.named('copyFrontendDist')
+}

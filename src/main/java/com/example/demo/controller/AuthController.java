@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.service.AuthService;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.util.StringUtils;
@@ -9,6 +10,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+// 当启用 SPA 回退（app.spa.enabled=true）时，我们希望让 SPA 接管页面渲染，
+// 因此把传统的 Thymeleaf 页面控制器在 app.spa.enabled=false 时才注册。
+@ConditionalOnProperty(prefix = "app.spa", name = "enabled", havingValue = "false", matchIfMissing = true)
 @Controller
 public class AuthController {
 
