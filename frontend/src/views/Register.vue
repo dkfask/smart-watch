@@ -1,38 +1,42 @@
 <template>
-  <div style="max-width:560px;margin:0 auto;">
-    <h2>注册</h2>
-    <form @submit.prevent="onSubmit">
-      <div style="margin-bottom:12px;">
-        <label class="label">用户名</label>
-        <input v-model="username" required placeholder="3-20 位字母/数字/下划线" />
+  <div class="container page-center card card-narrow">
+    <h1 class="card-title">注册</h1>
+
+    <form class="form" @submit.prevent="onSubmit">
+      <div class="form-group">
+        <label class="label" for="username">用户名</label>
+        <input id="username" v-model="username" required placeholder="3-20 位字母/数字/下划线" autocomplete="username" />
       </div>
 
-      <div style="margin-bottom:12px;">
-        <label class="label">邮箱（可选）</label>
-        <input v-model="email" placeholder="example@domain.com" />
+      <div class="form-group">
+        <label class="label" for="email">邮箱（可选）</label>
+        <input id="email" v-model="email" placeholder="example@domain.com" autocomplete="email" />
       </div>
 
-      <div style="margin-bottom:12px;">
-        <label class="label">密码</label>
-        <input type="password" v-model="password" required placeholder="至少 6 位" />
-        <div style="margin-top:6px;" v-if="password">
-          <small>强度： <span :class="passwordStrengthClass">{{ passwordStrengthText }}</span></small>
+      <div class="form-group">
+        <label class="label" for="password">密码</label>
+        <input id="password" type="password" v-model="password" required placeholder="至少 6 位" autocomplete="new-password" />
+        <div class="small text-muted mt-12" v-if="password">
+          强度： <span :class="passwordStrengthClass">{{ passwordStrengthText }}</span>
         </div>
       </div>
 
-      <div style="margin-bottom:12px;">
-        <label class="label">确认密码</label>
-        <input type="password" v-model="confirmPassword" required placeholder="再次输入密码" />
+      <div class="form-group">
+        <label class="label" for="confirm">确认密码</label>
+        <input id="confirm" type="password" v-model="confirmPassword" required placeholder="再次输入密码" autocomplete="new-password" />
       </div>
 
-      <div style="margin-top:12px;display:flex;gap:8px;">
-        <button type="submit" :disabled="loading">{{ loading ? '注册中...' : '注册' }}</button>
-        <button type="button" @click="$router.push('/login')">返回登录</button>
+      <div class="actions">
+        <button type="submit" class="btn btn-primary w-100" :disabled="loading">
+          <span v-if="loading" class="spinner-border spinner-sm" aria-hidden="true"></span>
+          <span>{{ loading ? '注册中...' : '注册' }}</span>
+        </button>
+        <button type="button" class="btn btn-ghost w-100" @click="$router.push('/login')">返回登录</button>
       </div>
     </form>
 
-    <div v-if="msg" class="success" style="margin-top:12px">{{ msg }}</div>
-    <div v-if="err" class="error" style="margin-top:12px">{{ err }}</div>
+    <div v-if="msg" class="alert alert-success mt-12">{{ msg }}</div>
+    <div v-if="err" class="alert alert-error mt-12">{{ err }}</div>
   </div>
 </template>
 

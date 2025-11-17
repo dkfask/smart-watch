@@ -1,53 +1,13 @@
 <!doctype html>
-<html>
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>demo2 - 前端 (Vue)</title>
-    <!--
-      说明（中文）：
-      该 index.html 是前端开发入口（Vite 开发时引用 /src/main.js）。
-      为了在后端静态托管尚未部署构建产物时，仍能快速判断后端是否返回了静态页面，
-      我在 body 中加入了一个显眼的静态提示（#static-debug）。
-      - 如果你在浏览器能看到该提示，说明后端已正确返回该 index.html（static 映射工作正常），
-        接下来应检查 JS/CSS 是否加载（Network/Console），通常是 assets 404 或路径问题导致页面空白。
-      - 如果看不到该提示，则说明后端没有提供该静态文件，需把 `frontend/dist` 的构建产物复制到
-        `src/main/resources/static/` 或在开发时使用 Vite dev-server（npm run dev）。
-    -->
-    <style>
-      /* 仅用于调试提示的最小样式，部署时可移除 */
-      #static-debug {
-        box-sizing: border-box;
-        border: 2px dashed #f39c12;
-        padding: 12px;
-        margin: 12px;
-        background: #fff8e6;
-        color: #333;
-        font-family: Arial, Helvetica, sans-serif;
-      }
-      #static-debug small { color: #666; }
-    </style>
     <script type="module" crossorigin src="/assets/index-CCCsE7ZM.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-CArzOMZH.css">
   </head>
   <body>
-    <!-- 静态调试提示：在 JS 未加载时也可见 -->
-    <div id="static-debug">
-      <h2>静态页面已返回（调试提示）</h2>
-      <p>说明：这是一个静态提示，仅用于本地调试和排查页面空白问题。</p>
-      <ul>
-        <li>若你能看到此提示，说明后端已返回该 HTML 文件（static 映射正常）。</li>
-        <li>若页面仍空白，请打开浏览器开发者工具 (F12) → Network / Console，检查是否有 <code>assets/*.js</code> 或 <code>/src/main.js</code> 的 404 或 JS 错误。</li>
-        <li>若你看不到此提示，请确认是否把构建产物复制到了后端静态目录，或使用 Vite dev-server（开发模式）。</li>
-      </ul>
-      <small>调试页面：static-test.html（如已部署也可直接访问 /static-test.html 验证）</small>
-    </div>
-
     <div id="app"></div>
-
-    <!--
-      注意：开发版 index.html 会引用 /src/main.js（Vite dev-server 提供）。
-      在生产/部署时，应使用构建产物（frontend/dist/index.html），此文件会引用 /assets/*.js。
-    -->
   </body>
 </html>

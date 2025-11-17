@@ -1,34 +1,33 @@
 <template>
-  <div style="max-width:800px;margin:0 auto;padding:1rem;">
+  <div class="card">
     <!--
       Menu.vue
       说明：
-      - 该组件为 SPA 层面的主菜单页面，与后端的 `/api/me` 接口配合展示当前用户名。
+      - 该组件为 SPA 层面的主菜单页面，配合后端的 `/api/me` 接口展示当前用户名。
       - 提供退出登录操作：调用 POST /api/logout（credentials: 'include'），成功后清理本地缓存并跳转到 /login。
-      - 该页面采用简单样式，仅作示例；可根据前端路由与业务扩展菜单项。
+      - 页面采用统一的全局样式（卡片/按钮等），可按前端路由与业务扩展菜单项。
     -->
-    <header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+    <header class="input-row" style="justify-content:space-between; align-items:center;">
       <div>
-        <h2>主菜单</h2>
-        <div style="color:#666;">欢迎, <strong>{{ username || '用户' }}</strong></div>
+        <h2 class="card-title">主菜单</h2>
+        <div class="text-muted">欢迎, <strong>{{ username || '用户' }}</strong></div>
       </div>
       <div>
-        <button @click="doLogout" :disabled="loggingOut">退出登录</button>
+        <button class="btn btn-ghost" @click="doLogout" :disabled="loggingOut">退出登录</button>
       </div>
     </header>
 
-    <nav>
-      <ul style="list-style:none;padding:0;display:flex;gap:1rem;">
-        <li><router-link to="/dashboard">仪表盘</router-link></li>
-        <li><router-link to="/profile">个人资料</router-link></li>
-        <li><router-link to="/settings">设置</router-link></li>
+    <nav class="mt-12">
+      <ul style="list-style:none; padding:0; display:flex; gap:12px; flex-wrap:wrap;">
+        <li><router-link class="btn btn-secondary" to="/dashboard">仪表盘</router-link></li>
+        <li><router-link class="btn btn-secondary" to="/devices">设备管理</router-link></li>
+        <li><router-link class="btn btn-secondary" to="/settings">设置</router-link></li>
       </ul>
     </nav>
 
-    <section style="margin-top:1.5rem;">
-      <p>这是 SPA 的主菜单页面示例。若需要服务端渲染的 `/menu` 页面，后端已同时提供 Thymeleaf 版（`/menu` 模板）。</p>
-      <div style="margin-top:0.8rem;color:#333;">
-        <strong>提示：</strong> 页面通过 `GET /api/me` 获取当前用户名，若未认证将重定向回登录页。
+    <section class="mt-12">
+      <div class="text-muted">
+        提示：页面通过 GET /api/me 获取当前用户名；若未认证将重定向回登录页。
       </div>
     </section>
   </div>
@@ -67,17 +66,10 @@ export default {
       this.loggingOut = true
       try {
         const res = await fetch('/api/logout', { method: 'POST', credentials: 'include' })
-        if (res.ok) {
-          // 清理客户端缓存并跳回登录页
-          try { localStorage.removeItem('username') } catch (e) { /* ignore */ }
-          this.$router.push('/login')
-        } else {
-          // 若退出失败，仍尽量清理并跳回登录页
-          try { localStorage.removeItem('username') } catch (e) { /* ignore */ }
-          this.$router.push('/login')
-        }
+        // 无论结果怎样，尽量清理并回到登录页
+        try { localStorage.removeItem('username') } catch (e) { /* ignore */ }
+        this.$router.push('/login')
       } catch (e) {
-        console.error('退出登录异常：', e.message)
         try { localStorage.removeItem('username') } catch (er) { /* ignore */ }
         this.$router.push('/login')
       } finally {
@@ -87,4 +79,3 @@ export default {
   }
 }
 </script>
-

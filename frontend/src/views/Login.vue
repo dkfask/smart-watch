@@ -1,28 +1,33 @@
 <template>
-  <div style="max-width:420px;margin:0 auto;">
-    <h2>登录</h2>
+  <div class="container page-center card card-narrow">
+    <h1 class="card-title">登录</h1>
+    <p class="text-muted small mb-12">使用账户登录以访问平台功能</p>
+
     <!-- 改为使用 REST 登录：前端通过 fetch 调用 /api/login（JSON），并使用 credentials: 'include' 以携带 session cookie -->
-    <form @submit.prevent="onSubmit">
-      <div style="margin-bottom:8px;">
-        <label>用户名</label><br />
-        <input v-model="username" required placeholder="请输入用户名" />
+    <form class="form" @submit.prevent="onSubmit">
+      <div class="form-group">
+        <label class="label" for="username">用户名</label>
+        <input id="username" v-model="username" required placeholder="请输入用户名" autocomplete="username" />
       </div>
-      <div style="margin-bottom:8px;">
-        <label>密码</label><br />
-        <input type="password" v-model="password" required placeholder="请输入密码" />
+      <div class="form-group">
+        <label class="label" for="password">密码</label>
+        <input id="password" type="password" v-model="password" required placeholder="请输入密码" autocomplete="current-password" />
       </div>
 
-      <div v-if="err" style="color:red;margin-bottom:8px">{{ err }}</div>
+      <div v-if="err" class="alert alert-error mb-12" role="alert">{{ err }}</div>
 
-      <div style="margin-top:12px;">
-        <button type="submit" :disabled="loading">{{ loading ? '登录中...' : '登录' }}</button>
-        <button type="button" @click="goRegister">去注册</button>
+      <div class="actions mt-12">
+        <button type="submit" class="btn btn-primary w-100" :disabled="loading">
+          <span v-if="loading" class="spinner-border spinner-sm" aria-hidden="true"></span>
+          <span>{{ loading ? '登录中...' : '登录' }}</span>
+        </button>
+        <button type="button" class="btn btn-ghost w-100" @click="goRegister">去注册</button>
       </div>
     </form>
 
-    <div style="margin-top:16px;color:#666;">
+    <p class="text-muted small mt-12">
       注：前端使用 REST 登录（/api/login）。请确保后端服务可用且浏览器允许 Cookie（前端使用 session cookie）。
-    </div>
+    </p>
   </div>
 </template>
 
@@ -65,11 +70,7 @@ export default {
           body: JSON.stringify({ username: this.username.trim(), password: this.password })
         })
         if (res.ok) {
-          // 登录成功：后端返回 { username }
-          // 使用 SPA 路由导航到 /menu，避免触发整页刷新；
-          // Menu 页面会通过 /api/me 再次确认并显示用户名。
           const data = await res.json().catch(() => ({}))
-          // 可选：把 username 暂存到 localStorage 以便在切换页面前显示（不是必须）
           if (data && data.username) {
             try { localStorage.setItem('username', data.username) } catch(e) { /* ignore */ }
           }

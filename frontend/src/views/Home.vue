@@ -1,9 +1,9 @@
 <template>
-  <div>
-    <h2>首页</h2>
-    <p>欢迎来到 demo2 的 Vue 前端示例页面。</p>
-    <div style="margin-top:12px;">
-      <button @click="goLogin">登出（跳回登录）</button>
+  <div class="card">
+    <h2 class="card-title">首页</h2>
+    <p class="text-muted">欢迎来到 demo2 的 Vue 前端示例页面。</p>
+    <div class="mt-12">
+      <button class="btn btn-secondary" @click="goLogin">退出（跳回登录）</button>
     </div>
   </div>
 </template>
@@ -20,3 +20,4 @@ export default {
 }
 </script>
 
+<!-- 使用全局样式：.card / .btn / .text-muted / .mt-12 -->

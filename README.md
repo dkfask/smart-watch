@@ -262,6 +262,16 @@
     - `frontend/src/router/index.js`：路由配置（/login /register /home）
     - `frontend/src/views/Login.vue`、`Register.vue`、`Home.vue`：页面组件
 
+### 新增前端页面快捷入口
+本次前端迭代新增了以下页面（位于 `frontend/src/views`），已在路由中注册：
+- `/dashboard`：系统仪表盘（设备统计、最近日志）
+- `/devices`：设备列表（支持分页与跳转到详情）
+- `/devices/:id`：设备详情页面（基础信息、最近位置、日志）
+- `/realtime`：实时监控（示例页面，可接入 WebSocket 与地图）
+- `/settings`：系统设置（示例，用于配置保存目录 / 轮询间隔）
+
+在开发模式（Vite dev-server）下访问 `http://localhost:5173`，可以在地址栏直接打开以上路由进行调试；部署到后端静态目录后可通过 `http://localhost:8080` 访问（同域部署）。
+
 ### Gradle 集成前端构建（已实现）
 
 本仓库已把 `frontend` 的构建集成到 Gradle 打包流程中：
