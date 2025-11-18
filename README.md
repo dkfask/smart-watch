@@ -74,7 +74,7 @@
 前提：确保 Spring Boot 应用已启动且 `MpbandServer` 已在配置端口（默认 9000）监听，HTTP 服务（默认 8080）可用。
 
 1) 模拟设备向服务器发送 AP00 登录包（使用 telnet 或 netcat）：
-   - 使用 telnet（Windows）：
+   - 使用 telnet��Windows）：
      - 在 cmd 中：
        telnet localhost 9000
      - 在 telnet 会话中输入并回车（示例）：
@@ -624,3 +624,96 @@ java -cp build\classes\java\main com.example.demo.tools.BraceletClientSimulator 
 
 ---
 
+以上内容已经追加到本仓库的 README，用于说明上行报文保存与设备日志的设计与测试方法。若需要，我可以：
+- 提供示例脚本用于清理旧的日志文件（按日期删除）；
+- 或者实现一个简单的日志查询工具（基于 Spring Boot 的小应用）用于按 IMEI/时间范围查询上行日志。
+
+## 实时定位、围栏与轨迹绘制（前端：Leaflet + 后端 API）
+
+为增强设备定位与围栏管理体验，前端整合了 Leaflet 地图与 Leaflet Draw 插件，提供实时位置展示、历史轨迹绘制与创建/编辑围栏的功能。下面用中文说明该模块的实现位置、运行方式与典型操作流程。
+
+### 功能概览
+- 实时定位（Realtime 页面）：通过轮询或可扩展为 WebSocket/SSE 获取在线设备的最新位置并在地图上显示为标记（Marker）。
+- 轨迹回放（Device Detail 页面）：按设备加载历史位置（支持时间范围）并在地图上绘制轨迹（Polyline）。
+- 围栏绘制与持久化：支持在地图上绘制圆形/多边形围栏，当前实现会把圆形围栏持久化到后端 `geo_fences` 表（center + radius）；也可显示后端返回的 GeoJSON 围栏。
+- 围栏编辑/删除：通过 Leaflet Draw 编辑并触发对应事件；可在前端捕获并同步到后端。
+- 与下发命令结合：在设备详情页同时保留“下发命令”面板，便于在查看轨迹/围栏时直接向设备下发 BPxx 指令。
+
+### 关键前端文件（位置）
+- `frontend/src/components/LeafletMap.vue`：Leaflet 封装组件，支持 markers、tracks（polyline）、fences（GeoJSON）以及 Leaflet Draw 的绘制与编辑事件（emit: `fence-created`, `fence-edited`, `fence-deleted`）。
+- `frontend/src/views/Realtime.vue`：实时监控页面，轮询 `/api/downlink/online` 获取在线设备 IMEI，查询对应设备的最近位置并在地图上显示（每10秒轮询，示例实现）。
+- `frontend/src/views/DeviceDetail.vue`：设备详情页面，加载设备最近位置与最近 24 小时轨迹（通过 `/api/locations/device/{id}` 与 `/api/locations/device/{id}/range`），并允许绘制围栏；绘制圆形时会调用围栏 API 将其保存到服务器。
+- `frontend/src/api/location.js`：前端到后端的定位查询封装（`recentByDevice`、`rangeByDevice`）。
+- `frontend/src/api/fence.js`：前端到后端的围栏创建封装（`createFence`）。
+- `frontend/src/api/downlink.js`：下发命令 API 封装（`getOnline()`、`sendBp00()`、`sendBp12()`、`sendCustom()`），用于 DeviceDetail 的下发按钮。
+
+### 后端相关接口（已存在）
+- `GET /api/downlink/online`：返回当前在线设备 IMEI 列表（用于实时页面与 DeviceDetail 判断在线状态）。
+- `GET /api/locations/device/{deviceId}`：返回设备最近位置（recent）。
+- `GET /api/locations/device/{deviceId}/range?start=...&end=...`：按时间范围获取设备轨迹（用于轨迹回放）。
+- `POST /api/fences`：创建围栏（示例接受 `GeoFence` 实体的 JSON，持久化到数据库）。
+
+### 使用/调试步骤（快速）
+1. 启动后端（Spring Boot）：
+
+```cmd
+cd /d e:\smart\master
+mvn -DskipFrontend=true -DskipTests spring-boot:run
+```
+
+2. 启动前端开发服务器（热重载）：
+
+```cmd
+cd /d e:\smart\master\frontend
+npm install
+npm run dev
+```
+
+3. 访问前端（开发模式）：
+   - 打开浏览器访问 `http://localhost:5173`。
+   - 菜单 -> 实时监控（Realtime）查看在线设备并在地图上显示位置。
+   - 设备管理 -> 点击某设备进入详情页，可查看轨迹并绘制围栏。
+
+4. 绘制围栏并持久化（在 Device Detail 页面）：
+   - 使用 Leaflet Draw 的圆形工具绘制圆形围栏；绘制完成后前端会构建 `GeoFence` 对象并调用 `POST /api/fences` 将其保存。
+   - 成功后围栏会在地图上显示，并可以到后端 `geo_fences` 表中查看记录（包含 center + radius）。
+
+5. 下发命令（在 Device Detail 页面右侧面板）：
+   - 点击“发送 BP00”将调用 `POST /api/downlink/bp00?imei=...`（授时）；
+   - 填入 SOS 号码并点击“发送 BP12”会调用 `POST /api/downlink/bp12`；
+   - 也可以直接输入自定义原始包并发送到 `POST /api/downlink/custom`。
+
+### 示范 curl 调用（README 中已有下行示例，此处补充围栏与轨迹相关）
+- 查询设备最近位置（示例 deviceId=123）：
+
+```cmd
+curl -v "http://localhost:8080/api/locations/device/123?limit=1"
+```
+
+- 查询设备时间段轨迹（ISO8601 时间）：
+
+```cmd
+curl -v "http://localhost:8080/api/locations/device/123/range?start=2025-11-17T00:00:00&end=2025-11-18T00:00:00"
+```
+
+- 创建围栏（示例）
+
+```cmd
+curl -v -X POST "http://localhost:8080/api/fences" -H "Content-Type: application/json" -d "{
+  \"userId\":1,
+  \"name\":\"map-fence-demo\",
+  \"centerLatitude\":22.3830,
+  \"centerLongitude\":114.0823,
+  \"radius\":100.0,
+  \"triggerType\":\"both\",
+  \"isActive\":true
+}"
+```
+
+### 注意事项与扩展建议
+- 围栏数据模型：当前数据库模型以中心点 + 半径表示圆形围栏（适合轻量场景）。若需要保存任意多边形，建议扩展 `geo_fences` 表以存储 GeoJSON 字符串（或另建 geo 表），前端也应支持将画出的多边形 GeoJSON 直接 POST 到后端。
+- 实时数据源：当前实现使用轮询和数据库读取。为降低延迟和提高实时性，建议后端提供 WebSocket 或 SSE 推送实时位置，前端订阅后实时更新地图标注。
+- 性能：轨迹点较多时，前端可做线段简化（Douglas-Peucker）或服务端降采样以减少客户端渲染压力。
+- 鉴权：DeviceDetail 的下发命令与围栏创建属于敏感操作，建议在后端加 RBAC（仅管理员或具备相应权限的用户可执行），并在前端隐藏/禁用非授权用户的操作按钮。
+
+---

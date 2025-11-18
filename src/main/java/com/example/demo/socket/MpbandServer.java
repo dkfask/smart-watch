@@ -666,7 +666,7 @@ public class MpbandServer implements SmartLifecycle {
 
         // 其它包统一返回带状态或空的 BPxx（简单实现）
         switch (packet.getProtocol()) {
-            case "AP01": return HEADER + "BP01" + END_MARKER;
+            case "AP01": return "IWBP01#";
             case "AP03": return HEADER + "BP03" + END_MARKER;
             case "AP04": return HEADER + "BP04" + END_MARKER;
             case "AP10": return HEADER + "BP10" + END_MARKER;

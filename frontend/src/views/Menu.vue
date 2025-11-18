@@ -63,28 +63,31 @@ export default {
     }
   },
   methods: {
+    // 退出登录：向后端发起 POST /api/logout，忽略网络/服务端错误，保证本地状态清理并跳转到登录页
     async doLogout() {
       this.loggingOut = true
       try {
-        // 无论结果怎样，尽量清理并回到登录页
+        // 1) 向后端请求登出（若失败仍继续本地清理）
+        try {
+          await fetch('/api/logout', { method: 'POST', credentials: 'include' })
+        } catch (err) {
+          // 后端登出请求失败（网络或 5xx），记录日志并继续本地清理
+          console.warn('调用 /api/logout 失败：', err && err.message)
+        }
+
+        // 2) 本地清理并跳转到登录页（无论后端是否成功）
         try { localStorage.removeItem('username') } catch (e) { /* ignore */ }
         this.$router.push('/login')
-          try { localStorage.removeItem('username') } catch (e) { /* ignore */ }
-          this.$router.push('/login')
-        } else {
-          // 若退出失败，仍尽量清理并跳回登录页
-          try { localStorage.removeItem('username') } catch (e) { /* ignore */ }
-          this.$router.push('/login')
-        }
       } catch (e) {
-        console.error('退出登录异常：', e.message)
+        // 捕获上面任何意外异常，保证仍然进行本地清理和跳转
+        console.error('退出登录异常：', e && e.message)
         try { localStorage.removeItem('username') } catch (er) { /* ignore */ }
-        this.$router.push('/login')
+        try { this.$router.push('/login') } catch (_) { /* ignore */ }
       } finally {
+        // 确保状态最终被重置
         this.loggingOut = false
       }
     }
   }
 }
 </script>
-

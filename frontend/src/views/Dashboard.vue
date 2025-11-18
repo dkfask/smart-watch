@@ -50,7 +50,8 @@ export default {
       '353456789012345 - 2025-11-17 09:12:03 - AP01',
       '357653050858997 - 2025-11-17 08:50:10 - AP03'
     ]
-<!-- 依赖全局样式（assets/styles.css）：.card/.cards/.metric-value -->
+    // 依赖全局样式 (assets/styles.css)：.card/.cards/.metric-value
+  }
 }
 </script>
 
@@ -59,4 +60,3 @@ export default {
 .card { background:#fff; padding:12px; border-radius:6px; box-shadow:0 1px 3px rgba(0,0,0,0.1); width:160px; }
 .value { font-size:24px; font-weight:700; margin-top:8px }
 </style>
-

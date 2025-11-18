@@ -112,3 +112,113 @@ java -jar build\libs\demo2.jar
 - 鉴权：目前前端未实现完整的令牌或会话保持逻辑（依赖 Spring Security 的表单登录）；建议使用 REST login + JWT 实现单页应用的无缝鉴权与 API 调用控制。
 - 实时数据：`Realtime.vue` 建议使用 WebSocket 或 SSE 来实现设备的实时位置与告警流，并将地图集成（Leaflet/Mapbox/Google Maps）。
 - 日志与审计：设备详情页可提供“下载日志”按钮，调用后端按 IMEI 导出对应设备的日志文件（后端已按设备写日志到磁盘，可扩展导出 API）。
+
+## 地图组件（LeafletMap）
+
+此项目包含一个可复用的地图库组件 `LeafletMap`，文件位置：`frontend/src/components/LeafletMap.vue`。
+该组件基于 Leaflet 与 leaflet-draw，提供：
+- 展示点（markers）、轨迹（tracks）、围栏（fences）
+- 可选的画围栏/编辑/删除（editable 模式）
+- 通过事件把围栏的创建/编辑/删除回传给父组件
+
+下面是快速使用说明（中文）：
+
+1) 安装依赖（在 `frontend` 目录下执行，Windows cmd）：
+
+```cmd
+cd frontend
+npm install leaflet leaflet-draw
+```
+
+> 注意：项目中已在 `LeafletMap.vue` 内部使用了 Leaflet 的图片资源（marker 图标等）。需要确保 Vite 或打包器能够处理图片资源（默认 Vite 可以）。同时在全局样式或入口处引入 Leaflet CSS：
+>
+> 在 `frontend/src/main.js`（或 `main.ts`）中加入：
+>
+> ```js
+> import 'leaflet/dist/leaflet.css'
+> import 'leaflet-draw/dist/leaflet.draw.css'
+> ```
+
+2) 组件 props（输入）说明：
+- center: Array - [lat, lon]，默认 [22.383, 114.0823]
+- zoom: Number - 地图缩放级别，默认 13
+- markers: Array - 标记点数组，元素格式为 { id, lat, lon, label }，label 会显示为弹窗
+- tracks: Array - 轨迹，可为：
+  - [[lat, lon], ...] 的坐标数组，或
+  - [{ latitude, longitude } | { lat, lon }] 的对象数组
+- fences: Array - 围栏数组，支持 GeoJSON Feature、Geometry（Polygon）或包含 geometry 的对象
+- editable: Boolean - 是否启用绘制/编辑工具（leaflet-draw），默认 false
+- height: String - 地图容器高度（例如 '400px'），默认 '400px'
+
+3) 组件事件（输出）说明：
+- `fence-created` — 当用户在可编辑模式下新建围栏时触发，payload 举例：
+  - 圆：{ type: 'circle', center: [lat, lon], radius: r（米）, geojson }
+  - 多边形/矩形：{ type: 'geojson', geojson }
+- `fence-edited` — 编辑后触发，payload 同上（包含 geojson）
+- `fence-deleted` — 删除后触发，payload 同上（包含 geojson）
+- `marker-click` — 点击地图标记时触发，payload 为该标记对象（{id, lat, lon, label}）
+- `map-ready` — 地图初始化完成后触发，payload 为 Leaflet 的 map 实例
+
+4) 父组件可调用的方法：
+- 组件暴露 `centerOn(lat, lon, zoom)` 方法（通过 `ref` 访问），用于让地图移动到某个坐标并可选择设置缩放级别，例如：
+
+示例（Vue 3 `<script setup>` 风格）：
+
+```vue
+<script setup>
+import { ref } from 'vue'
+import LeafletMap from './components/LeafletMap.vue'
+
+const markers = ref([
+  { id: 'dev1', lat: 22.383, lon: 114.0823, label: '设备 1' }
+])
+
+const fences = ref([])
+const mapRef = ref(null)
+
+function onMarkerClick(m) {
+  console.log('marker clicked', m)
+}
+
+function onFenceCreated(payload) {
+  console.log('fence created', payload)
+  // 可以把 payload.geojson 发送到后端保存
+}
+
+function zoomToDevice() {
+  if (mapRef.value && mapRef.value.centerOn) {
+    mapRef.value.centerOn(22.383, 114.0823, 15)
+  }
+}
+</script>
+
+<template>
+  <button @click="zoomToDevice">聚焦设备</button>
+  <LeafletMap
+    ref="mapRef"
+    :markers="markers"
+    :fences="fences"
+    :editable="true"
+    height="500px"
+    @marker-click="onMarkerClick"
+    @fence-created="onFenceCreated"
+  />
+</template>
+```
+
+5) 关于 fences 的格式与保存建议：
+- 组件在绘制/编辑后会回传 GeoJSON（通过 `layer.toGeoJSON()`）。建议后端以 GeoJSON 格式保存围栏，便于后续加载并直接传回组件的 `fences` prop。
+- 对于圆形围栏，组件会额外返回 center 与 radius（米），因为 GeoJSON 标准并未直接表达圆的半径信息。
+
+6) 常见问题与调试：
+- 地图标记图标不见了：通常是因为打包器没有正确处理 leaflet 的图片资源。`LeafletMap.vue` 已包含把图片合并到 Icon 的代码（通过 import），在 Vite 下默认可工作；若出现问题，请检查构建输出和资源路径。
+- 瓦片加载慢或被屏蔽：组件默认使用 OpenStreetMap 公共瓦片服务，生产环境请替换为有 SLA 的瓦片服务或 CDN。
+- 样式冲突：确保全局引入 Leaflet CSS（见上文），否则控件样式和画布可能错位。
+
+7) 扩展建议（可选）：
+- 如果需要更多地图功能（热力图、聚合、地图叠加），可以在 `LeafletMap.vue` 的基础上扩展或把组件拆分成更细粒度的子组件。
+- 若项目对 IE 或较旧浏览器有兼容性要求，请根据 Leaflet 与 leaflet-draw 的兼容性说明处理 polyfill。
+
+---
+
+以上为 `LeafletMap` 组件的快速上手与使用说明，已覆盖安装、props、事件、示例与常见注意事项。如需我将 README 中的示例代码改为 Options API 风格或把 CSS 引入改为按需引入（仅在该组件内），我可以继续修改文档或代码。

@@ -18,6 +18,7 @@
     <description>demo2</description>
 
     <properties>
+        <maven.build.timestamp.format>yyyyMMddHHmmss</maven.build.timestamp.format>
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -78,7 +79,7 @@
         <!-- 指定构建输出目录（可使用相对路径或绝对路径） -->
         <directory>E:\smart\output</directory>
         <!-- 固定可执行 JAR 名称为 demo2.jar -->
-        <finalName>demo2</finalName>
+        <finalName>demo2-${maven.build.timestamp}</finalName>
         <plugins>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
