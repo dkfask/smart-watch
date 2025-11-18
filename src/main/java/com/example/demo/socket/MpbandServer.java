@@ -258,8 +258,9 @@ public class MpbandServer implements SmartLifecycle {
         log.info("📨 收到原始数据: {}", message);
 
         // 保存原始报文到磁盘并追加到设备日志（尽量提取 IMEI）
+        String imei = null;
         try {
-            String imei = getImeiFromRaw(message);
+            imei = getImeiFromRaw(message);
             saveRawAndDeviceLog(message, imei, clientInfo);
         } catch (Exception ex) {
             log.warn("保存上行报文到磁盘失败: {}", ex.getMessage());
@@ -272,8 +273,8 @@ public class MpbandServer implements SmartLifecycle {
             return;
         }
 
-        // 处理（传入原始消息以便自行解析字段）
-        processPacket(packet, message, clientInfo, clientSocket);
+        // 处理（传入原始消息与已提取 imei）
+        processPacket(packet, message, clientInfo, clientSocket, imei);
 
         // 构造并发送回复
         String response = createResponse(packet);
@@ -282,11 +283,9 @@ public class MpbandServer implements SmartLifecycle {
     }
 
     /**
-     * 处理解析后的数据包（重构版）
-     * @param packet 已由 ProtocolParser 粗略解析的包对象（包含 protocol）
-     * @param raw 原始报文字符串（含头尾符号），格式如 IWAP00...#
+     * processPacket: 将 imei 传递给各子处理函数，确保后续保存操作可以基于 imei 查找/创建设备并关联记录。
      */
-    private void processPacket(BraceletPacket packet, String raw, String clientInfo, Socket clientSocket) {
+    private void processPacket(BraceletPacket packet, String raw, String clientInfo, Socket clientSocket, String imei) {
         String proto = packet.getProtocol();
         // 解析统一从 raw 中截取 payload（header+proto 长度为 2 + 4 = 6）
         String payload = "";
@@ -299,58 +298,52 @@ public class MpbandServer implements SmartLifecycle {
         switch (proto) {
             case "AP00":
                 // 登录包：IWAP00+IMEI# 或 IWAP00+IMEI,MCC|MNC|APN# 或 IWAP00+IMEI,ICCID,IMSI#
-                handleAp00(payload, clientSocket, clientInfo);
+                handleAp00(payload, clientSocket, clientInfo, imei);
                 break;
             case "AP01":
                 // 定位包
-                handleAp01(payload, clientInfo);
+                handleAp01(payload, clientInfo, imei);
                 break;
             case "AP02":
                 // 健康包（旧版 AP02 可能另用，此处如无明确需求可当作健康数据）
-                saveHealthData(parseKeyValueParams(payload));
+                saveHealthData(parseKeyValueParams(payload), imei);
                 break;
             case "AP03":
-                handleAp03(payload, clientInfo);
+                handleAp03(payload, clientInfo, imei);
                 break;
             case "AP04":
-                handleAp04(payload, clientInfo);
+                handleAp04(payload, clientInfo, imei);
                 break;
             case "AP10":
-                handleAp10(payload, clientInfo);
+                handleAp10(payload, clientInfo, imei);
                 break;
             case "AP42":
-                handleAp42(payload, clientInfo);
+                handleAp42(payload, clientInfo, imei);
                 break;
             case "APBL":
-                handleApBl(payload, clientInfo);
+                handleApBl(payload, clientInfo, imei);
                 break;
             case "APJK":
-                handleApJk(payload, clientInfo);
+                handleApJk(payload, clientInfo, imei);
                 break;
             case "APTP":
-                handleApTp(payload, clientInfo);
+                handleApTp(payload, clientInfo, imei);
                 break;
             case "APVR":
-                handleApVr(payload, clientInfo);
+                handleApVr(payload, clientInfo, imei);
                 break;
             case "APWR":
-                handleApWr(payload, clientInfo);
+                handleApWr(payload, clientInfo, imei);
                 break;
             default:
                 log.info("❓ 未知协议类型: {} raw={}", proto, payload);
         }
     }
 
-    // --------------------------- 各协议处理函数 ---------------------------
+    // --------------------------- 各协议处理函数（签名加入 imei 参数） ---------------------------
 
-    /**
-     * 处理 AP00 登录包：根据三种格式解析并保存设备信息
-     * payload 示例：
-     *  - 353456789012345
-     *  - 353456789012345,460|00|CMNET
-     *  - 357653050858997,89962030221137165263,416032113716526
-     */
-    private void handleAp00(String payload, Socket clientSocket, String clientInfo) {
+    /** 处理 AP00 登录包：根据三种格式解析并保存设备信息 */
+    private void handleAp00(String payload, Socket clientSocket, String clientInfo, String imeiFromRaw) {
         if (payload == null || payload.isEmpty()) return;
         String[] parts = payload.split(",");
         String imei = parts[0].trim();
@@ -367,27 +360,25 @@ public class MpbandServer implements SmartLifecycle {
         }
 
         // 保存设备信息（若不存在）
-        Optional<Device> opt = deviceRepository.findByImei(imei);
-        if (opt.isPresent()) {
-            log.info("设备已存在 IMEI={}", imei);
-            return;
-        }
-
-        Device device = new Device();
-        device.setImei(imei);
-        device.setCreatedAt(new Date());
-
         try {
+            Optional<Device> opt = deviceRepository.findByImei(imei);
+            if (opt.isPresent()) {
+                log.info("设备已存在 IMEI={}", imei);
+                return;
+            }
+
+            Device device = new Device();
+            device.setImei(imei);
+            device.setCreatedAt(new Date());
+
             if (parts.length >= 2) {
                 String second = parts[1];
                 if (second.contains("|")) {
-                    // MCC|MNC|APN
                     String[] net = second.split("\\|", 3);
                     if (net.length >= 1) device.setMcc(net[0]);
                     if (net.length >= 2) device.setMnc(net[1]);
                     if (net.length >= 3) device.setApn(net[2]);
                 } else if (parts.length >= 3) {
-                    // ICCID, IMSI
                     device.setIccid(parts[1].trim());
                     device.setImsi(parts[2].trim());
                 }
@@ -400,19 +391,16 @@ public class MpbandServer implements SmartLifecycle {
     }
 
     /**
-     * 处理 AP01 定位包的简化解析与存储，尽量按协议文档抽取常用字段：time, valid, lat, lon, speed, gpsTime, direction, paramBlock, LBS(will be array), wifiRaw
+     * 处理 AP01 定位包的简化解析与存储，加入 imei 参数以便把定位记录与设备关联。
      */
-    private void handleAp01(String payload, String clientInfo) {
+    private void handleAp01(String payload, String clientInfo, String imei) {
         if (payload == null || payload.isEmpty()) return;
-        // 记录来源以避免未使用参数的静态分析警告，同时便于调试
         log.debug("AP01 来自 {} 的 payload: {}", clientInfo, payload);
         // 按逗号分段：第一个段包含大块 GPS 信息，其后一般依次为 MCC,MNC,LAC,CID,...,wifi
         String[] segments = payload.split(",", 6);
         String gpsBlock = segments.length > 0 ? segments[0] : "";
 
         Map<String, String> params = new LinkedHashMap<>();
-        // 解析 gpsBlock，采用正则匹配常见格式
-        // 格式示例：080524A2232.9806N11404.9355E000.1061830323.8706000908000102
         try {
             // 时间(6) + valid(1)
             if (gpsBlock.length() >= 7) {
@@ -483,16 +471,12 @@ public class MpbandServer implements SmartLifecycle {
             params.put("wifi_raw", segments[segments.length - 1]);
         }
 
-        // 保存到数据库（复用 saveLocationData 的结构，传入解析后的 params）
-        saveLocationData(params);
+        // 保存到数据库：传入 imei，确保记录关联到设备
+        saveLocationData(params, imei);
         log.info("AP01 处理完成, 保存解析字段: {}", params.keySet());
     }
 
-    /**
-     * 解析 AP03 心跳包
-     * 格式：IWAP03,06000908000102,5555,30# 或 IWAP03,06300706800008,0,00,8,600#
-     */
-    private void handleAp03(String payload, String clientInfo) {
+    private void handleAp03(String payload, String clientInfo, String imei) {
         if (payload == null || payload.isEmpty()) return;
         log.debug("AP03 来自 {} 的 payload: {}", clientInfo, payload);
         String[] parts = payload.split(",");
@@ -503,101 +487,104 @@ public class MpbandServer implements SmartLifecycle {
         if (parts.length > 3) params.put("work_mode", parts[3]);
         if (parts.length > 4) params.put("interval", parts[4]);
 
-        saveHeartbeatData(params);
+        saveHeartbeatData(params, imei);
         log.info("AP03 心跳包已保存: {}", params);
     }
 
-    /** AP04 低电量报警 */
-    private void handleAp04(String payload, String clientInfo) {
+    private void handleAp04(String payload, String clientInfo, String imei) {
         if (payload == null || payload.isEmpty()) return;
         log.debug("AP04 来自 {} 的 payload: {}", clientInfo, payload);
         String[] parts = payload.split(",");
         Map<String, String> params = new LinkedHashMap<>();
         params.put("battery", parts.length > 0 ? parts[0] : "");
-        // 暂时把此信息存为健康数据的一部分或心跳数据的扩展
-        saveHeartbeatData(params);
+        saveHeartbeatData(params, imei);
         log.info("AP04 低电报警已处理: {}", params);
     }
 
-    /** AP10 报警与地址回复，保存原始并在需要时回复地址（此处仅保存与记录） */
-    private void handleAp10(String payload, String clientInfo) {
+    private void handleAp10(String payload, String clientInfo, String imei) {
         log.debug("AP10 来自 {} 的 payload: {}", clientInfo, payload);
         Map<String, String> params = new LinkedHashMap<>();
         params.put("raw", payload);
-        // 若需要可进一步解析与存储报警信息
+        saveLocationData(params, imei);
         log.info("AP10 报警上报，原始内容: {}", payload);
-        // 这里只记录，不做复杂地址回复；保存为位置记录备用
-        saveLocationData(params);
     }
 
-    /** AP42 图片分包，payload 格式: time,totalCount,seq,len,data
-     *  简单实现：记录接收并回复已成功（receiver flag=1）
-     */
-    private void handleAp42(String payload, String clientInfo) {
+    private void handleAp42(String payload, String clientInfo, String imei) {
         log.debug("AP42 来自 {} 的 payload: {}", clientInfo, payload);
         String[] p = payload.split(",", 5);
         String time = p.length > 0 ? p[0] : "";
         String total = p.length > 1 ? p[1] : "";
         String seq = p.length > 2 ? p[2] : "";
-        // 数据内容暂不持久化到数据库（可按需实现），这里只写日志
         log.info("AP42 图片包 time={} total={} seq={}", time, total, seq);
-        // 平台需要回复 IWBP42,time,total,seq,1# 表示接收成功
-        // 我们通过创建一个临时 BraceletPacket（或直接通过下行管理器发送）来返回，
-        // 但当前框架的 createResponse 基于 packet.getProtocol()，因此这里仅记录日志；
-        // 实际运行时设备会等待 BP42 响应，createResponse 会被调用产生 BP42（如果发起相应的 packet）
     }
 
-    /** APBL 蓝牙数据 */
-    private void handleApBl(String payload, String clientInfo) {
+    private void handleApBl(String payload, String clientInfo, String imei) {
         log.debug("APBL 来自 {} 的 payload: {}", clientInfo, payload);
         Map<String, String> params = new LinkedHashMap<>();
         params.put("raw", payload);
         log.info("APBL 蓝牙数据: {}", payload);
-        // 可持久化或保存到专门表
     }
 
-    /** APJK 健康数据 */
-    private void handleApJk(String payload, String clientInfo) {
+    private void handleApJk(String payload, String clientInfo, String imei) {
+        if (payload == null || payload.isEmpty()) return;
         log.debug("APJK 来自 {} 的 payload: {}", clientInfo, payload);
-        Map<String, String> params = parseKeyValueParams(payload);
-        saveHealthData(params);
-        log.info("APJK 健康数据已保存: {}", params);
-    }
 
-    /** APTP 体温 */
-    private void handleApTp(String payload, String clientInfo) {
-        log.debug("APTP 来自 {} 的 payload: {}", clientInfo, payload);
+        // 期望形式为：timestamp,type,value  （value 可能含有 '|' 分隔多个子值）
+        // 例如: 2021-05-29 13:00:00,1,69|120
+        String[] parts = payload.split(",", 3);
         Map<String, String> params = new LinkedHashMap<>();
-        String[] p = payload.split(",");
-        if (p.length >= 1) params.put("temp", p[0]);
-        if (p.length >= 2) params.put("wrist_temp", p[1]);
-        saveHealthData(params);
-        log.info("APTP 体温已保存: {}", params);
-    }
+        if (parts.length >= 3) {
+            String timeStr = parts[0].trim();
+            String typeStr = parts[1].trim();
+            String valStr = parts[2].trim();
+            params.put("timestamp", timeStr);
+            params.put("type", typeStr);
+            params.put("raw_value", valStr);
 
-    /** APVR 版本 */
-    private void handleApVr(String payload, String clientInfo) {
-        log.debug("APVR 来自 {} 的 payload: {}", clientInfo, payload);
-        Map<String, String> params = new LinkedHashMap<>();
-        String[] p = payload.split(",", 2);
-        if (p.length >= 2) {
-            params.put("imei", p[0]);
-            params.put("firmware", p[1]);
-        } else params.put("raw", payload);
-        log.info("APVR 版本信息: {}", params);
-    }
+            // 解析类型并把值拆解为更具体字段
+            switch (typeStr) {
+                case "1": // 血压: diastolic|systolic
+                    params.put("data_type", "blood_pressure");
+                    if (valStr.contains("|")) {
+                        String[] vs = valStr.split("\\|", 2);
+                        params.put("bp_diastolic", vs[0]);
+                        params.put("bp_systolic", vs[1]);
+                        params.put("value", vs[0] + "|" + vs[1]);
+                    } else {
+                        // 若没有分隔符，仍当作 raw 保存
+                        params.put("value", valStr);
+                    }
+                    break;
+                case "2": // 心率
+                    params.put("data_type", "heart_rate");
+                    params.put("value", valStr);
+                    break;
+                case "3": // 体温
+                    params.put("data_type", "temperature");
+                    params.put("value", valStr);
+                    break;
+                case "4": // 血氧
+                    params.put("data_type", "spo2");
+                    params.put("value", valStr);
+                    break;
+                default:
+                    // 未知类型，回退为 raw
+                    params.put("data_type", "unknown");
+                    params.put("value", valStr);
+            }
+            // 将 imei 从 payload 或 raw 中尝试提取（若这个 payload 中包含 imei，虽然协议通常不在此处带 imei）
+            if (imei != null) params.put("imei", imei);
 
-    /** APWR 佩戴状态 */
-    private void handleApWr(String payload, String clientInfo) {
-        log.debug("APWR 来自 {} 的 payload: {}", clientInfo, payload);
-        Map<String, String> params = new LinkedHashMap<>();
-        String[] p = payload.split(",", 3);
-        if (p.length >= 3) {
-            params.put("imei", p[0]);
-            params.put("wear_flag", p[1]);
-            params.put("timestamp", p[2]);
-        } else params.put("raw", payload);
-        log.info("APWR 佩戴状态: {}", params);
+            saveHealthData(params, imei);
+            log.info("APJK 健康数据已保存（结构化）: {}", params);
+            return;
+        }
+
+        // 回退：如果不符合新的三段式格式，则尝试解析为 key=value 键值对（向后兼容）
+        Map<String, String> kv = parseKeyValueParams(payload);
+        if (imei != null) kv.put("imei", imei);
+        saveHealthData(kv, imei);
+        log.info("APJK 健康数据已按 kv 解析并保存: {}", kv);
     }
 
     // --------------------------- 辅助方法 ---------------------------
@@ -667,7 +654,7 @@ public class MpbandServer implements SmartLifecycle {
 
         if ("AP00".equals(packet.getProtocol())) {
             // 按协议要求：返回 IWBP00,20150101125223,8,Asia/Shanghai#
-            // 其中时间为 UTC 0 时区时间（yyyyMMddHHmmss），第二项为服务器当前时区小时偏移
+            // 其中时间为 UTC 0 时区时间（yyyyMMddHHmmss），��二项为服务器当前时区小时偏移
             DateTimeFormatter fmtUtc = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(java.time.ZoneOffset.UTC);
             String utc = fmtUtc.format(java.time.Instant.now());
 
@@ -711,10 +698,9 @@ public class MpbandServer implements SmartLifecycle {
 
     /**
      * 保存定位数据到数据库（AP01 / AP10 的简化保存）。
-     * 该实现遵循简单映射：尝试从 params 中读取 lat/lon/speed/direction/gpsRaw/wifi_raw，若包含 imei 则关联设备。
-     * 所有异常在本方法内部捕获，避免影响主循环。
+     * 现在接受 imei，若 imei 不为空则尝试关联 Device（若不存在则创建）。
      */
-    private void saveLocationData(Map<String, String> params) {
+    private void saveLocationData(Map<String, String> params, String imei) {
         try {
             LocationRecord rec = new LocationRecord();
             // 解析常用字段
@@ -740,13 +726,10 @@ public class MpbandServer implements SmartLifecycle {
             rec.setExtraRaw(params.toString());
 
             // 试图关联 imei
-            String imei = params.getOrDefault("imei", null);
             if (imei != null && !imei.isEmpty()) {
                 rec.setImei(imei);
-                try {
-                    Optional<Device> d = deviceRepository.findByImei(imei);
-                    d.ifPresent(rec::setDevice);
-                } catch (Exception ignored) {}
+                Device d = findOrCreateDeviceByImei(imei);
+                if (d != null) rec.setDevice(d);
             }
 
             locationRecordRepository.save(rec);
@@ -763,9 +746,9 @@ public class MpbandServer implements SmartLifecycle {
 
     /**
      * 保存心跳数据到数据库（AP03 / AP04）。
-     * 将 param_block 写入 statusBlock, steps 写入 counter, roll_count 写入 rollCount, interval 写入 intervalSeconds。
+     * 接收 imei 并关联设备。
      */
-    private void saveHeartbeatData(Map<String, String> params) {
+    private void saveHeartbeatData(Map<String, String> params, String imei) {
         try {
             HeartbeatRecord rec = new HeartbeatRecord();
             rec.setStatusBlock(params.getOrDefault("param_block", params.getOrDefault("status_block", null)));
@@ -777,10 +760,10 @@ public class MpbandServer implements SmartLifecycle {
             }
             rec.setRawPayload(params.toString());
 
-            String imei = params.getOrDefault("imei", null);
             if (imei != null && !imei.isEmpty()) {
                 rec.setImei(imei);
-                try { Optional<Device> d = deviceRepository.findByImei(imei); d.ifPresent(rec::setDevice); } catch (Exception ignored) {}
+                Device d = findOrCreateDeviceByImei(imei);
+                if (d != null) rec.setDevice(d);
             }
 
             heartbeatRecordRepository.save(rec);
@@ -791,31 +774,61 @@ public class MpbandServer implements SmartLifecycle {
 
     /**
      * 保存健康数据到数据库（APJK / APTP 等）。
-     * dataType 使用 params 内常见键（如 temp 或 type），value 存储为整个 params.toString() 以便后续分析。
+     * 接收 imei 并关联设备。
      */
-    private void saveHealthData(Map<String, String> params) {
+    private void saveHealthData(Map<String, String> params, String imei) {
         try {
             HealthRecord rec = new HealthRecord();
             if (params.containsKey("temp")) {
                 rec.setDataType("temperature");
                 rec.setValue(params.get("temp"));
-            } else if (params.containsKey("type")) {
-                rec.setDataType(params.get("type"));
+            } else if (params.containsKey("data_type")) {
+                rec.setDataType(params.get("data_type"));
                 rec.setValue(params.getOrDefault("value", params.toString()));
             } else {
                 rec.setDataType("unknown");
                 rec.setValue(params.toString());
             }
 
-            String imei = params.getOrDefault("imei", null);
+            if (params.containsKey("timestamp")) {
+                try {
+                    java.time.format.DateTimeFormatter df = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+                    java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(params.get("timestamp"), df);
+                    java.time.Instant inst = ldt.toInstant(java.time.ZoneOffset.UTC);
+                    rec.setRecvTime(Date.from(inst));
+                } catch (Exception ignored) {}
+            }
+
             if (imei != null && !imei.isEmpty()) {
                 rec.setImei(imei);
-                try { Optional<Device> d = deviceRepository.findByImei(imei); d.ifPresent(rec::setDevice); } catch (Exception ignored) {}
+                Device d = findOrCreateDeviceByImei(imei);
+                if (d != null) rec.setDevice(d);
             }
             rec.setExtra(params.toString());
             healthRecordRepository.save(rec);
         } catch (Exception e) {
             log.warn("保存健康数据失败: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 根据 imei 查找设备，若不存在则创建一个最小信息的 Device 并保存。
+     * 这样可以保证后续的记录（定位/心跳/健康）都有 Device 外键关联
+     */
+    private Device findOrCreateDeviceByImei(String imei) {
+        if (imei == null || imei.isEmpty()) return null;
+        try {
+            Optional<Device> opt = deviceRepository.findByImei(imei);
+            if (opt.isPresent()) return opt.get();
+            Device d = new Device();
+            d.setImei(imei);
+            d.setCreatedAt(new Date());
+            deviceRepository.save(d);
+            log.info("自动创建设备记录 imei={}", imei);
+            return d;
+        } catch (Exception e) {
+            log.warn("查找或创建 Device 失败 imei={}: {}", imei, e.getMessage());
+            return null;
         }
     }
 
@@ -928,5 +941,60 @@ public class MpbandServer implements SmartLifecycle {
     private String sanitizeFilename(String in) {
         if (in == null) return "unknown";
         return in.replaceAll("[^a-zA-Z0-9._-]", "_");
+    }
+
+    private void handleApTp(String payload, String clientInfo, String imei) {
+        // APTP：体温包，格式示例： temp,wrist_temp  或单个值
+        if (payload == null || payload.isEmpty()) return;
+        log.debug("APTP 来自 {} 的 payload: {}", clientInfo, payload);
+        String[] p = payload.split(",");
+        Map<String, String> params = new LinkedHashMap<>();
+        if (p.length >= 1 && p[0] != null && !p[0].isEmpty()) params.put("temp", p[0]);
+        if (p.length >= 2 && p[1] != null && !p[1].isEmpty()) params.put("wrist_temp", p[1]);
+        // 保存为健康数据（saveHealthData 会识别 temp 字段并标记为 temperature）
+        saveHealthData(params, imei);
+        log.info("APTP 体温数据已保存: {}", params);
+    }
+
+    private void handleApVr(String payload, String clientInfo, String imei) {
+        // APVR：版本信息，示例： imei,firmware  或单个 firmware
+        if (payload == null || payload.isEmpty()) return;
+        log.debug("APVR 来自 {} 的 payload: {}", clientInfo, payload);
+        String[] p = payload.split(",", 2);
+        Map<String, String> params = new LinkedHashMap<>();
+        if (p.length >= 2) {
+            params.put("imei", p[0]);
+            params.put("firmware", p[1]);
+        } else {
+            params.put("firmware", payload);
+        }
+        // 将版本信息作为额外的健康/状态记录保存，以便审计（也可扩展为专门表）
+        params.put("data_type", "firmware_info");
+        params.put("value", params.getOrDefault("firmware", payload));
+        // 如果上层传入了 imei，则优先使用上层 imei 作为设备关联；否则尝试从内容里取
+        if (imei == null || imei.isEmpty()) {
+            String pImei = params.get("imei");
+            if (pImei != null) imei = pImei;
+        }
+        saveHealthData(params, imei);
+        log.info("APVR 版本信息已保存: {}", params);
+    }
+
+    private void handleApWr(String payload, String clientInfo, String imei) {
+        // APWR：佩戴状态，示例： imei,wear_flag,timestamp
+        if (payload == null || payload.isEmpty()) return;
+        log.debug("APWR 来自 {} 的 payload: {}", clientInfo, payload);
+        String[] p = payload.split(",", 3);
+        Map<String, String> params = new LinkedHashMap<>();
+        if (p.length >= 1) params.put("imei", p[0]);
+        if (p.length >= 2) params.put("wear_flag", p[1]);
+        if (p.length >= 3) params.put("timestamp", p[2]);
+        // 优先使用外部传入的 imei（如果有），否则使用 payload 中的 imei 字段
+        if ((imei == null || imei.isEmpty()) && params.containsKey("imei")) {
+            imei = params.get("imei");
+        }
+        // 把佩戴状态作为心跳/状态保存
+        saveHeartbeatData(params, imei);
+        log.info("APWR 佩戴状态已保存: {}", params);
     }
 }

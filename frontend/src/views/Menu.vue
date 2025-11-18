@@ -28,6 +28,7 @@
     <section class="mt-12">
       <div class="text-muted">
         提示：页面通过 GET /api/me 获取当前用户名；若未认证将重定向回登录页。
+        <strong>提示：</strong> 页面通过 `GET /api/me` 获取当前用户名，若未认证将重定向回登录页。
       </div>
     </section>
   </div>
@@ -65,11 +66,18 @@ export default {
     async doLogout() {
       this.loggingOut = true
       try {
-        const res = await fetch('/api/logout', { method: 'POST', credentials: 'include' })
         // 无论结果怎样，尽量清理并回到登录页
         try { localStorage.removeItem('username') } catch (e) { /* ignore */ }
         this.$router.push('/login')
+          try { localStorage.removeItem('username') } catch (e) { /* ignore */ }
+          this.$router.push('/login')
+        } else {
+          // 若退出失败，仍尽量清理并跳回登录页
+          try { localStorage.removeItem('username') } catch (e) { /* ignore */ }
+          this.$router.push('/login')
+        }
       } catch (e) {
+        console.error('退出登录异常：', e.message)
         try { localStorage.removeItem('username') } catch (er) { /* ignore */ }
         this.$router.push('/login')
       } finally {
@@ -79,3 +87,4 @@ export default {
   }
 }
 </script>
+

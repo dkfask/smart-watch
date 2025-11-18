@@ -7,25 +7,26 @@
         <label class="label" for="saveDir">数据保存目录</label>
         <input id="saveDir" v-model="settings.saveDir" placeholder="例如：mpband_data" />
         <small class="text-muted">示例：mpband_data（后端需对应配置 app.mpband.saveDir）</small>
-      </div>
+        <small>示例：mpband_data（后端需对应配置 app.mpband.saveDir）</small>
       <div class="form-group">
         <label class="label" for="poll">定位轮询间隔（秒）</label>
         <input id="poll" type="number" v-model.number="settings.pollInterval" />
-      </div>
+        <input type="number" v-model.number="settings.pollInterval" />
       <div class="actions">
         <button type="submit" class="btn btn-primary">保存</button>
         <button type="button" class="btn btn-ghost" @click="reset">重置</button>
       </div>
-    </form>
-  </div>
 </template>
 
 <script>
+import NavBar from '../components/NavBar.vue'
+
 export default {
   name: 'Settings',
+  components: { NavBar },
   data() {
-    return {
       // 前端配置示例，实际需通过后端 API 获取并保存
+      // 本页为前端配置示例，实际需通过后端 API 获取并保存
       settings: {
         saveDir: 'mpband_data',
         pollInterval: 60
@@ -34,12 +35,16 @@ export default {
   },
   methods: {
     save() {
-      // TODO: 提交到后端 /api/settings
       alert('已保存（示例，当前仅前端显示）')
     },
     reset() {
       this.settings = { saveDir: 'mpband_data', pollInterval: 60 }
-    }
-  }
 }
 </script>
+
+<style scoped>
+.field { margin-bottom:12px }
+label { display:block; font-weight:600 }
+input { width:320px; padding:6px; }
+</style>
+

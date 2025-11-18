@@ -623,3 +623,4 @@ java -cp build\classes\java\main com.example.demo.tools.BraceletClientSimulator 
   - 如果业务要求极高吞吐（每秒数千条），建议将写磁盘改为异步队列+单线程落盘，或使用高性能日志采集（Fluentd/Logstash/Vector）接收上行原始流。
 
 ---
+
