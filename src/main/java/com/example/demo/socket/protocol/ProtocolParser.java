@@ -1,7 +1,12 @@
 package com.example.demo.socket.protocol;
 
-import java.util.HashMap;
-import java.util.Map;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import java.util.concurrent.TimeUnit;
 
 /**
  * ProtocolParser - 将原始手环报文解析为具体的 BraceletPacket 子类
@@ -9,189 +14,145 @@ import java.util.Map;
  * 解析策略（保守方式，尽量不抛异常，仅进行必要解析）：
  * - 校验包头 IW 与结束符 #
  * - 提取协议号（位置 2-6）例如 AP00
- * - 对 AP00（登录）做专门解析，将 payload 放到 params.payload
- * - 对 AP01（位置）尝试解析日期/有效性/经纬度等字段，放入 params
- * - 对 AP03（心跳）将 payload 放入 params 并尝试解析常见子字段
- * - 其他协议会被当作通用包，payload 放入 params
+ * - 使用 ProtocolHandlerFactory 获取相应的协议处理器
+ * - 调用协议处理器进行具体解析
  */
+@Component
 public class ProtocolParser {
     private static final String HEADER = "IW";
     private static final String END_MARKER = "#";
+    
+    // 性能监控指标
+    private final Counter parseSuccessCounter;
+    private final Counter parseErrorCounter;
+    private final Timer parseTimer;
+    private final Counter checksumSuccessCounter;
+    private final Counter checksumErrorCounter;
+    
+    // 静态实例，用于兼容原有静态调用
+    private static ProtocolParser instance;
+    
+    @Autowired
+    public ProtocolParser(MeterRegistry meterRegistry) {
+        // 初始化性能监控指标
+        this.parseSuccessCounter = Counter.builder("protocol.parse.success")
+                .description("Number of successful protocol parsing operations")
+                .register(meterRegistry);
+        
+        this.parseErrorCounter = Counter.builder("protocol.parse.error")
+                .description("Number of failed protocol parsing operations")
+                .register(meterRegistry);
+        
+        this.parseTimer = Timer.builder("protocol.parse.duration")
+                .description("Time taken to parse protocol messages")
+                .register(meterRegistry);
+        
+        this.checksumSuccessCounter = Counter.builder("protocol.checksum.success")
+                .description("Number of successful checksum validations")
+                .register(meterRegistry);
+        
+        this.checksumErrorCounter = Counter.builder("protocol.checksum.error")
+                .description("Number of failed checksum validations")
+                .register(meterRegistry);
+        
+        // 设置静态实例
+        instance = this;
+    }
+    
+    // 获取静态实例（用于兼容原有静态调用）
+    private static ProtocolParser getInstance() {
+        if (instance == null) {
+            // 当没有Spring容器时，创建一个默认实例（用于测试）
+            instance = new ProtocolParser(new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+        }
+        return instance;
+    }
 
-    public static BraceletPacket parse(String raw) {
-        if (raw == null) return null;
-        raw = raw.trim();
-        if (!raw.startsWith(HEADER) || !raw.endsWith(END_MARKER)) return null;
-        if (raw.length() < 6) return null; // 最小长度
-
+    public static BraceletPacket parse(String raw) throws ProtocolException {
+        ProtocolParser parser = getInstance();
+        
+        // 记录解析开始时间
+        long startTime = System.nanoTime();
+        
         try {
+            if (raw == null) {
+                parser.parseErrorCounter.increment();
+                throw new ProtocolException("原始报文为空");
+            }
+            raw = raw.trim();
+            if (!raw.startsWith(HEADER)) {
+                parser.parseErrorCounter.increment();
+                throw new ProtocolException("报文缺少正确的包头 IW", raw);
+            }
+            if (!raw.endsWith(END_MARKER)) {
+                parser.parseErrorCounter.increment();
+                throw new ProtocolException("报文缺少正确的结束符 #", raw);
+            }
+            if (raw.length() < 6) {
+                parser.parseErrorCounter.increment();
+                throw new ProtocolException("报文长度不足", raw);
+            }
+
             String protocol = raw.substring(2, 6);
-            // payloadStartIndex: 协议号之后（不再自动尝试识别流水号）
-            int payloadStart = 6;
-
-            String payload = raw.substring(payloadStart, raw.length() - 1); // 去掉结束符
-
-            Map<String, String> params = new HashMap<>();
-            params.put("payload", payload);
-
-            // 根据具体协议构建不同类型的包
-            switch (protocol) {
-                case "AP00": {
-                    LoginPacket p = new LoginPacket();
-                    p.setRaw(raw);
-                    p.setHeader(HEADER);
-                    p.setProtocol(protocol);
-                    p.setReceiveTime(new java.util.Date());
-                    p.setParams(params);
-
-                    // 解析 payload 的三种可能格式
-                    String[] parts = payload.split(",");
-                    if (parts.length >= 1) p.setImei(parts[0].trim());
-                    if (parts.length >= 2 && parts[1].contains("|")) {
-                        String[] net = parts[1].split("\\|", 3);
-                        if (net.length > 0) p.setMcc(net[0]);
-                        if (net.length > 1) p.setMnc(net[1]);
-                        if (net.length > 2) p.setApn(net[2]);
-                    } else if (parts.length >= 3) {
-                        p.setIccid(parts[1].trim());
-                        p.setImsi(parts[2].trim());
-                    }
-                    // 保留原始 payload
-                    p.getParams().putAll(params);
-                    return p;
+            
+            // 提取协议版本号（假设版本号位于协议号之后，格式为&V=1.0）
+            String version = "1.0"; // 默认版本号
+            int versionIndex = raw.indexOf("&V=");
+            if (versionIndex != -1) {
+                int endIndex = raw.indexOf('&', versionIndex + 3);
+                if (endIndex == -1) {
+                    endIndex = raw.indexOf('#', versionIndex + 3);
                 }
-                case "AP01": {
-                    LocationPacket p = new LocationPacket();
-                    p.setRaw(raw);
-                    p.setHeader(HEADER);
-                    p.setProtocol(protocol);
-                    p.setReceiveTime(new java.util.Date());
-                    p.setParams(params);
-
-                    // AP01 示例一般第一个部分为 GPS 主段（直到第一个逗号），后续为基站/wifi
-                    String gpsPart = payload;
-                    String restPart = "";
-                    int idx = payload.indexOf(',');
-                    if (idx >= 0) {
-                        gpsPart = payload.substring(0, idx);
-                        restPart = payload.substring(idx + 1);
-                    }
-                    p.setExtra(restPart);
-                    p.getParams().put("rawGpsPart", gpsPart);
-                    p.getParams().put("rawExtraPart", restPart);
-
-                    // gpsPart 例如: 080524A2232.9806N11404.9355E000.1061830323.87
-                    if (gpsPart.length() >= 7) {
-                        // date (6 chars)
-                        String date = gpsPart.substring(0, 6);
-                        p.setDate(date);
-                        p.getParams().put("date", date);
-                        int pos = 6;
-                        if (pos < gpsPart.length()) {
-                            String valid = gpsPart.substring(pos, pos + 1);
-                            p.setValid(valid);
-                            p.getParams().put("valid", valid);
-                            pos += 1;
-
-                            // 接下来尝试解析纬度 ddmm.mmmmN
-                            int latEnd = indexOfAny(gpsPart, pos, new char[]{'N','S'});
-                            if (latEnd > pos) {
-                                String latRaw = gpsPart.substring(pos, latEnd + 1); // 包含 N/S
-                                p.setLatRaw(latRaw);
-                                p.getParams().put("latRaw", latRaw);
-                                Double lat = convertNMEAToDecimal(latRaw);
-                                if (lat != null) { p.setLat(lat); p.getParams().put("lat", String.valueOf(lat)); }
-                                pos = latEnd + 1;
-                            }
-
-                            int lngEnd = indexOfAny(gpsPart, pos, new char[]{'E','W'});
-                            if (lngEnd > pos) {
-                                String lngRaw = gpsPart.substring(pos, lngEnd + 1);
-                                p.setLngRaw(lngRaw);
-                                p.getParams().put("lngRaw", lngRaw);
-                                Double lng = convertNMEAToDecimal(lngRaw);
-                                if (lng != null) { p.setLng(lng); p.getParams().put("lng", String.valueOf(lng)); }
-                                pos = lngEnd + 1;
-                            }
-
-                            // 速度/时间/方向等剩余部分
-                            if (pos < gpsPart.length()) {
-                                String tail = gpsPart.substring(pos);
-                                p.setSpeed(tail);
-                                p.getParams().put("gpsTail", tail);
-                            }
-                        }
-                    }
-
-                    return p;
-                }
-                case "AP03": {
-                    HeartbeatPacket p = new HeartbeatPacket();
-                    p.setRaw(raw);
-                    p.setHeader(HEADER);
-                    p.setProtocol(protocol);
-                    p.setReceiveTime(new java.util.Date());
-                    p.setParams(params);
-                    p.setRawPayload(payload);
-
-                    // 进一步把 payload 按逗号拆分
-                    String[] parts = payload.split(",");
-                    if (parts.length >= 1) p.getParams().put("statusBlock", parts[0]);
-                    if (parts.length >= 2) p.getParams().put("counter", parts[1]);
-                    if (parts.length >= 3) p.getParams().put("rollCount", parts[2]);
-                    if (parts.length >= 4) p.getParams().put("workMode", parts[3]);
-                    if (parts.length >= 5) p.getParams().put("interval", parts[4]);
-
-                    return p;
-                }
-                // 其他协议 -> 通用包
-                default: {
-                    BraceletPacket p = new BraceletPacket() {};
-                    p.setRaw(raw);
-                    p.setHeader(HEADER);
-                    p.setProtocol(protocol);
-                    p.setReceiveTime(new java.util.Date());
-                    p.setParams(params);
-                    return p;
+                if (endIndex != -1) {
+                    version = raw.substring(versionIndex + 3, endIndex);
                 }
             }
+            
+            // 使用协议处理器工厂获取相应的协议处理器
+            ProtocolHandler handler = ProtocolHandlerFactory.getHandler(protocol, version);
+            
+            // 验证校验和
+            if (handler instanceof BaseProtocolHandler) {
+                BaseProtocolHandler baseHandler = (BaseProtocolHandler) handler;
+                String checksum = baseHandler.extractChecksum(raw);
+                if (checksum != null) {
+                    String dataWithoutChecksum = baseHandler.extractDataWithoutChecksum(raw);
+                    if (baseHandler.validateChecksum(dataWithoutChecksum, checksum)) {
+                        parser.checksumSuccessCounter.increment();
+                    } else {
+                        parser.checksumErrorCounter.increment();
+                        throw new ProtocolException("校验和验证失败", raw, protocol);
+                    }
+                }
+            }
+            
+            // 调用协议处理器进行解析
+            BraceletPacket packet = handler.parse(raw);
+            if (packet == null) {
+                parser.parseErrorCounter.increment();
+                throw new ProtocolException("协议解析失败", raw, protocol);
+            }
+            
+            // 设置协议版本号
+            packet.setVersion(version);
+            
+            // 记录解析成功
+            parser.parseSuccessCounter.increment();
+            
+            return packet;
+        } catch (ProtocolException e) {
+            // 已经是 ProtocolException，直接抛出
+            parser.parseErrorCounter.increment();
+            throw e;
         } catch (Exception e) {
-            // 解析失败，返回 null
-            return null;
-        }
-    }
-
-    private static int indexOfAny(String s, int from, char[] targets) {
-        for (int i = from; i < s.length(); i++) {
-            char c = s.charAt(i);
-            for (char t : targets) if (c == t) return i;
-        }
-        return -1;
-    }
-
-    /**
-     * 把 NMEA 风格的 ddmm.mmmmN 或 dddmm.mmmmE 字符串转成十进制度
-     */
-    private static Double convertNMEAToDecimal(String raw) {
-        if (raw == null) return null;
-        raw = raw.trim();
-        if (raw.length() < 2) return null;
-        char hemi = raw.charAt(raw.length() - 1);
-        String body = raw.substring(0, raw.length() - 1);
-        int dot = body.indexOf('.');
-        if (dot <= 0) return null;
-        try {
-            int beforeDecimal = body.substring(0, dot).length();
-            int degLen = beforeDecimal > 4 ? 3 : 2;
-            String degStr = body.substring(0, degLen);
-            String minStr = body.substring(degLen);
-            double deg = Double.parseDouble(degStr);
-            double minute = Double.parseDouble(minStr);
-            double decimal = deg + (minute / 60.0);
-            if (hemi == 'S' || hemi == 'W') decimal = -decimal;
-            return decimal;
-        } catch (Exception ex) {
-            return null;
+            // 其他异常转换为 ProtocolException
+            parser.parseErrorCounter.increment();
+            throw new ProtocolException("协议解析异常", raw, e);
+        } finally {
+            // 记录解析耗时
+            long endTime = System.nanoTime();
+            long durationNanos = endTime - startTime;
+            parser.parseTimer.record(durationNanos, TimeUnit.NANOSECONDS);
         }
     }
 }

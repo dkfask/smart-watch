@@ -21,7 +21,7 @@ public class HeartbeatRecord {
     private String imei;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "recv_time")
+    @Column(name = "recv_time", nullable = false)
     private Date recvTime;
 
     @Column(name = "status_block", length = 255)
@@ -43,7 +43,19 @@ public class HeartbeatRecord {
     @Column(name = "raw_payload")
     private String rawPayload;
 
-    public HeartbeatRecord() { this.recvTime = new Date(); }
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "datetime default current_timestamp")
+    private Date createdAt;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "updated_at", nullable = false, columnDefinition = "datetime default current_timestamp on update current_timestamp")
+    private Date updatedAt;
+
+    public HeartbeatRecord() {
+        this.recvTime = new Date();
+        this.createdAt = new Date();
+        this.updatedAt = new Date();
+    }
 
     // getters & setters
     public Long getId() { return id; }
@@ -75,5 +87,11 @@ public class HeartbeatRecord {
 
     public String getRawPayload() { return rawPayload; }
     public void setRawPayload(String rawPayload) { this.rawPayload = rawPayload; }
+
+    public Date getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }
+
+    public Date getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Date updatedAt) { this.updatedAt = updatedAt; }
 }
 

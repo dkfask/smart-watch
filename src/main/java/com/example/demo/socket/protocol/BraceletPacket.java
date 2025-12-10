@@ -30,6 +30,9 @@ public abstract class BraceletPacket {
 
     /** 可选的额外参数键值（解析器可填充） */
     protected Map<String, String> params = new HashMap<>();
+    
+    /** 协议版本号 */
+    protected String version = "1.0"; // 默认版本号
 
     public String getRaw() { return raw; }
     public void setRaw(String raw) { this.raw = raw; }
@@ -48,6 +51,9 @@ public abstract class BraceletPacket {
 
     public Map<String, String> getParams() { return params; }
     public void setParams(Map<String, String> params) { this.params = params; }
+    
+    public String getVersion() { return version; }
+    public void setVersion(String version) { this.version = version; }
 
 }
 

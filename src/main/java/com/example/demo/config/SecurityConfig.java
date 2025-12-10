@@ -33,9 +33,26 @@ public class SecurityConfig {
                     "/login", "/register",
                     "/", "/index.html", "/favicon.ico",
                     "/css/**", "/js/**", "/images/**", "/assets/**", "/static/**",
-                    "/webjars/**",
-                    "/api/**"
+                    "/webjars/**"
                 ).permitAll()
+                // 允许无需认证的API
+                .requestMatchers(
+                    "/api/auth/login", "/api/auth/me", "/api/auth/logout",
+                    "/api/devices", "/api/devices/**",
+                    "/api/patients", "/api/patients/**",
+                    "/api/patient-devices", "/api/patient-devices/**",
+                    "/api/fences", "/api/fences/**",
+                    "/api/alerts", "/api/alerts/**",
+                    "/api/health-records", "/api/health-records/**",
+                    "/api/wearers", "/api/wearers/**",
+                    "/api/downlink", "/api/downlink/**",
+                    "/api/locations", "/api/locations/**",
+                    "/db/test"
+                ).permitAll()
+                // 其他API需要认证
+                .requestMatchers("/api/**").authenticated()
+                // 对于非API的GET请求，由SpaFallbackController处理SPA路由
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/login", "/register", "/home", "/menu").permitAll()
                 .anyRequest().authenticated()
             )
             .formLogin(login -> login

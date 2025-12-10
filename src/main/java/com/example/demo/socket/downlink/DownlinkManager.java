@@ -139,4 +139,14 @@ public class DownlinkManager {
         return Collections.unmodifiableSet(imeiToSocket.keySet());
     }
 
+    /**
+     * 获取当前 socket 对应的 IMEI（若该 socket 已在 register 时登记过）。
+     * 目的：当上行报文本身不携带 IMEI 时，服务器可以根据已注册的连接找到对应设备号，
+     * 并在保存定位/心跳/健康数据时把 IMEI 一并关联保存，便于按设备号查询。
+     */
+    public String getImeiBySocket(Socket socket) {
+        if (socket == null) return null;
+        return socketToImei.get(System.identityHashCode(socket));
+    }
+
 }

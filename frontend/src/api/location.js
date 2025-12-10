@@ -1,24 +1,39 @@
-const base = '/api/locations'
+import api from './axios'
+import { handleApiResponse, handleApiError } from './utils'
 
-export async function recentByDevice(deviceId, limit = 50, offset = 0) {
-  const url = new URL(`${base}/device/${deviceId}`, window.location.origin)
-  url.searchParams.set('limit', limit)
-  url.searchParams.set('offset', offset)
-  const res = await fetch(url.toString(), { credentials: 'include' })
-  if (!res.ok) throw new Error(`recentByDevice failed ${res.status}`)
-  return res.json()
+export const locationApi = {
+  // 获取设备最近位置
+  getRecentLocations(deviceId, limit = 50, offset = 0) {
+    return api.get(`/locations/device/${deviceId}`, { params: { limit, offset } })
+      .then(handleApiResponse)
+      .catch(handleApiError)
+  },
+
+  // 获取设备历史位置范围
+  getLocationsByRange(deviceId, start, end, limit = 200, offset = 0) {
+    return api.get(`/locations/device/${deviceId}/range`, {
+      params: {
+        start,
+        end,
+        limit,
+        offset
+      }
+    })
+      .then(handleApiResponse)
+      .catch(handleApiError)
+  },
+
+  // 获取设备最新位置（带高德地址）
+  getLatestLocationWithAmap(deviceId) {
+    return api.get(`/locations/device/${deviceId}/latest-with-amap`)
+      .then(handleApiResponse)
+      .catch(handleApiError)
+  },
+
+  // 上报位置
+  reportLocation(location) {
+    return api.post('/locations/report', location)
+      .then(handleApiResponse)
+      .catch(handleApiError)
+  }
 }
-
-export async function rangeByDevice(deviceId, startIso, endIso, limit = 200, offset = 0) {
-  const url = new URL(`${base}/device/${deviceId}/range`, window.location.origin)
-  url.searchParams.set('start', startIso)
-  url.searchParams.set('end', endIso)
-  url.searchParams.set('limit', limit)
-  url.searchParams.set('offset', offset)
-  const res = await fetch(url.toString(), { credentials: 'include' })
-  if (!res.ok) throw new Error(`rangeByDevice failed ${res.status}`)
-  return res.json()
-}
-
-export default { recentByDevice, rangeByDevice }
-

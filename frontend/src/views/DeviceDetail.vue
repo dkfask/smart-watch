@@ -1,244 +1,269 @@
 <template>
-  <div class="card">
-    <!-- 设备详情：展示设备基础信息、最近位置与日志摘要 -->
-    <h2 class="card-title">设备详情</h2>
-
-    <div v-if="device">
-      <div class="mb-12">
-        <div><strong>ID:</strong> {{ device.id }}</div>
-        <div><strong>IMEI:</strong> {{ device.imei }}</div>
-        <div><strong>创建时间:</strong> {{ formatDate(device.createdAt) }}</div>
+  <div class="device-detail-container">
+    <el-card shadow="hover" v-loading="loading">
+      <template #header>
+        <div class="card-header">
+          <h2>设备详情</h2>
+          <el-button type="primary" @click="goBack">返回列表</el-button>
+        </div>
+      </template>
+      <div class="device-detail-content">
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-descriptions title="设备基本信息" :column="2" border>
+              <el-descriptions-item label="ID">{{ device.id }}</el-descriptions-item>
+              <el-descriptions-item label="IMEI">{{ device.imei }}</el-descriptions-item>
+              <el-descriptions-item label="MCC">{{ device.mcc || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="MNC">{{ device.mnc || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="APN">{{ device.apn || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="ICCID">{{ device.iccid || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="IMSI">{{ device.imsi || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="创建时间">{{ formatDate(device.createdAt) }}</el-descriptions-item>
+            </el-descriptions>
+          </el-col>
+          <el-col :span="12">
+            <el-descriptions title="病人信息" :column="1" border>
+              <el-descriptions-item label="姓名">{{ patient?.name || '未关联' }}</el-descriptions-item>
+              <el-descriptions-item label="年龄">{{ patient?.age || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="性别">{{ patient?.gender === 'male' ? '男' : patient?.gender === 'female' ? '女' : '-' }}</el-descriptions-item>
+              <el-descriptions-item label="病房">{{ patient?.ward || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="床位">{{ patient?.bed || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="关联时间">{{ formatDate(patient?.assignedAt) }}</el-descriptions-item>
+            </el-descriptions>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20" style="margin-top: 20px;">
+          <el-col :span="24">
+            <el-descriptions title="最新位置信息" :column="4" border>
+              <el-descriptions-item label="时间">{{ formatDate(latestLocation?.time) }}</el-descriptions-item>
+              <el-descriptions-item label="经度">{{ latestLocation?.longitude || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="纬度">{{ latestLocation?.latitude || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="地址">{{ latestLocation?.address || '-' }}</el-descriptions-item>
+              <el-descriptions-item label="精度">{{ latestLocation?.accuracy || '-' }} 米</el-descriptions-item>
+              <el-descriptions-item label="海拔">{{ latestLocation?.altitude || '-' }} 米</el-descriptions-item>
+              <el-descriptions-item label="电池电量">{{ latestLocation?.batteryLevel || '-' }}%</el-descriptions-item>
+              <el-descriptions-item label="定位来源">{{ latestLocation?.source || '-' }}</el-descriptions-item>
+            </el-descriptions>
+          </el-col>
+        </el-row>
+        <div class="map-section">
+          <h3>设备位置</h3>
+          <div id="device-map" class="device-map"></div>
+        </div>
       </div>
-
-      <section class="mb-12">
-        <div v-if="location">
-          <div><strong>最近位置:</strong> {{ location.latitude || location.lat }}, {{ location.longitude || location.lon }}</div>
-          <div><strong>速度:</strong> {{ location.speed || 'n/a' }}</div>
-        </div>
-        <div v-else>暂无位置信息</div>
-      </section>
-
-      <section>
-        <h3>轨迹 & 围栏</h3>
-        <p class="text-muted">在地图上可以查看最近轨迹，并绘制围栏（绘制圆形会持久化）。</p>
-        <leaflet-map :markers="mapMarkers" :tracks="trackPoints" :fences="fences" :editable="true" :height="'480px'"
-                     @fence-created="onFenceCreated" />
-      </section>
-
-      <section class="mt-12">
-        <h3>下发命令</h3>
-        <div class="mb-8">
-          <div><strong>设备在线:</strong> <span v-if="isOnline" style="color:green">在线</span><span v-else style="color:#888">离线</span></div>
-        </div>
-
-        <div class="form-group">
-          <label class="label">同步时间（BP00）时区偏移（小时）</label>
-          <input v-model.number="bp00Timezone" type="number" style="width:120px" />
-          <button class="btn btn-primary" @click="sendTimeSync" :disabled="!device || !isOnline">发送 BP00</button>
-        </div>
-
-        <div class="form-group">
-          <label class="label">设置 SOS 号码（BP12）</label>
-          <div>
-            <input v-model="bp12.seq" placeholder="流水号(可选)" style="width:120px;margin-right:8px" />
-            <input v-model="bp12.sos1" placeholder="SOS1" style="width:180px;margin-right:8px" />
-            <input v-model="bp12.sos2" placeholder="SOS2" style="width:180px;margin-right:8px" />
-            <input v-model="bp12.sos3" placeholder="SOS3" style="width:180px" />
-          </div>
-          <div style="margin-top:8px">
-            <button class="btn btn-primary" @click="sendBp12" :disabled="!device || !isOnline">发送 BP12</button>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label class="label">自定义原始命令（完整包，例如 IWBP10,imei,seq,xxx#）</label>
-          <textarea v-model="customCommand" rows="3" style="width:100%"></textarea>
-          <div style="margin-top:8px">
-            <button class="btn btn-primary" @click="sendCustomCommand" :disabled="!device || !isOnline">发送自定义命令</button>
-          </div>
-        </div>
-
-        <div class="mt-8">
-          <div v-if="downlinkStatus" class="text-muted">状态: {{ downlinkStatus }}</div>
-          <div v-if="downlinkError" style="color:red">错误: {{ downlinkError }}</div>
-        </div>
-      </section>
-
-    </div>
-
-    <div v-else>
-      加载中...
-    </div>
+    </el-card>
   </div>
 </template>
 
-<script>
-import NavBar from '../components/NavBar.vue'
-import api from '../api/device.js'
-import downlink from '../api/downlink.js'
-import LeafletMap from '../components/LeafletMap.vue'
-import locationApi from '../api/location.js'
-import fenceApi from '../api/fence.js'
+<script setup>
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { deviceApi } from '../api/device'
+import { locationApi } from '../api/location'
+import { patientApi } from '../api/patient'
+import { ElMessage } from 'element-plus'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
 
-export default {
-  name: 'DeviceDetail',
-  components: { NavBar, LeafletMap },
-  data() {
-    return {
-      device: null,
-      location: null,
-      logs: [],
+const route = useRoute()
+const router = useRouter()
+const deviceId = ref(route.params.id)
+const device = ref({})
+const patient = ref(null)
+const latestLocation = ref(null)
+const loading = ref(false)
+let map = null
 
-      // map / track
-      mapMarkers: [],
-      trackPoints: [],
-      fences: [],
-
-      // downlink related
-      isOnline: false,
-      bp00Timezone: new Date().getTimezoneOffset() / -60 || 8,
-      bp12: { seq: '1', sos1: '', sos2: '', sos3: '' },
-      customCommand: '',
-      downlinkStatus: '',
-      downlinkError: ''
-    }
-  },
-  methods: {
-    async load() {
-      const id = this.$route.params.id
-      try {
-        const res = await api.get(id)
-        this.device = res.data || res
-        // load latest location and recent track
-        await this.loadLocationAndTrack()
-        // load online state
-        this.loadOnlineStatus()
-      } catch (e) {
-        console.error('获取设备失败', e)
-        alert('获取设备失败')
-      }
-    },
-
-    async loadLocationAndTrack() {
-      if (!this.device || !this.device.id) return
-      try {
-        // fetch recent single for display
-        const recent = await locationApi.recentByDevice(this.device.id, 1)
-        if (Array.isArray(recent) && recent.length > 0) {
-          this.location = recent[0]
-          this.mapMarkers = [{ id: this.device.imei, lat: this.location.latitude, lon: this.location.longitude, label: this.device.imei }]
-        }
-        // fetch last 24 hours track
-        const end = new Date()
-        const start = new Date(end.getTime() - 24 * 3600 * 1000)
-        const tracks = await locationApi.rangeByDevice(this.device.id, start.toISOString(), end.toISOString(), 500)
-        // normalize to {latitude, longitude}
-        this.trackPoints = (Array.isArray(tracks) ? tracks : []).map(p => ({ latitude: p.latitude, longitude: p.longitude }))
-      } catch (e) {
-        console.warn('加载轨迹失败', e)
-      }
-    },
-
-    async onFenceCreated(payload) {
-      // only handle circle persistence for now
-      try {
-        if (payload.type === 'circle') {
-          const center = payload.center // [lat, lon]
-          const radius = payload.radius // meters
-          // build GeoFence payload expected by backend
-          const gf = {
-            userId: 1, // TODO: replace with current user id if available
-            name: 'map-fence-' + Date.now(),
-            centerLatitude: center[0],
-            centerLongitude: center[1],
-            radius: radius,
-            triggerType: 'both',
-            isActive: true
-          }
-          const id = await fenceApi.createFence(gf)
-          // append geojson to fences list for rendering
-          if (payload.geojson) this.fences.push(payload.geojson)
-          alert('围栏已创建 id=' + id)
-        } else {
-          alert('当前仅支持圆形围栏持久化（请使用圆形工具）')
-        }
-      } catch (e) {
-        console.error('创建围栏失败', e)
-        alert('创建围栏失败: ' + (e.message || e))
-      }
-    },
-
-    async loadOnlineStatus() {
-      try {
-        const online = await downlink.getOnline()
-        this.isOnline = Array.isArray(online) && this.device && online.includes(this.device.imei)
-      } catch (e) {
-        console.warn('获取在线设备失败', e)
-        this.isOnline = false
-      }
-    },
-
-    async sendTimeSync() {
-      if (!this.device) return
-      this.downlinkStatus = '发送中...'
-      this.downlinkError = ''
-      try {
-        await downlink.sendBp00(this.device.imei, this.bp00Timezone)
-        this.downlinkStatus = 'BP00 已发送'
-      } catch (e) {
-        console.error(e)
-        this.downlinkError = e.message || String(e)
-        this.downlinkStatus = ''
-      }
-    },
-
-    async sendBp12() {
-      if (!this.device) return
-      this.downlinkStatus = '发送中...'
-      this.downlinkError = ''
-      try {
-        const body = {
-          imei: this.device.imei,
-          seq: this.bp12.seq,
-          sos: [this.bp12.sos1 || '', this.bp12.sos2 || '', this.bp12.sos3 || '']
-        }
-        await downlink.sendBp12(body)
-        this.downlinkStatus = 'BP12 已发送'
-      } catch (e) {
-        console.error(e)
-        this.downlinkError = e.message || String(e)
-        this.downlinkStatus = ''
-      }
-    },
-
-    async sendCustomCommand() {
-      if (!this.device) return
-      if (!this.customCommand || !this.customCommand.trim()) {
-        this.downlinkError = '自定义命令不能为空'
-        return
-      }
-      this.downlinkStatus = '发送中...'
-      this.downlinkError = ''
-      try {
-        const body = { imei: this.device.imei, payload: this.customCommand.trim() }
-        await downlink.sendCustom(body)
-        this.downlinkStatus = '自定义命令已发送'
-      } catch (e) {
-        console.error(e)
-        this.downlinkError = e.message || String(e)
-        this.downlinkStatus = ''
-      }
-    },
-
-    formatDate(s) { if (!s) return ''; try { return new Date(s).toLocaleString() } catch(e){ return s } }
-  },
-  mounted() { this.load() }
+// 格式化日期
+const formatDate = (dateString) => {
+  if (!dateString) return ''
+  return new Date(dateString).toLocaleString()
 }
+
+// 获取设备详情
+const fetchDeviceDetail = async () => {
+  loading.value = true
+  try {
+    const deviceData = await deviceApi.getDevice(deviceId.value)
+    device.value = deviceData
+    await Promise.all([fetchPatientInfo(), fetchLatestLocation()])
+  } catch (error) {
+    ElMessage.error('获取设备详情失败')
+    console.error('Failed to fetch device detail:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+// 获取设备关联的病人信息
+const fetchPatientInfo = async () => {
+  try {
+    const patientData = await patientApi.getPatientByDeviceId(deviceId.value)
+    patient.value = patientData
+  } catch (error) {
+    console.error('Failed to fetch patient info:', error)
+    // 病人信息获取失败不影响设备详情展示
+    patient.value = null
+  }
+}
+
+// 获取设备最新位置
+const fetchLatestLocation = async () => {
+  try {
+    const locationData = await locationApi.getLatestLocationWithAmap(deviceId.value)
+    latestLocation.value = locationData
+    initMap()
+  } catch (error) {
+    console.error('Failed to fetch latest location:', error)
+    // 位置获取失败不影响设备详情展示
+  }
+}
+
+// 初始化地图
+const initMap = () => {
+  if (!latestLocation.value || !latestLocation.value.latitude || !latestLocation.value.longitude) {
+    return
+  }
+
+  // 销毁现有地图实例
+  if (map) {
+    map.remove()
+  }
+
+  // 创建新地图实例
+  map = L.map('device-map').setView([latestLocation.value.latitude, latestLocation.value.longitude], 15)
+
+  // 添加瓦片图层（使用高德地图作为备用）
+  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+    subdomains: ['1', '2', '3', '4'],
+    attribution: '© 高德地图'
+  }).addTo(map)
+
+  // 创建自定义水滴图标
+  const customIcon = L.divIcon({
+    className: 'custom-marker',
+    html: `
+      <div class="marker-drop">
+        <div class="marker-icon">📍</div>
+        <div class="marker-number">${device.value.id}</div>
+      </div>
+    `,
+    iconSize: [40, 40],
+    iconAnchor: [20, 40]
+  });
+
+  // 添加标记
+  L.marker([latestLocation.value.latitude, latestLocation.value.longitude], { icon: customIcon })
+    .addTo(map)
+    .bindPopup(`
+      <b>设备: ${device.value.imei}</b><br>
+      位置: ${latestLocation.value.address || '未知'}<br>
+      时间: ${formatDate(latestLocation.value.time)}
+    `)
+    .openPopup()
+}
+
+// 返回列表
+const goBack = () => {
+  router.push('/devices')
+}
+
+// 定时刷新位置
+let refreshTimer = null
+
+onMounted(() => {
+  fetchDeviceDetail()
+  // 每30秒刷新一次位置
+  refreshTimer = setInterval(fetchLatestLocation, 30000)
+})
+
+onBeforeUnmount(() => {
+  // 清除定时器
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+  }
+  // 销毁地图实例
+  if (map) {
+    map.remove()
+  }
+})
 </script>
 
 <style scoped>
-.mb-12 { margin-bottom: 12px }
-.form-group { margin-bottom: 12px }
-.mt-12 { margin-top: 12px }
-.text-muted { color: #666 }
+.device-detail-container {
+  width: 100%;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.device-detail-content {
+  padding: 20px 0;
+}
+
+.map-section {
+  margin-top: 20px;
+}
+
+.map-section h3 {
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.device-map {
+  height: 400px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* 自定义水滴标记样式 */
+:deep(.custom-marker) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+:deep(.marker-drop) {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  background-color: #1890ff;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+:deep(.marker-icon) {
+  transform: rotate(45deg);
+  font-size: 20px;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+}
+
+:deep(.marker-number) {
+  position: absolute;
+  bottom: -15px;
+  right: -15px;
+  background-color: #fff;
+  border: 2px solid #1890ff;
+  border-radius: 50%;
+  width: 25px;
+  height: 25px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 12px;
+  font-weight: bold;
+  color: #1890ff;
+  transform: rotate(45deg);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
 </style>

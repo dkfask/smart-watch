@@ -7,10 +7,10 @@ import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
-import java.math.BigDecimal;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,55 +22,78 @@ public class GeoFenceRepository {
 
     private static final RowMapper<GeoFence> MAPPER = (rs, n) -> {
         GeoFence f = new GeoFence();
-        f.setFenceId(rs.getLong("fence_id"));
-        f.setUserId(rs.getLong("user_id"));
+        f.setId(rs.getLong("id"));
         f.setName(rs.getString("name"));
-        f.setCenterLatitude(rs.getBigDecimal("center_latitude"));
-        f.setCenterLongitude(rs.getBigDecimal("center_longitude"));
-        f.setRadius(rs.getBigDecimal("radius"));
-        f.setTriggerType(rs.getString("trigger_type"));
-        Object act = rs.getObject("is_active");
-        f.setIsActive(act == null ? null : rs.getBoolean("is_active"));
+        f.setType(rs.getString("type"));
+        // 使用getObject处理可能为null的double值
+        f.setCenterLat(rs.getObject("center_lat", Double.class));
+        f.setCenterLng(rs.getObject("center_lng", Double.class));
+        // 使用getObject处理可能为null的int值
+        f.setRadius(rs.getObject("radius", Integer.class));
+        f.setCoordinates(rs.getString("coordinates"));
+        f.setStatus(rs.getString("status"));
+        f.setDescription(rs.getString("description"));
+        // 使用getObject处理可能为null的Long值
+        f.setCreatedBy(rs.getObject("created_by", Long.class));
         Timestamp c = rs.getTimestamp("created_at");
-        f.setCreatedAt(c != null ? c.toLocalDateTime() : null);
+        f.setCreatedAt(c != null ? new Date(c.getTime()) : null);
+        Timestamp u = rs.getTimestamp("updated_at");
+        f.setUpdatedAt(u != null ? new Date(u.getTime()) : null);
         return f;
     };
 
     public long create(GeoFence f) {
-        String sql = "INSERT INTO geo_fences(user_id,name,center_latitude,center_longitude,radius,trigger_type,is_active) VALUES(?,?,?,?,?,?,?)";
+        String sql = "INSERT INTO geo_fences(name, type, center_lat, center_lng, radius, coordinates, status, description, created_by, patient_id) VALUES(?,?,?,?,?,?,?,?,?,?)";
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
-            ps.setLong(1, f.getUserId());
-            ps.setString(2, f.getName());
-            ps.setBigDecimal(3, f.getCenterLatitude());
-            ps.setBigDecimal(4, f.getCenterLongitude());
-            ps.setBigDecimal(5, f.getRadius());
-            ps.setString(6, f.getTriggerType());
-            if (f.getIsActive() == null) ps.setObject(7, null); else ps.setBoolean(7, f.getIsActive());
+            ps.setString(1, f.getName());
+            ps.setString(2, f.getType());
+            ps.setObject(3, f.getCenterLat());
+            ps.setObject(4, f.getCenterLng());
+            ps.setObject(5, f.getRadius());
+            ps.setString(6, f.getCoordinates());
+            ps.setString(7, f.getStatus());
+            ps.setString(8, f.getDescription());
+            ps.setObject(9, f.getCreatedBy());
+            ps.setObject(10, f.getPatientId());
             return ps;
         }, kh);
         return kh.getKey() == null ? 0L : kh.getKey().longValue();
     }
 
     public int update(GeoFence f) {
-        return jdbc.update("UPDATE geo_fences SET name=?, center_latitude=?, center_longitude=?, radius=?, trigger_type=?, is_active=? WHERE fence_id=?",
-                f.getName(), f.getCenterLatitude(), f.getCenterLongitude(), f.getRadius(), f.getTriggerType(), f.getIsActive(), f.getFenceId());
+        return jdbc.update("UPDATE geo_fences SET name=?, type=?, center_lat=?, center_lng=?, radius=?, coordinates=?, status=?, description=?, created_by=?, patient_id=? WHERE id=?",
+                f.getName(), f.getType(), f.getCenterLat(), f.getCenterLng(), f.getRadius(), f.getCoordinates(), f.getStatus(), f.getDescription(), f.getCreatedBy(), f.getPatientId(), f.getId());
     }
 
     public Optional<GeoFence> findById(long id) {
-        List<GeoFence> list = jdbc.query("SELECT * FROM geo_fences WHERE fence_id=?", MAPPER, id);
+        List<GeoFence> list = jdbc.query("SELECT * FROM geo_fences WHERE id=?", MAPPER, id);
         return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
     }
 
     public List<GeoFence> listByUser(long userId) {
-        return jdbc.query("SELECT * FROM geo_fences WHERE user_id=? ORDER BY fence_id DESC", MAPPER, userId);
+        return jdbc.query("SELECT * FROM geo_fences WHERE created_by=? ORDER BY id DESC", MAPPER, userId);
     }
 
     public List<GeoFence> listActiveByUser(long userId) {
-        return jdbc.query("SELECT * FROM geo_fences WHERE user_id=? AND is_active=TRUE ORDER BY fence_id DESC", MAPPER, userId);
+        return jdbc.query("SELECT * FROM geo_fences WHERE created_by=? AND status='active' ORDER BY id DESC", MAPPER, userId);
     }
 
-    public int delete(long fenceId) { return jdbc.update("DELETE FROM geo_fences WHERE fence_id=?", fenceId); }
+    public List<GeoFence> listAll() {
+        return jdbc.query("SELECT * FROM geo_fences ORDER BY id DESC", MAPPER);
+    }
+
+    public List<GeoFence> listActive() {
+        return jdbc.query("SELECT * FROM geo_fences WHERE status='active' ORDER BY id DESC", MAPPER);
+    }
+
+    public int delete(long fenceId) { 
+        return jdbc.update("DELETE FROM geo_fences WHERE id=?", fenceId); 
+    }
+
+    public int deactivate(long fenceId) {
+        return jdbc.update("UPDATE geo_fences SET status='inactive' WHERE id=?", fenceId);
+    }
 }
 

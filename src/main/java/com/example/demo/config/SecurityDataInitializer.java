@@ -17,22 +17,33 @@ public class SecurityDataInitializer {
     @Bean
     public CommandLineRunner initDefaultUsers(UserRepository userRepository, PasswordEncoder encoder) {
         return args -> {
-            ensureUser(userRepository, encoder, "admin", "admin123", "admin@example.com");
-            ensureUser(userRepository, encoder, "user", "user123", "user@example.com");
+            try {
+                ensureUser(userRepository, encoder, "admin", "admin123", "admin@example.com");
+                ensureUser(userRepository, encoder, "user", "user123", "user@example.com");
+            } catch (Exception e) {
+                log.warn("Failed to initialize default users, database connection might be unavailable: {}", e.getMessage());
+                log.debug("Detailed error:", e);
+            }
         };
     }
 
     private void ensureUser(UserRepository userRepository, PasswordEncoder encoder,
                              String username, String rawPassword, String email) {
-        if (userRepository.findByUsername(username).isEmpty()) {
-            User u = new User();
-            u.setUsername(username);
-            u.setEmail(email);
-            u.setPassword_hash(encoder.encode(rawPassword));
-            long id = userRepository.create(u);
-            log.info("Initialized default user '{}' (id={})", username, id);
-        } else {
-            log.debug("Default user '{}' already exists", username);
+        try {
+            if (userRepository.findByUsername(username).isEmpty()) {
+                User u = new User();
+                u.setUsername(username);
+                u.setEmail(email);
+                u.setPassword(encoder.encode(rawPassword));
+                u.setRole("user");
+                u.setStatus("active");
+                User savedUser = userRepository.save(u);
+                log.info("Initialized default user '{}' (id={})");
+            } else {
+                log.debug("Default user '{}' already exists");
+            }
+        } catch (Exception e) {
+            log.warn("Failed to ensure user '{}': {}");
         }
     }
 }

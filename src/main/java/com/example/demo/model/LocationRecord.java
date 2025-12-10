@@ -27,11 +27,14 @@ public class LocationRecord {
     @JoinColumn(name = "device_id")
     private Device device;
 
+    @Column(name = "patient_id")
+    private Long patientId;
+
     @Column(length = 15)
     private String imei;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "recv_time")
+    @Column(name = "recv_time", nullable = false)
     private Date recvTime;
 
     @Column(name = "gps_raw", length = 1024)
@@ -44,11 +47,10 @@ public class LocationRecord {
     private Double latitude;
     private Double longitude;
 
-    @Column(length = 64)
-    private String speed;
+    private Double speed;
 
-    @Column(length = 64)
-    private String direction;
+    @Column(name = "direction")
+    private Double direction;
 
     @Column(length = 255)
     private String address;
@@ -56,8 +58,18 @@ public class LocationRecord {
     @Column(length = 50)
     private String source;
 
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "datetime default current_timestamp")
+    private Date createdAt;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "updated_at", nullable = false, columnDefinition = "datetime default current_timestamp on update current_timestamp")
+    private Date updatedAt;
+
     public LocationRecord() {
         this.recvTime = new Date();
+        this.createdAt = new Date();
+        this.updatedAt = new Date();
     }
 
     // getters & setters
@@ -86,16 +98,22 @@ public class LocationRecord {
     public Double getLongitude() { return longitude; }
     public void setLongitude(Double longitude) { this.longitude = longitude; }
 
-    public String getSpeed() { return speed; }
-    public void setSpeed(String speed) { this.speed = speed; }
+    public Double getSpeed() { return speed; }
+    public void setSpeed(Double speed) { this.speed = speed; }
 
-    public String getDirection() { return direction; }
-    public void setDirection(String direction) { this.direction = direction; }
+    public Double getDirection() { return direction; }
+    public void setDirection(Double direction) { this.direction = direction; }
 
     public String getAddress() { return address; }
     public void setAddress(String address) { this.address = address; }
 
     public String getSource() { return source; }
     public void setSource(String source) { this.source = source; }
+
+    public Date getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }
+
+    public Date getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Date updatedAt) { this.updatedAt = updatedAt; }
 }
 

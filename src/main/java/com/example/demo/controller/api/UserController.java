@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.*;
 import java.net.URI;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 @RestController
 @RequestMapping("/api/users")
@@ -18,8 +20,8 @@ public class UserController {
 
     @PostMapping
     public ResponseEntity<?> create(@RequestBody User u) {
-        long id = repo.create(u);
-        return ResponseEntity.created(URI.create("/api/users/" + id)).body(id);
+        User saved = repo.save(u);
+        return ResponseEntity.created(URI.create("/api/users/" + saved.getId())).body(saved.getId());
     }
 
     @GetMapping("/{id}")
@@ -31,20 +33,30 @@ public class UserController {
     @GetMapping
     public List<User> list(@RequestParam(defaultValue = "20") int limit,
                            @RequestParam(defaultValue = "0") int offset) {
-        return repo.list(limit, offset);
+        // 使用CrudRepository的findAll()方法，然后手动分页
+        return StreamSupport.stream(repo.findAll().spliterator(), false)
+                .skip(offset)
+                .limit(limit)
+                .collect(Collectors.toList());
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<?> update(@PathVariable long id, @RequestBody User u) {
-        u.setUserId(id);
-        int n = repo.update(u);
-        return n > 0 ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
+        if (!repo.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        u.setId(id);
+        repo.save(u);
+        return ResponseEntity.ok().build();
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> delete(@PathVariable long id) {
-        int n = repo.delete(id);
-        return n > 0 ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+        if (!repo.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+        repo.deleteById(id);
+        return ResponseEntity.noContent().build();
     }
 }
 

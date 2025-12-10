@@ -134,11 +134,12 @@ public class ApiAuthController {
                 return ResponseEntity.status(HttpStatus.SEE_OTHER).header("Location", "/home").build();
             }
 
-            Map<String, Object> ok = new HashMap<>();
-            ok.put("success", true);
-            ok.put("username", username);
+            // 返回用户对象，包含用户名和角色信息，符合前端期望的格式
+            Map<String, Object> user = new HashMap<>();
+            user.put("username", username);
+            user.put("success", true);
             logger.debug("Authentication succeeded for user={}", username);
-            return ResponseEntity.ok(ok);
+            return ResponseEntity.ok(user);
         } catch (BadCredentialsException ex) {
             logger.info("Authentication failed for user={}: bad credentials", username);
             Map<String, Object> err = new HashMap<>();

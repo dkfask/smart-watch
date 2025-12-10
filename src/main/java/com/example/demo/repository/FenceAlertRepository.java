@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.util.Date;
 import java.util.List;
 
 @Repository
@@ -20,14 +21,16 @@ public class FenceAlertRepository {
 
     private static final RowMapper<FenceAlert> MAPPER = (rs, n) -> {
         FenceAlert a = new FenceAlert();
-        a.setAlertId(rs.getLong("alert_id"));
+        a.setId(rs.getLong("alert_id"));
         a.setFenceId(rs.getLong("fence_id"));
         a.setDeviceId(rs.getLong("device_id"));
         a.setAlertType(rs.getString("alert_type"));
         var t = rs.getTimestamp("triggered_time");
-        a.setTriggeredTime(t != null ? t.toLocalDateTime() : null);
+        a.setTriggeredTime(t != null ? new Date(t.getTime()) : null);
         Object rd = rs.getObject("is_read");
         a.setIsRead(rd == null ? null : rs.getBoolean("is_read"));
+        a.setCreatedAt(rs.getTimestamp("created_at") != null ? new Date(rs.getTimestamp("created_at").getTime()) : null);
+        a.setUpdatedAt(rs.getTimestamp("updated_at") != null ? new Date(rs.getTimestamp("updated_at").getTime()) : null);
         return a;
     };
 

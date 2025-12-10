@@ -13,34 +13,49 @@ public class HealthRecord {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "device_id")
-    private Device device;
+    @Column(name = "patient_id")
+    private Long patientId;
+
+    @Column(name = "device_id")
+    private Long deviceId;
 
     @Column(length = 15)
     private String imei;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "recv_time")
+    @Column(name = "recv_time", nullable = false)
     private Date recvTime;
 
-    @Column(name = "data_type", length = 32)
+    @Column(name = "data_type", length = 32, nullable = false)
     private String dataType;
 
-    @Lob
+    @Column(nullable = false)
     private String value;
 
     @Lob
-    private String extra;
+    @Column(name = "raw_data")
+    private String rawData;
 
-    public HealthRecord() { this.recvTime = new Date(); }
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "datetime default current_timestamp")
+    private Date createdAt;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "updated_at", nullable = false, columnDefinition = "datetime default current_timestamp on update current_timestamp")
+    private Date updatedAt;
+
+    public HealthRecord() {
+        this.recvTime = new Date();
+        this.createdAt = new Date();
+        this.updatedAt = new Date();
+    }
 
     // getters & setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
-    public Device getDevice() { return device; }
-    public void setDevice(Device device) { this.device = device; }
+    public Long getDeviceId() { return deviceId; }
+    public void setDeviceId(Long deviceId) { this.deviceId = deviceId; }
 
     public String getImei() { return imei; }
     public void setImei(String imei) { this.imei = imei; }
@@ -54,7 +69,13 @@ public class HealthRecord {
     public String getValue() { return value; }
     public void setValue(String value) { this.value = value; }
 
-    public String getExtra() { return extra; }
-    public void setExtra(String extra) { this.extra = extra; }
+    public String getRawData() { return rawData; }
+    public void setRawData(String rawData) { this.rawData = rawData; }
+
+    public Date getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }
+
+    public Date getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Date updatedAt) { this.updatedAt = updatedAt; }
 }
 

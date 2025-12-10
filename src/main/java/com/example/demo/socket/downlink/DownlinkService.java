@@ -263,6 +263,86 @@ public class DownlinkService {
     }
 
     /**
+     * 构建 BPMC（运动检测控制）下行包
+     * 示例：IWBPMC,353456789012345,0808351,1#
+     */
+    public String buildBPMC(String imei, String seq, int setting) {
+        String seq6 = normalizeSeq(seq);
+        return HEADER + String.format("BPMC,%s,%s,%d", imei, seq6, setting) + END_MARKER;
+    }
+
+    /**
+     * 构建 BPPH（SOS呼叫开关）下行包
+     * 示例：IWBPPH,353456789012345,0808351,1#
+     */
+    public String buildBPPH(String imei, String seq, int setting) {
+        String seq6 = normalizeSeq(seq);
+        return HEADER + String.format("BPPH,%s,%s,%d", imei, seq6, setting) + END_MARKER;
+    }
+
+    /**
+     * 构建 BPSM（短信指令）下行包
+     * 示例：IWBPSM,355932600021328,680835,@wifictl@=connect-123-12345678-psk#
+     */
+    public String buildBPSM(String imei, String seq, String commandContent) {
+        String seq6 = normalizeSeq(seq);
+        return HEADER + String.format("BPSM,%s,%s,%s", imei, seq6, commandContent) + END_MARKER;
+    }
+
+    /**
+     * 构建 BPTF（时间制度）下行包
+     * 示例：IWBPTF,353456789012345,2#
+     */
+    public String buildBPTF(String imei, int setting) {
+        return HEADER + String.format("BPTF,%s,%d", imei, setting) + END_MARKER;
+    }
+
+    /**
+     * 构建 BPWL（设置与设备绑定的联系人白名单，10个）下行包
+     * 格式：IWBPWL,IMEI,指令流水号,联系人1名称|联系人1电话|绑定设备的IMEI,...,联系人10名称|联系人10电话|绑定设备的IMEI#
+     */
+    public String buildBPWL(String imei, String seq, List<String> contactInfoList) {
+        String seq6 = normalizeSeq(seq);
+        StringBuilder sb = new StringBuilder();
+        sb.append("BPWL,").append(imei).append(',').append(seq6).append(',');
+        
+        // 组成最多10组，每组 name|phone|deviceImei
+        for (int i = 0; i < 10; i++) {
+            String contactInfo = (contactInfoList != null && i < contactInfoList.size()) ? contactInfoList.get(i) : "";
+            sb.append(contactInfo);
+            if (i < 9) sb.append(',');
+        }
+        return HEADER + sb.toString() + END_MARKER;
+    }
+
+    /**
+     * 构建 BPXL（测量心率）下行包
+     * 示例：IWBPXL,353456789012345,080835#
+     */
+    public String buildBPXL(String imei, String seq) {
+        String seq6 = normalizeSeq(seq);
+        return HEADER + String.format("BPXL,%s,%s", imei, seq6) + END_MARKER;
+    }
+
+    /**
+     * 构建 BPXY（测量血压）下行包
+     * 示例：IWBPXY,353456789012345,080835#
+     */
+    public String buildBPXY(String imei, String seq) {
+        String seq6 = normalizeSeq(seq);
+        return HEADER + String.format("BPXY,%s,%s", imei, seq6) + END_MARKER;
+    }
+
+    /**
+     * 构建 BPXZ（测量血氧）下行包
+     * 示例：IWBPXZ,353456789012345,080835#
+     */
+    public String buildBPXZ(String imei, String seq) {
+        String seq6 = normalizeSeq(seq);
+        return HEADER + String.format("BPXZ,%s,%s", imei, seq6) + END_MARKER;
+    }
+
+    /**
      * 通用发送方法：将构建的下行命令通过 socket 发送到设备。
      * 使用 PrintWriter 且默认编码为 UTF-8 写入并 flush。
      *

@@ -4,6 +4,7 @@ import com.example.demo.model.User;
 import com.example.demo.repository.UserRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -19,12 +20,18 @@ public class AuthUserDetailsService implements UserDetailsService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthUserDetailsService.class);
 
-    private final UserRepository userRepository;
+    private UserRepository userRepository;
 
     // 防止 loadUserByUsername 重入导致的递归/StackOverflow（线程本地）
     private static final ThreadLocal<Boolean> LOAD_IN_PROGRESS = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
-    public AuthUserDetailsService(UserRepository userRepository) {
+    // 默认构造函数，用于Spring创建实例
+    public AuthUserDetailsService() {
+    }
+
+    // Setter注入，允许userRepository为null
+    @Autowired(required = false)
+    public void setUserRepository(UserRepository userRepository) {
         this.userRepository = userRepository;
     }
 
@@ -42,25 +49,38 @@ public class AuthUserDetailsService implements UserDetailsService {
 
         try {
             LOAD_IN_PROGRESS.set(Boolean.TRUE);
+            
+            // 检查userRepository是否为null
+            if (userRepository == null) {
+                logger.error("UserRepository is not initialized, cannot load user: {}", username);
+                throw new UsernameNotFoundException("用户仓库未初始化，暂时无法加载用户: " + username);
+            }
 
             User u = userRepository.findByUsername(username)
                     .orElseThrow(() -> new UsernameNotFoundException("用户不存在: " + username));
 
-            String passwordHash = u.getPassword_hash();
+            String passwordHash = u.getPassword();
             if (passwordHash == null || passwordHash.isBlank()) {
                 throw new UsernameNotFoundException("用户未设置密码: " + username);
             }
 
             List<GrantedAuthority> authorities = new ArrayList<>();
-            authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
-            if ("admin".equalsIgnoreCase(u.getUsername())) {
+            // 根据角色设置权限
+            String role = u.getRole();
+            if ("admin".equalsIgnoreCase(role)) {
                 authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+                authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+            } else {
+                authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
             }
+
+            // 检查用户状态
+            boolean isEnabled = "active".equalsIgnoreCase(u.getStatus());
 
             return new org.springframework.security.core.userdetails.User(
                     u.getUsername(),
                     passwordHash,
-                    true, true, true, true,
+                    isEnabled, true, true, true,
                     authorities
             );
         } catch (StackOverflowError soe) {

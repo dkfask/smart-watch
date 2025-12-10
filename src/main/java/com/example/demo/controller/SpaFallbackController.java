@@ -16,13 +16,16 @@ import org.springframework.web.bind.annotation.RequestMapping;
  * 注意：默认不启用（false），以保持现有行为不变。启用后请确保前端构建产物已部署到 static 目录。
  */
 @Controller
-@RequestMapping
 @ConditionalOnProperty(prefix = "app.spa", name = "enabled", havingValue = "true")
 public class SpaFallbackController {
-
-    @GetMapping({"/", "/login", "/register", "/home"})
-    public String forwardToIndex() {
-        // 当该 Bean 被创建时（即 app.spa.enabled=true），直接转发到 static 下的 index.html
-        return "forward:/index.html";
+    
+    @GetMapping("/")
+    public String root() {
+        return "redirect:/index.html";
+    }
+    
+    @GetMapping({"/login", "/register", "/home", "/menu"})
+    public String spaRoutes() {
+        return "redirect:/index.html";
     }
 }

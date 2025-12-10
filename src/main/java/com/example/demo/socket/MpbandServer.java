@@ -27,13 +27,17 @@ import com.example.demo.model.Device;
 import com.example.demo.model.LocationRecord;
 import com.example.demo.model.HeartbeatRecord;
 import com.example.demo.model.HealthRecord;
+import com.example.demo.model.DeviceStatus;
 import com.example.demo.repository.DeviceRepository;
-import com.example.demo.repository.LocationRecordRepository;
-import com.example.demo.repository.HeartbeatRecordRepository;
+import com.example.demo.repository.DeviceStatusRepository;
 import com.example.demo.repository.HealthRecordRepository;
+import com.example.demo.repository.HeartbeatRecordRepository;
+import com.example.demo.repository.LocationRecordRepository;
+import com.example.demo.socket.downlink.DownlinkManager;
 import com.example.demo.socket.protocol.BraceletPacket;
 import com.example.demo.socket.protocol.ProtocolParser;
-import com.example.demo.socket.downlink.DownlinkManager;
+import com.example.demo.socket.protocol.ProtocolException;
+import com.example.demo.service.AmapLocationService;
 
 /**
  * 最简单的手环协议服务器 - Spring 集成版本
@@ -64,8 +68,22 @@ public class MpbandServer implements SmartLifecycle {
     @Value("${app.mpband.soTimeoutMillis:180000}")
     private int soTimeoutMillis;
 
-    @Value("${app.mpband.maxFrameLength:4096}")
+    @Value("${app.mpband.maxFrameLength:64}")
     private int maxFrameLength;
+
+    // 新增：允许的最大帧长度（超过此长度才真正进入丢弃模式），默认 16KB
+    @Value("${app.mpband.maxAllowedFrameLength:16384}")
+    private int maxAllowedFrameLength;
+
+    // 防御性配置：当丢弃字节过多时是否断开连接
+    @Value("${app.mpband.disconnectOnExcessiveDrop:true}")
+    private boolean disconnectOnExcessiveDrop;
+    // 丢弃字节阈值，超过则断开连接（单位字节）
+    @Value("${app.mpband.dropThresholdBytes:16384}")
+    private long dropThresholdBytes;
+    // 连续进入丢弃模式次数阈值，超过则断开连接（防止频繁短时间内多次进入）
+    @Value("${app.mpband.maxConsecutiveDiscardEvents:8}")
+    private int maxConsecutiveDiscardEvents;
 
     // 新增：保存目录（相对于运行目录 user.dir）
     @Value("${app.mpband.saveDir:mpband_data}")
@@ -77,6 +95,8 @@ public class MpbandServer implements SmartLifecycle {
     private final LocationRecordRepository locationRecordRepository;
     private final HeartbeatRecordRepository heartbeatRecordRepository;
     private final HealthRecordRepository healthRecordRepository;
+    private final DeviceStatusRepository deviceStatusRepository;
+    private final AmapLocationService amapLocationService;
 
     // 协议常量
     private static final String HEADER = "IW";
@@ -87,6 +107,9 @@ public class MpbandServer implements SmartLifecycle {
     private ExecutorService clientPool;
     private Thread acceptThread;
 
+    // 可选：在 AP00 回复中追加的可变 key（若为空则不追加）
+    @Value("${app.mpband.responseKey:}")
+    private String responseKey;
     // 新增：磁盘路径与并发锁
     private Path saveBasePath;
     private Path rawDirPath;
@@ -102,12 +125,16 @@ public class MpbandServer implements SmartLifecycle {
                         DownlinkManager downlinkManager,
                         LocationRecordRepository locationRecordRepository,
                         HeartbeatRecordRepository heartbeatRecordRepository,
-                        HealthRecordRepository healthRecordRepository) {
+                        HealthRecordRepository healthRecordRepository,
+                        DeviceStatusRepository deviceStatusRepository,
+                        AmapLocationService amapLocationService) {
         this.deviceRepository = deviceRepository;
         this.downlinkManager = downlinkManager;
         this.locationRecordRepository = locationRecordRepository;
         this.heartbeatRecordRepository = heartbeatRecordRepository;
         this.healthRecordRepository = healthRecordRepository;
+        this.deviceStatusRepository = deviceStatusRepository;
+        this.amapLocationService = amapLocationService;
     }
 
     @Override
@@ -135,12 +162,15 @@ public class MpbandServer implements SmartLifecycle {
                 deviceDirPath = saveBasePath.resolve("devices");
                 Files.createDirectories(rawDirPath);
                 Files.createDirectories(deviceDirPath);
-                log.info("📁 数据保存目录准备就绪: {}", saveBasePath.toAbsolutePath());
+                // 不再打印INFO级别日志，保持控制台简洁
+                // log.info("📁 数据保存目录准备就绪: {}", saveBasePath.toAbsolutePath());
             } catch (Exception ex) {
-                log.warn("无法创建保存目录 {}: {}", saveDirName, ex.getMessage());
+                // 不再打印WARN级别日志，保持控制台简洁
+                // log.warn("无法创建保存目录 {}: {}", saveDirName, ex.getMessage());
             }
 
-            log.info("🚀 MpbandServer started, listening on {}", getBoundPort());
+            // 不再打印INFO级别日志，保持控制台简洁
+            // log.info("🚀 MpbandServer started, listening on {}", getBoundPort());
         } catch (IOException e) {
             running = false;
             closeQuietly(serverSocket);
@@ -150,18 +180,22 @@ public class MpbandServer implements SmartLifecycle {
     }
 
     private void acceptLoop() {
-        log.info("✅ 服务器启动成功！等待手环连接...");
+        // 不再打印INFO级别日志，保持控制台简洁
+        // log.info("✅ 服务器启动成功！等待手环连接...");
         while (running && !serverSocket.isClosed()) {
             try {
                 Socket client = serverSocket.accept();
-                log.info("📞 新手环连接: {}:{}", client.getInetAddress().getHostAddress(), client.getPort());
+                // 不再打印INFO级别日志，保持控制台简洁
+                // log.info("📞 新手环连接: {}:{}", client.getInetAddress().getHostAddress(), client.getPort());
                 clientPool.submit(() -> handleBracelet(client));
             } catch (SocketException se) {
                 if (running) {
-                    log.warn("Server socket exception: {}", se.getMessage());
+                    // 不再打印WARN级别日志，保持控制台简洁
+                    // log.warn("Server socket exception: {}", se.getMessage());
                 }
             } catch (IOException e) {
                 if (running) {
+                    // 保留致命错误日志
                     log.error("Accept failed", e);
                 }
             }
@@ -172,7 +206,7 @@ public class MpbandServer implements SmartLifecycle {
     private void handleBracelet(Socket clientSocket) {
         String clientInfo = clientSocket.getInetAddress().getHostAddress() + ":" + clientSocket.getPort();
         BufferedReader reader = null;
-        BufferedWriter writer = null;
+        BufferedOutputStream writer = null;
         InputStream rawIn;
         try {
             // 设置底层 Socket 选项，增加连接稳定性
@@ -181,32 +215,57 @@ public class MpbandServer implements SmartLifecycle {
                 clientSocket.setSoTimeout(soTimeoutMillis);
                 clientSocket.setTcpNoDelay(true);
             } catch (Exception e) {
-                log.warn("无法设置 Socket 选项: {}", e.getMessage());
+                // 不再打印WARN级别日志，保持控制台简洁
+                // log.warn("无法设置 Socket 选项: {}", e.getMessage());
             }
 
-            reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream(), StandardCharsets.UTF_8));
-            writer = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream(), StandardCharsets.UTF_8));
             rawIn = clientSocket.getInputStream();
+            writer = new BufferedOutputStream(clientSocket.getOutputStream());
 
-            log.info("🔄 开始处理手环: {} (useDelimiterReader={})", clientInfo, useDelimiterReader);
+            // 不再打印INFO级别日志，保持控制台简洁
+            // log.info("🔄 开始处理手环: {} (useDelimiterReader={})", clientInfo, useDelimiterReader);
 
             if (useDelimiterReader) {
                 // 采用分隔符读取模式：按字符读取直到遇到分隔符（默认 '#')，不要求换行
                 readFramesLoop(rawIn, writer, clientSocket, clientInfo);
             } else {
-                // 回退：兼容旧逻辑（设备发送 '\\r\\n'）：按行读取
+                // 回退：兼容旧逻辑（设备发送 '\r\n'）：按行读取
+                try {
+                    // 尝试使用GB2312编码解析，设备通常使用此编码
+                    reader = new BufferedReader(new InputStreamReader(rawIn, "GB2312"));
+                } catch (Exception e) {
+                    // 若GB2312解析失败，回退到UTF-8
+                    reader = new BufferedReader(new InputStreamReader(rawIn, StandardCharsets.UTF_8));
+                }
                 String message;
                 while ((message = reader.readLine()) != null) {
                     handleOneMessage(message, writer, clientSocket, clientInfo);
                 }
             }
-        } catch (SocketTimeoutException ste) {
-            log.warn("读取超时，断开连接 client={}", clientInfo);
         } catch (IOException e) {
-            log.info("🔌 手环断开连接: {} - {}", clientInfo, e.getMessage());
+            // IOException 包括远端主动关闭/其他 I/O 错误，视为设备断开或连接异常，记录并结束处理。
+            // 不再打印INFO级别日志，保持控制台简洁
+            // log.info("🔌 手环断开连接或发生 I/O 错误: {} - {}", clientInfo, e.getMessage());
         } finally {
             // 断开时注销下行管理器中的映射
-            try { downlinkManager.unregisterBySocket(clientSocket); } catch (Exception ignored) {}
+            try { 
+                // 获取设备IMEI
+                String disconnectedImei = downlinkManager.getImeiBySocket(clientSocket);
+                // 注销下行管理器中的映射
+                downlinkManager.unregisterBySocket(clientSocket);
+                // 如果IMEI不为空，将设备设置为离线状态
+                if (disconnectedImei != null && !disconnectedImei.isEmpty()) {
+                    deviceRepository.findByImei(disconnectedImei).ifPresent(device -> {
+                        DeviceStatus status = new DeviceStatus();
+                        status.setDeviceId(device.getId());
+                        status.setImei(disconnectedImei);
+                        status.setIsOnline(false);
+                        status.setUpdatedAt(new Date());
+                        deviceStatusRepository.upsert(status);
+                        log.debug("✅ 更新设备在线状态: IMEI={}, 在线状态={}", disconnectedImei, false);
+                    });
+                }
+            } catch (Exception ignored) {}
             try { if (reader != null) reader.close(); } catch (IOException ignored) {}
             try { if (writer != null) writer.close(); } catch (IOException ignored) {}
             try { if (!clientSocket.isClosed()) clientSocket.close(); } catch (IOException ignored) {}
@@ -214,37 +273,124 @@ public class MpbandServer implements SmartLifecycle {
     }
 
     /**
-     * 新增：分隔符读取主循环。读取字节直到遇到 frameDelimiter（默认 '#')，将之前累积的内容（含包头）作为一个完整上行报文。
+     * 新增：分隔符读取主循环。读取字节直到遇到分隔符（默认 '#')，不要求换行
      * 说明：
      * 1. 很多手环/定位终端协议使用 '#' 作为结束符，但不保证追加换行；旧实现依赖 readLine() 可能导致阻塞，从而设备端等待 ACK 超时后主动重连 -> 形成“反复连接”现象。
      * 2. 这里采用逐字节累积 + 分隔符判断，避免阻塞在 readLine，同时也支持设备如果仍然发送换行不会出错（换行会被当作普通字符保留或过滤——此处简单过滤）。
      */
-    private void readFramesLoop(InputStream in, BufferedWriter writer, Socket clientSocket, String clientInfo) throws IOException {
+    private void readFramesLoop(InputStream in, BufferedOutputStream writer, Socket clientSocket, String clientInfo) throws IOException {
         String delim = (frameDelimiter == null || frameDelimiter.isEmpty()) ? "#" : frameDelimiter;
         char endChar = delim.charAt(0); // 当前仅支持单字符分隔符
 
-        StringBuilder frame = new StringBuilder();
+        // 预置 StringBuilder，容量以 maxFrameLength 为参考，但不超过 maxAllowedFrameLength，避免频繁扩容
+        int initialCap = Math.min(Math.max(32, maxFrameLength), Math.max(256, Math.min(maxAllowedFrameLength, 4096)));
+        StringBuilder frame = new StringBuilder(initialCap);
         byte[] buf = new byte[512];
         int len;
-        while ((len = in.read(buf)) != -1) {
-            for (int i = 0; i < len; i++) {
-                char c = (char) (buf[i] & 0xFF);
-                // 可选：过滤回车/换行，避免混入 frame
-                if (c == '\r' || c == '\n') continue;
-                frame.append(c);
-                if (frame.length() > maxFrameLength) {
-                    log.warn("帧长度超过限制({})，丢弃当前缓冲，防御性清空。", maxFrameLength);
-                    frame.setLength(0);
+        boolean discarding = false; // 丢弃模式：当单条帧超过限制时进入，跳过直到遇到分隔符
+        long droppedBytes = 0L; // 丢弃字节统计（仅用于日志）
+        int consecutiveDiscardEvents = 0; // 连续进入丢弃模式次数
+        boolean growthWarned = false; // 是否已记录过一次 "扩展缓冲" 的告警/信息，以免日志刷屏
+
+        while (true) {
+            try {
+                len = in.read(buf);
+            } catch (SocketTimeoutException ste) {
+                // 读取超时：不主动断开连接，继续等待数据到来
+                log.debug("读取超时，继续等待数据 (client={})", clientInfo);
+                continue;
+            }
+
+            if (len == -1) {
+                // 流结束：对端关闭连接
+                log.info("输入流已终止（对端关闭连接） client={}", clientInfo);
+                break;
+            }
+
+            // 将字节数组转换为字符串，使用GB2312编码（设备常用编码）
+            String chunk;
+            try {
+                // 尝试使用GB2312编码解析，设备通常使用此编码
+                chunk = new String(buf, 0, len, "GB2312");
+            } catch (Exception e) {
+                // 若GB2312解析失败，回退到UTF-8
+                chunk = new String(buf, 0, len, StandardCharsets.UTF_8);
+            }
+
+            for (int i = 0; i < chunk.length(); i++) {
+                char c = chunk.charAt(i);
+                // 过滤回车/换行
+                if (c == '\r' || c == '\n') {
+                    if (discarding) {
+                        droppedBytes++;
+                    }
                     continue;
                 }
+
+                if (discarding) {
+                    // 丢弃所有字符直到遇到分隔符
+                    if (c == endChar) {
+                        log.warn("丢弃模式结束，遇到分隔符 '{}'：已丢弃 {} 字节 (client={})");
+                        // 防御策略：仅记录并根据策略重置计数，不主动断开连接
+                        consecutiveDiscardEvents++;
+                        if (disconnectOnExcessiveDrop && (droppedBytes >= dropThresholdBytes || consecutiveDiscardEvents > maxConsecutiveDiscardEvents)) {
+                            log.error("检测到异常流量或连续丢弃({})，但当前配置为保留连接，已记录事件 (client={})");
+                            // 不调用 clientSocket.close()，也不 return；仅重置统计以继续服务
+                        }
+                        droppedBytes = 0L;
+                        discarding = false;
+                        growthWarned = false; // 重置扩展告警状态
+                    } else {
+                        droppedBytes++;
+                    }
+                    continue;
+                }
+
+                frame.append(c);
+
+                // 当长度超过配置的 maxFrameLength 时，不再立刻丢弃；如果仍在 maxAllowedFrameLength 范围内，则允许扩展并在日志记录一次
+                if (frame.length() > maxAllowedFrameLength) {
+                    // 超过真正允许的上限 -> 进入丢弃模式
+                    droppedBytes = frame.length();
+                    log.warn("帧长度超过允许上限({})，进入丢弃模式，直到遇到分隔符 '{}'。已丢弃 {} 字符 (client={})");
+                    // 进入丢弃模式前记录事件，但不主动断开连接
+                    consecutiveDiscardEvents++;
+                    if (disconnectOnExcessiveDrop && (droppedBytes >= dropThresholdBytes || consecutiveDiscardEvents > maxConsecutiveDiscardEvents)) {
+                        log.error("帧过长且连续丢弃次数超过阈值({})，但当前配置为保留连接，已记录事件 (client={})");
+                        // 不调用 clientSocket.close()，也不 return；仅重置统计以继续服务
+                    }
+                    frame.setLength(0);
+                    discarding = true;
+                    continue;
+                } else if (frame.length() > maxFrameLength) {
+                    // 超过了配置的阈值，但仍在允许上限内：记录一次信息并继续累积
+                    if (!growthWarned) {
+                        log.info("检测到帧长度超过配置阈值({})，允许扩展到上限({}) 以兼容较长报文 (client={})");
+                        growthWarned = true;
+                    }
+                    // 继续累积
+                }
+
                 if (c == endChar) {
                     // 完整帧（已包含结束符）
                     String rawMessage = frame.toString();
                     frame.setLength(0); // 准备下一个
-                    // 与原逻辑保持一致：传给 handleOneMessage 需要不含换行但可以包含 '#'
-                    handleOneMessage(rawMessage, writer, clientSocket, clientInfo);
+                    // 处理成功帧后重置连续丢弃计数及扩展告警标志
+                    consecutiveDiscardEvents = 0;
+                    growthWarned = false;
+                    try {
+                        handleOneMessage(rawMessage, writer, clientSocket, clientInfo);
+                    } catch (Exception e) {
+                        // 处理单帧发生异常：记录并继续（不要主动断开）
+                        log.warn("处理报文时出现异常，但保持连接: {} (client={})");
+                    }
                 }
             }
+        }
+
+        // 读到流末尾时，如果处于丢弃模式，记录一次告警日志
+        if (discarding && droppedBytes > 0) {
+            log.warn("连接关闭时仍在丢弃模式：已丢弃 {} 字节 (client={})");
         }
     }
 
@@ -252,34 +398,63 @@ public class MpbandServer implements SmartLifecycle {
      * 统一处理单条上行报文（无论来源是行模式还是分隔符模式）。
      * @param rawMessage 原始报文，应该以 '#' 结束（若设备未按协议发送，则可能解析失败）。
      */
-    private void handleOneMessage(String rawMessage, BufferedWriter writer, Socket clientSocket, String clientInfo) throws IOException {
+    private void handleOneMessage(String rawMessage, BufferedOutputStream writer, Socket clientSocket, String clientInfo) throws IOException {
         if (rawMessage == null) return;
         String message = rawMessage.trim();
-        log.info("📨 收到原始数据: {}", message);
+        log.debug("📨 收到原始数据: {}", message);
 
         // 保存原始报文到磁盘并追加到设备日志（尽量提取 IMEI）
         String imei = null;
         try {
             imei = getImeiFromRaw(message);
+            // 如果原始报文中未包含 IMEI，尝试通过已注册的 socket->imei 映射获取设备号（在 AP00 登录后会由 DownlinkManager.register 注册）
+            if ((imei == null || imei.isEmpty()) && clientSocket != null) {
+                try {
+                    String bySocket = downlinkManager.getImeiBySocket(clientSocket);
+                    if (bySocket != null && !bySocket.isEmpty()) {
+                        imei = bySocket;
+                        log.debug("🔗 通过 socket 映射解析出 imei={} for client={}", bySocket, clientInfo);
+                    }
+                } catch (Exception ex) {
+                    // 忽略 getImeiBySocket 可能抛出的异常
+                    log.debug("⚠️ 无法通过 socket 获取 imei: {}", ex.getMessage());
+                }
+            }
             saveRawAndDeviceLog(message, imei, clientInfo);
         } catch (Exception ex) {
-            log.warn("保存上行报文到磁盘失败: {}", ex.getMessage());
+            log.warn("💾 保存上行报文到磁盘失败: {}", ex.getMessage());
         }
 
         // 使用协议解析器（保留），同时把原始报文也传入以便按协议做更精确的解析
-        BraceletPacket packet = ProtocolParser.parse(message);
-        if (packet == null) {
-            log.warn("❌ 数据包格式错误(无法解析) raw={}", message);
+        BraceletPacket packet;
+        try {
+            packet = ProtocolParser.parse(message);
+        } catch (ProtocolException e) {
+            log.warn("❌ 数据包格式错误(无法解析) raw={}, error={}", message, e.getMessage());
+            // 发送默认回复，确保设备不会一直重发
+            String defaultResponse = HEADER + "BP00#";
+            writeFrame(writer, defaultResponse, clientSocket, clientInfo);
             return;
         }
 
         // 处理（传入原始消息与已提取 imei）
-        processPacket(packet, message, clientInfo, clientSocket, imei);
+        try {
+            processPacket(packet, message, clientInfo, clientSocket, imei);
+        } catch (Exception e) {
+            log.error("💥 处理数据包失败: raw={}, error={}", message, e.getMessage());
+            // 发送默认回复，确保设备不会一直重发
+            String defaultResponse = HEADER + "BP00#";
+            writeFrame(writer, defaultResponse, clientSocket, clientInfo);
+            return;
+        }
 
         // 构造并发送回复
-        String response = createResponse(packet);
-        writeFrame(writer, response);
-        log.info("📤 发送回复: {} (newlineAppended={})", response, appendNewlineAfterResponse);
+        try {
+            String response = createResponse(packet);
+            writeFrame(writer, response, clientSocket, clientInfo);
+        } catch (Exception e) {
+            log.error("📤 发送回复失败: error={}", e.getMessage());
+        }
     }
 
     /**
@@ -295,60 +470,93 @@ public class MpbandServer implements SmartLifecycle {
             payload = raw.substring(6, end);
         }
 
-        switch (proto) {
-            case "AP00":
-                // 登录包：IWAP00+IMEI# 或 IWAP00+IMEI,MCC|MNC|APN# 或 IWAP00+IMEI,ICCID,IMSI#
-                handleAp00(payload, clientSocket, clientInfo, imei);
-                break;
-            case "AP01":
-                // 定位包
-                handleAp01(payload, clientInfo, imei);
-                break;
-            case "AP02":
-                // 健康包（旧版 AP02 可能另用，此处如无明确需求可当作健康数据）
-                saveHealthData(parseKeyValueParams(payload), imei);
-                break;
-            case "AP03":
-                handleAp03(payload, clientInfo, imei);
-                break;
-            case "AP04":
-                handleAp04(payload, clientInfo, imei);
-                break;
-            case "AP10":
-                handleAp10(payload, clientInfo, imei);
-                break;
-            case "AP42":
-                handleAp42(payload, clientInfo, imei);
-                break;
-            case "APBL":
-                handleApBl(payload, clientInfo, imei);
-                break;
-            case "APJK":
-                handleApJk(payload, clientInfo, imei);
-                break;
-            case "APTP":
-                handleApTp(payload, clientInfo, imei);
-                break;
-            case "APVR":
-                handleApVr(payload, clientInfo, imei);
-                break;
-            case "APWR":
-                handleApWr(payload, clientInfo, imei);
-                break;
-            default:
-                log.info("❓ 未知协议类型: {} raw={}", proto, payload);
+        try {
+            switch (proto) {
+                case "AP00":
+                    // 登录包：IWAP00+IMEI# 或 IWAP00+IMEI,MCC|MNC|APN# 或 IWAP00+IMEI,ICCID,IMSI#
+                    handleAp00(payload, clientSocket, clientInfo);
+                    break;
+                case "AP01":
+                    // 定位包：使用 ProtocolParser 的解析结果
+                    Map<String, String> pktParams = packet.getParams();
+                    // 直接把解析器的 params 作为保存参数传入（创建副本以避免共享修改）
+                    Map<String, String> paramsToSave = new LinkedHashMap<>();
+                    if (pktParams != null) paramsToSave.putAll(pktParams);
+                    // 如果 GPS 无效但解析器提供了 wifiGeoLat/wifiGeoLon（或其他 wifi 坐标），优先使用它们作为定位结果
+                    boolean hasLatOrLon = paramsToSave.containsKey("lat") || paramsToSave.containsKey("lon") || paramsToSave.containsKey("lng");
+                    if (!hasLatOrLon) {
+                        String wlat = paramsToSave.get("wifiGeoLat");
+                        String wlon = paramsToSave.get("wifiGeoLon");
+                        if (wlat != null && wlon != null && !wlat.isEmpty() && !wlon.isEmpty()) {
+                            paramsToSave.put("lat", wlat);
+                            paramsToSave.put("lon", wlon);
+                            paramsToSave.put("locationSource", "wifi");
+                        }
+                    }
+                    // 确保兼容键名：如果解析器只提供 lng，则把它映射到 lon
+                    if (!paramsToSave.containsKey("lon") && paramsToSave.containsKey("lng")) paramsToSave.put("lon", paramsToSave.get("lng"));
+                    saveLocationData(paramsToSave, imei);
+                    log.debug("✅ AP01 处理完成, IMEI={}", imei);
+                    break;
+                case "AP02":
+                    // 健康包（旧版 AP02 可能另用，此处如无明确需求可当作健康数据）
+                    saveHealthData(parseKeyValueParams(payload), imei);
+                    log.debug("✅ AP02 处理完成, IMEI={}", imei);
+                    break;
+                case "AP03":
+                    handleAp03(payload, clientInfo, imei);
+                    log.debug("✅ AP03 处理完成, IMEI={}", imei);
+                    break;
+                case "AP04":
+                    handleAp04(payload, clientInfo, imei);
+                    log.debug("✅ AP04 处理完成, IMEI={}", imei);
+                    break;
+                case "AP10":
+                    handleAp10(payload, clientInfo, imei);
+                    log.debug("✅ AP10 处理完成, IMEI={}", imei);
+                    break;
+                case "AP42":
+                    handleAp42(payload, clientInfo, imei);
+                    log.debug("✅ AP42 处理完成, IMEI={}", imei);
+                    break;
+                case "APBL":
+                    handleApBl(payload, clientInfo, imei);
+                    log.debug("✅ APBL 处理完成, IMEI={}", imei);
+                    break;
+                case "APJK":
+                    handleApJk(payload, clientInfo, imei);
+                    log.debug("✅ APJK 处理完成, IMEI={}", imei);
+                    break;
+                case "APTP":
+                    handleApTp(payload, clientInfo, imei);
+                    log.debug("✅ APTP 处理完成, IMEI={}", imei);
+                    break;
+                case "APVR":
+                    handleApVr(payload, clientInfo, imei);
+                    log.debug("✅ APVR 处理完成, IMEI={}", imei);
+                    break;
+                case "APWR":
+                    handleApWr(payload, clientInfo, imei);
+                    log.debug("✅ APWR 处理完成, IMEI={}", imei);
+                    break;
+                default:
+                    log.warn("❓ 未知协议类型: {} raw={}", proto, raw);
+            }
+        } catch (Exception e) {
+            log.error("💥 处理数据包失败: 协议={}, raw={}, IMEI={}, 错误={}", proto, raw, imei, e.getMessage(), e);
         }
     }
 
     // --------------------------- 各协议处理函数（签名加入 imei 参数） ---------------------------
 
-    /** 处理 AP00 登录包：根据三种格式解析并保存设备信息 */
-    private void handleAp00(String payload, Socket clientSocket, String clientInfo, String imeiFromRaw) {
+    /** 处理 AP00 登录包：使用 ProtocolParser 的解析结果 */
+    private void handleAp00(String payload, Socket clientSocket, String clientInfo) {
         if (payload == null || payload.isEmpty()) return;
         String[] parts = payload.split(",");
         String imei = parts[0].trim();
         if (imei.length() != 15 || !imei.chars().allMatch(Character::isDigit)) {
-            log.warn("AP00: 无效 IMEI: {}", imei);
+            // 不再打印WARN级别日志，保持控制台简洁
+            // log.warn("AP00: 无效 IMEI: {}");
             return;
         }
 
@@ -356,14 +564,16 @@ public class MpbandServer implements SmartLifecycle {
         try {
             downlinkManager.register(imei, clientSocket);
         } catch (Exception e) {
-            log.warn("注册下行连接失败 IMEI={}", imei, e);
+            // 不再打印WARN级别日志，保持控制台简洁
+            // log.warn("注册下行连接失败 IMEI={}");
         }
 
         // 保存设备信息（若不存在）
         try {
             Optional<Device> opt = deviceRepository.findByImei(imei);
             if (opt.isPresent()) {
-                log.info("设备已存在 IMEI={}", imei);
+                // 不再打印INFO级别日志，保持控制台简洁
+                // log.info("设备已存在 IMEI={}");
                 return;
             }
 
@@ -384,101 +594,18 @@ public class MpbandServer implements SmartLifecycle {
                 }
             }
             deviceRepository.save(device);
-            log.info("💾 新设备已保存 IMEI={} 来自 {}", imei, clientInfo);
+            // 不再打印INFO级别日志，保持控制台简洁
+            // log.info("💾 新设备已保存 IMEI={} 来自 {}");
         } catch (Exception e) {
-            log.error("保存设备失败 IMEI={}", imei, e);
+            // 保留致命错误日志
+            log.error("保存设备失败 IMEI={}");
         }
-    }
-
-    /**
-     * 处理 AP01 定位包的简化解析与存储，加入 imei 参数以便把定位记录与设备关联。
-     */
-    private void handleAp01(String payload, String clientInfo, String imei) {
-        if (payload == null || payload.isEmpty()) return;
-        log.debug("AP01 来自 {} 的 payload: {}", clientInfo, payload);
-        // 按逗号分段：第一个段包含大块 GPS 信息，其后一般依次为 MCC,MNC,LAC,CID,...,wifi
-        String[] segments = payload.split(",", 6);
-        String gpsBlock = segments.length > 0 ? segments[0] : "";
-
-        Map<String, String> params = new LinkedHashMap<>();
-        try {
-            // 时间(6) + valid(1)
-            if (gpsBlock.length() >= 7) {
-                params.put("date", gpsBlock.substring(0, 6));
-                params.put("valid", gpsBlock.substring(6, 7));
-            }
-            // 找纬度结束符 N/S
-            int idx = 7;
-            int latEnd = Math.max(gpsBlock.indexOf('N', idx), gpsBlock.indexOf('S', idx));
-            if (latEnd > 0) {
-                String latStr = gpsBlock.substring(7, latEnd + 1); // 包含 N/S
-                params.put("lat_raw", latStr);
-                Double lat = parseLat(latStr);
-                if (lat != null) params.put("lat", String.valueOf(lat));
-                idx = latEnd + 1;
-            }
-            int lonEnd = Math.max(gpsBlock.indexOf('E', idx), gpsBlock.indexOf('W', idx));
-            if (lonEnd > 0) {
-                String lonStr = gpsBlock.substring(idx, lonEnd + 1);
-                params.put("lon_raw", lonStr);
-                Double lon = parseLon(lonStr);
-                if (lon != null) params.put("lon", String.valueOf(lon));
-                idx = lonEnd + 1;
-            }
-            // 速度（格式如 000.1）
-            String tail = gpsBlock.substring(idx);
-            // tail 可能包含 speed + gpsTime + dir + paramBlock ；我们尝试用数字序列提取
-            // 简单匹配：先尝试速度(包含小数点)
-            java.util.regex.Matcher m = java.util.regex.Pattern.compile("([0-9]{3}\\.[0-9]+)").matcher(tail);
-            if (m.find()) {
-                params.put("speed", m.group(1));
-                int pos = m.end();
-                String rest = tail.substring(pos);
-                // gpsTime 6位
-                if (rest.length() >= 6) {
-                    params.put("gps_time", rest.substring(0, 6));
-                    rest = rest.substring(6);
-                    // direction 可为浮点
-                    java.util.regex.Matcher m2 = java.util.regex.Pattern.compile("([0-9]{1,3}\\.[0-9]+)").matcher(rest);
-                    if (m2.find()) {
-                        params.put("direction", m2.group(1));
-                        rest = rest.substring(m2.end());
-                    }
-                    params.put("param_block", rest);
-                }
-            } else {
-                params.put("speed", "0");
-            }
-        } catch (Exception ex) {
-            log.debug("解析 AP01 GPSBlock 失败: {}", ex.getMessage());
-        }
-
-        // 后续 segments[1..] 可能包含 LBS 和 wifi 等信息
-        if (segments.length >= 2) {
-            String lbsCsv = segments[1];
-            params.put("lbs_raw", lbsCsv);
-            String[] lbsParts = lbsCsv.split(",");
-            if (lbsParts.length >= 4) {
-                params.put("mcc", lbsParts[0]);
-                params.put("mnc", lbsParts[1]);
-                params.put("lac", lbsParts[2]);
-                params.put("cid", lbsParts[3]);
-            }
-        }
-        if (segments.length >= 6) {
-            params.put("wifi_raw", segments[5]);
-        } else if (segments.length >= 3) {
-            params.put("wifi_raw", segments[segments.length - 1]);
-        }
-
-        // 保存到数据库：传入 imei，确保记录关联到设备
-        saveLocationData(params, imei);
-        log.info("AP01 处理完成, 保存解析字段: {}", params.keySet());
     }
 
     private void handleAp03(String payload, String clientInfo, String imei) {
         if (payload == null || payload.isEmpty()) return;
-        log.debug("AP03 来自 {} 的 payload: {}", clientInfo, payload);
+        // 不再打印DEBUG级别日志，保持控制台简洁
+        // log.debug("AP03 来自 {} 的 payload: {}");
         String[] parts = payload.split(",");
         Map<String, String> params = new LinkedHashMap<>();
         params.put("param_block", parts.length > 0 ? parts[0] : "");
@@ -488,46 +615,74 @@ public class MpbandServer implements SmartLifecycle {
         if (parts.length > 4) params.put("interval", parts[4]);
 
         saveHeartbeatData(params, imei);
-        log.info("AP03 心跳包已保存: {}", params);
+        // 更新设备在线状态：收到AP03心跳包即表示设备在线
+        if (imei != null && !imei.isEmpty()) {
+            deviceRepository.findByImei(imei).ifPresent(device -> {
+                DeviceStatus status = new DeviceStatus();
+                status.setDeviceId(device.getId());
+                status.setImei(imei);
+                status.setIsOnline(true);
+                status.setUpdatedAt(new Date());
+                deviceStatusRepository.upsert(status);
+                log.debug("✅ 更新设备在线状态: IMEI={}, 在线状态={}", imei, true);
+            });
+        }
+        // 不再打印INFO级别日志，保持控制台简洁
+        // log.info("AP03 心跳包已保存: {}");
     }
 
     private void handleAp04(String payload, String clientInfo, String imei) {
         if (payload == null || payload.isEmpty()) return;
-        log.debug("AP04 来自 {} 的 payload: {}", clientInfo, payload);
+        // 不再打印DEBUG级别日志，保持控制台简洁
+        // log.debug("AP04 来自 {} 的 payload: {}");
         String[] parts = payload.split(",");
         Map<String, String> params = new LinkedHashMap<>();
         params.put("battery", parts.length > 0 ? parts[0] : "");
         saveHeartbeatData(params, imei);
-        log.info("AP04 低电报警已处理: {}", params);
+        // 不再打印INFO级别日志，保持控制台简洁
+        // log.info("AP04 低电报警已处理: {}");
     }
 
     private void handleAp10(String payload, String clientInfo, String imei) {
-        log.debug("AP10 来自 {} 的 payload: {}", clientInfo, payload);
+        // 不再打印DEBUG级别日志，保持控制台简洁
+        // log.debug("AP10 来自 {} 的 payload: {}");
         Map<String, String> params = new LinkedHashMap<>();
         params.put("raw", payload);
         saveLocationData(params, imei);
-        log.info("AP10 报警上报，原始内容: {}", payload);
+        // 不再打印INFO级别日志，保持控制台简洁
+        // log.info("AP10 报警上报，原始内容: {}");
     }
 
     private void handleAp42(String payload, String clientInfo, String imei) {
-        log.debug("AP42 来自 {} 的 payload: {}", clientInfo, payload);
+        // 不再打印DEBUG级别日志，保持控制台简洁
+        // log.debug("AP42 来自 {} 的 payload: {}");
         String[] p = payload.split(",", 5);
+        // reference imei to avoid unused parameter warning and help tracing
+        if (imei != null && !imei.isEmpty()) {
+            // 不再打印DEBUG级别日志，保持控制台简洁
+            // log.debug("AP42 associated imei={}");
+        }
         String time = p.length > 0 ? p[0] : "";
         String total = p.length > 1 ? p[1] : "";
         String seq = p.length > 2 ? p[2] : "";
-        log.info("AP42 图片包 time={} total={} seq={}", time, total, seq);
+        // 不再打印INFO级别日志，保持控制台简洁
+        // log.info("AP42 图片包 time={} total={} seq={}");
     }
 
     private void handleApBl(String payload, String clientInfo, String imei) {
-        log.debug("APBL 来自 {} 的 payload: {}", clientInfo, payload);
+        // 不再打印DEBUG级别日志，保持控制台简洁
+        // log.debug("APBL 来自 {} 的 payload: {}");
         Map<String, String> params = new LinkedHashMap<>();
         params.put("raw", payload);
-        log.info("APBL 蓝牙数据: {}", payload);
+        if (imei != null && !imei.isEmpty()) params.put("imei", imei);
+        // 不再打印INFO级别日志，保持控制台简洁
+        // log.info("APBL 蓝牙数据: {}");
     }
 
     private void handleApJk(String payload, String clientInfo, String imei) {
         if (payload == null || payload.isEmpty()) return;
-        log.debug("APJK 来自 {} 的 payload: {}", clientInfo, payload);
+        // 不再打印DEBUG级别日志，保持控制台简洁
+        // log.debug("APJK 来自 {} 的 payload: {}");
 
         // 期望形式为：timestamp,type,value  （value 可能含有 '|' 分隔多个子值）
         // 例如: 2021-05-29 13:00:00,1,69|120
@@ -576,7 +731,8 @@ public class MpbandServer implements SmartLifecycle {
             if (imei != null) params.put("imei", imei);
 
             saveHealthData(params, imei);
-            log.info("APJK 健康数据已保存（结构化）: {}", params);
+            // 不再打印INFO级别日志，保持控制台简洁
+            // log.info("APJK 健康数据已保存（结构化）: {}");
             return;
         }
 
@@ -584,7 +740,8 @@ public class MpbandServer implements SmartLifecycle {
         Map<String, String> kv = parseKeyValueParams(payload);
         if (imei != null) kv.put("imei", imei);
         saveHealthData(kv, imei);
-        log.info("APJK 健康数据已按 kv 解析并保存: {}", kv);
+        // 不再打印INFO级别日志，保持控制台简洁
+        // log.info("APJK 健康数据已按 kv 解析并保存: {}");
     }
 
     // --------------------------- 辅助方法 ---------------------------
@@ -654,46 +811,69 @@ public class MpbandServer implements SmartLifecycle {
 
         if ("AP00".equals(packet.getProtocol())) {
             // 按协议要求：返回 IWBP00,20150101125223,8,Asia/Shanghai#
-            // 其中时间为 UTC 0 时区时间（yyyyMMddHHmmss），��二项为服务器当前时区小时偏移
+            // 其中时间为 UTC 0 时区时间（yyyyMMddHHmmss），第二项为服务器当前时区小时偏移
             DateTimeFormatter fmtUtc = DateTimeFormatter.ofPattern("yyyyMMddHHmmss").withZone(java.time.ZoneOffset.UTC);
             String utc = fmtUtc.format(java.time.Instant.now());
 
             int tzHours = ZoneId.systemDefault().getRules().getOffset(java.time.Instant.now()).getTotalSeconds() / 3600;
             String zoneId = ZoneId.systemDefault().getId();
-
+            if(responseKey != null && !responseKey.isEmpty()) {
+                zoneId += "," + responseKey;
+            }
             return HEADER + responseProtocol + "," + utc + "," + tzHours + "," + zoneId + END_MARKER;
         }
 
         // 其它包统一返回带状态或空的 BPxx（简单实现）
-        switch (packet.getProtocol()) {
-            case "AP01": return "IWBP01#";
-            case "AP03": return HEADER + "BP03" + END_MARKER;
-            case "AP04": return HEADER + "BP04" + END_MARKER;
-            case "AP10": return HEADER + "BP10" + END_MARKER;
-            case "AP42": return HEADER + "BP42" + END_MARKER;
-            case "APBL": return HEADER + "BPBL" + END_MARKER;
-            case "APJK": return HEADER + "BPJK" + END_MARKER;
-            case "APTP": return HEADER + "BPTP" + END_MARKER;
-            case "APVR": return HEADER + "BPVR" + END_MARKER;
-            case "APWR": return HEADER + "BPWR" + END_MARKER;
-            default: return HEADER + responseProtocol + END_MARKER;
-        }
+        return switch (packet.getProtocol()) {
+            case "AP01" -> "IWBP01#";
+            case "AP03" -> HEADER + "BP03" + END_MARKER;
+            case "AP04" -> HEADER + "BP04" + END_MARKER;
+            case "AP10" -> HEADER + "BP10" + END_MARKER;
+            case "AP42" -> HEADER + "BP42" + END_MARKER;
+            case "APBL" -> HEADER + "BPBL" + END_MARKER;
+            case "APJK" -> HEADER + "BPJK" + END_MARKER;
+            case "APTP" -> HEADER + "BPTP" + END_MARKER;
+            case "APVR" -> HEADER + "BPVR" + END_MARKER;
+            case "APWR" -> HEADER + "BPWR" + END_MARKER;
+            default -> HEADER + responseProtocol + END_MARKER;
+        };
     }
 
     // --------------------------- 新增辅助实现 ---------------------------
 
     /**
-     * 将响应写回设备。使用 BufferedWriter 保证字符编码，并按配置决定是否追加 CRLF。
+     * 将响应写回设备。使用 BufferedOutputStream 保证字符编码，并按配置决定是否追加 CRLF。
      * 注意：很多设备只需要 '#' 作为结束，但有些设备要求同时收到 CRLF 才处理，因此提供配置控制。
      */
-    private void writeFrame(BufferedWriter out, String s) throws IOException {
+    private void writeFrame(BufferedOutputStream out, String s, Socket clientSocket, String clientInfo) throws IOException {
         if (out == null || s == null) return;
-        out.write(s);
+        byte[] bytes = s.getBytes(StandardCharsets.UTF_8);
+        out.write(bytes);
         if (appendNewlineAfterResponse) {
             out.write('\r');
             out.write('\n');
         }
         out.flush();
+        
+        // 记录服务器回复信息到日志文件
+        String imei = null;
+        if (clientSocket != null) {
+            try {
+                imei = downlinkManager.getImeiBySocket(clientSocket);
+            } catch (Exception ex) {
+                // 忽略异常
+            }
+        }
+        
+        // 记录发送的响应
+        log.debug("📤 发送回复: {} (newlineAppended={})", s, appendNewlineAfterResponse);
+        
+        // 将回复信息追加到设备日志文件
+        try {
+            saveResponseLog(s, imei, clientInfo);
+        } catch (Exception ex) {
+            log.warn("💾 保存回复日志失败: {}", ex.getMessage());
+        }
     }
 
     /**
@@ -704,26 +884,78 @@ public class MpbandServer implements SmartLifecycle {
         try {
             LocationRecord rec = new LocationRecord();
             // 解析常用字段
-            if (params.containsKey("lat")) rec.setLatitude(parseDoubleSafely(params.get("lat")));
-            if (params.containsKey("lon")) rec.setLongitude(parseDoubleSafely(params.get("lon")));
-            if (params.containsKey("speed")) rec.setSpeed(params.get("speed"));
-            if (params.containsKey("direction")) rec.setDirection(params.get("direction"));
+            // 优先使用显式的 lat/lon 字段，如果不存在则回退到 wifiGeoLat/wifiGeoLon
+            Double latVal = null;
+            Double lonVal = null;
+            if (params.containsKey("lat")) latVal = parseDoubleSafely(params.get("lat"));
+            else if (params.containsKey("wifiGeoLat")) latVal = parseDoubleSafely(params.get("wifiGeoLat"));
+            if (params.containsKey("lon")) lonVal = parseDoubleSafely(params.get("lon"));
+            else if (params.containsKey("wifiGeoLon")) lonVal = parseDoubleSafely(params.get("wifiGeoLon"));
+            if (latVal != null) rec.setLatitude(latVal);
+            if (lonVal != null) rec.setLongitude(lonVal);
 
-            // 原始块：优先拼接 lat_raw / lon_raw / param_block，便于调试
-            StringBuilder gpsRaw = new StringBuilder();
-            if (params.containsKey("lat_raw")) gpsRaw.append(params.get("lat_raw"));
-            if (params.containsKey("lon_raw")) {
-                if (gpsRaw.length() > 0) gpsRaw.append(",");
-                gpsRaw.append(params.get("lon_raw"));
+            // 若 GPS 坐标为占位 (0 或 null) 且存在 wifiGeoLat/wifiGeoLon，则覆盖
+            boolean gpsPlaceholder = (latVal == null || lonVal == null || (latVal != null && latVal.doubleValue() == 0.0) || (lonVal != null && lonVal.doubleValue() == 0.0));
+            if (gpsPlaceholder && params.containsKey("wifiGeoLat") && params.containsKey("wifiGeoLon")) {
+                Double wlat = parseDoubleSafely(params.get("wifiGeoLat"));
+                Double wlon = parseDoubleSafely(params.get("wifiGeoLon"));
+                if (wlat != null && wlon != null) {
+                    rec.setLatitude(wlat);
+                    rec.setLongitude(wlon);
+                    params.put("locationSource", "wifi");
+                }
             }
-            if (params.containsKey("param_block")) {
-                if (gpsRaw.length() > 0) gpsRaw.append(",");
-                gpsRaw.append(params.get("param_block"));
+            
+            // 保存速度和方向
+            if (params.containsKey("speed")) {
+                try {
+                    rec.setSpeed(Double.parseDouble(params.get("speed")));
+                } catch (NumberFormatException e) {
+                    // 如果解析失败，尝试保存为null
+                    rec.setSpeed(null);
+                    log.debug("无法解析speed参数: {}", params.get("speed"));
+                }
             }
-            if (!gpsRaw.isEmpty()) rec.setGpsRaw(gpsRaw.toString());
-
-            // 额外原始内容
-            rec.setExtraRaw(params.toString());
+            if (params.containsKey("direction")) {
+                try {
+                    rec.setDirection(Double.parseDouble(params.get("direction")));
+                } catch (NumberFormatException e) {
+                    // 如果解析失败，尝试保存为null
+                    rec.setDirection(null);
+                    log.debug("无法解析direction参数: {}", params.get("direction"));
+                }
+            }
+            
+            // 获取地址信息
+            if (rec.getLatitude() != null && rec.getLongitude() != null) {
+                String address = amapLocationService.regeoAddress(rec.getLatitude(), rec.getLongitude());
+                if (address != null) {
+                    rec.setAddress(address);
+                }
+            }
+            
+            // 保存地址信息（如果参数中已有则优先使用）
+            if (params.containsKey("address")) rec.setAddress(params.get("address"));
+            
+            // 保存定位源
+            if (params.containsKey("locationSource")) rec.setSource(params.get("locationSource"));
+            else if (params.containsKey("source")) rec.setSource(params.get("source"));
+            
+            // 保存原始GPS数据
+            if (params.containsKey("gps_raw")) {
+                rec.setGpsRaw(params.get("gps_raw"));
+            } else if (params.containsKey("rawGpsPart")) {
+                rec.setGpsRaw(params.get("rawGpsPart"));
+            }
+            
+            // 保存额外原始数据
+            if (params.containsKey("extra_raw")) {
+                rec.setExtraRaw(params.get("extra_raw"));
+            } else if (params.containsKey("rawExtraPart")) {
+                rec.setExtraRaw(params.get("rawExtraPart"));
+            } else {
+                rec.setExtraRaw(params.toString());
+            }
 
             // 试图关联 imei
             if (imei != null && !imei.isEmpty()) {
@@ -733,8 +965,9 @@ public class MpbandServer implements SmartLifecycle {
             }
 
             locationRecordRepository.save(rec);
+            log.debug("✅ 成功保存定位数据: IMEI={}, 位置=({}, {})");
         } catch (Exception e) {
-            log.warn("保存定位数据失败: {}", e.getMessage());
+            log.error("❌ 保存定位数据失败: IMEI={}, 错误={}", imei, e.getMessage());
         }
     }
 
@@ -751,15 +984,30 @@ public class MpbandServer implements SmartLifecycle {
     private void saveHeartbeatData(Map<String, String> params, String imei) {
         try {
             HeartbeatRecord rec = new HeartbeatRecord();
-            rec.setStatusBlock(params.getOrDefault("param_block", params.getOrDefault("status_block", null)));
-            rec.setCounter(params.getOrDefault("steps", params.getOrDefault("counter", null)));
-            rec.setRollCount(params.getOrDefault("roll_count", null));
-            rec.setWorkMode(params.getOrDefault("work_mode", null));
+            // 保存状态块
+            rec.setStatusBlock(params.getOrDefault("param_block", 
+                              params.getOrDefault("status_block", 
+                              params.getOrDefault("statusBlock", null))));
+            // 保存步数/计数器
+            rec.setCounter(params.getOrDefault("steps", 
+                          params.getOrDefault("counter", null)));
+            // 保存滚动计数
+            rec.setRollCount(params.getOrDefault("roll_count", 
+                           params.getOrDefault("rollCount", null)));
+            // 保存工作模式
+            rec.setWorkMode(params.getOrDefault("work_mode", 
+                           params.getOrDefault("workMode", null)));
+            // 保存间隔秒数
             if (params.containsKey("interval")) {
                 try { rec.setIntervalSeconds(Integer.parseInt(params.get("interval"))); } catch (Exception ignored) {}
             }
+            if (params.containsKey("interval_seconds")) {
+                try { rec.setIntervalSeconds(Integer.parseInt(params.get("interval_seconds"))); } catch (Exception ignored) {}
+            }
+            // 保存原始负载
             rec.setRawPayload(params.toString());
 
+            // 关联设备
             if (imei != null && !imei.isEmpty()) {
                 rec.setImei(imei);
                 Device d = findOrCreateDeviceByImei(imei);
@@ -767,8 +1015,9 @@ public class MpbandServer implements SmartLifecycle {
             }
 
             heartbeatRecordRepository.save(rec);
+            log.debug("✅ 成功保存心跳数据: IMEI={}", imei);
         } catch (Exception e) {
-            log.warn("保存心跳数据失败: {}", e.getMessage());
+            log.error("❌ 保存心跳数据失败: IMEI={}, 错误={}", imei, e.getMessage());
         }
     }
 
@@ -779,35 +1028,53 @@ public class MpbandServer implements SmartLifecycle {
     private void saveHealthData(Map<String, String> params, String imei) {
         try {
             HealthRecord rec = new HealthRecord();
+            // 保存数据类型和值
             if (params.containsKey("temp")) {
                 rec.setDataType("temperature");
                 rec.setValue(params.get("temp"));
             } else if (params.containsKey("data_type")) {
                 rec.setDataType(params.get("data_type"));
                 rec.setValue(params.getOrDefault("value", params.toString()));
+            } else if (params.containsKey("wrist_temp")) {
+                rec.setDataType("temperature");
+                rec.setValue(params.get("wrist_temp"));
             } else {
                 rec.setDataType("unknown");
                 rec.setValue(params.toString());
             }
 
+            // 保存时间戳
             if (params.containsKey("timestamp")) {
                 try {
                     java.time.format.DateTimeFormatter df = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
                     java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(params.get("timestamp"), df);
                     java.time.Instant inst = ldt.toInstant(java.time.ZoneOffset.UTC);
                     rec.setRecvTime(Date.from(inst));
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                    // 尝试解析其他时间格式
+                    try {
+                        java.time.format.DateTimeFormatter df2 = java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+                        java.time.LocalDateTime ldt2 = java.time.LocalDateTime.parse(params.get("timestamp"), df2);
+                        java.time.Instant inst2 = ldt2.toInstant(java.time.ZoneOffset.UTC);
+                        rec.setRecvTime(Date.from(inst2));
+                    } catch (Exception ignored2) {}
+                }
             }
 
+            // 关联设备
             if (imei != null && !imei.isEmpty()) {
                 rec.setImei(imei);
                 Device d = findOrCreateDeviceByImei(imei);
-                if (d != null) rec.setDevice(d);
+                if (d != null) rec.setDeviceId(d.getId());
             }
-            rec.setExtra(params.toString());
+            
+            // 保存额外信息
+            rec.setRawData(params.toString());
+            
             healthRecordRepository.save(rec);
+            log.debug("✅ 成功保存健康数据: IMEI={}, 类型={}", imei, rec.getDataType());
         } catch (Exception e) {
-            log.warn("保存健康数据失败: {}", e.getMessage());
+            log.error("❌ 保存健康数据失败: IMEI={}, 错误={}", imei, e.getMessage());
         }
     }
 
@@ -819,15 +1086,19 @@ public class MpbandServer implements SmartLifecycle {
         if (imei == null || imei.isEmpty()) return null;
         try {
             Optional<Device> opt = deviceRepository.findByImei(imei);
-            if (opt.isPresent()) return opt.get();
+            if (opt.isPresent()) {
+                log.debug("✅ 设备已存在: imei={}", imei);
+                return opt.get();
+            }
+            // 设备不存在，创建新设备
             Device d = new Device();
             d.setImei(imei);
             d.setCreatedAt(new Date());
             deviceRepository.save(d);
-            log.info("自动创建设备记录 imei={}", imei);
+            log.info("📱 自动创建设备记录: imei={}", imei);
             return d;
         } catch (Exception e) {
-            log.warn("查找或创建 Device 失败 imei={}: {}", imei, e.getMessage());
+            log.error("❌ 查找或创建 Device 失败: imei={}, 错误={}", imei, e.getMessage());
             return null;
         }
     }
@@ -915,14 +1186,18 @@ public class MpbandServer implements SmartLifecycle {
                 }
             }
         } catch (Exception e) {
-            log.warn("写入原始报文文件失败: {}", e.getMessage());
+            // 不再打印WARN级别日志，保持控制台简洁
+            // log.warn("写入原始报文文件失败: {}");
         }
 
         // 追加到设备日志
         try {
             String id = (imei != null && !imei.isEmpty()) ? imei : (clientInfo != null ? clientInfo.replace(':','_').replace('/','_').replace('\\','_') : "unknown");
             String safe = sanitizeFilename(id);
-            Path deviceLog = (deviceDirPath != null) ? deviceDirPath.resolve(safe + ".log") : Paths.get(System.getProperty("user.dir")).resolve(safe + ".log");
+            String day = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneId.systemDefault()).format(java.time.Instant.now());
+            // 设备日志文件名格式：{imei}_yyyyMMdd.log，每个设备每天一个文件
+            String deviceLogFileName = String.format("%s_%s.log", safe, day);
+            Path deviceLog = (deviceDirPath != null) ? deviceDirPath.resolve(deviceLogFileName) : Paths.get(System.getProperty("user.dir")).resolve(deviceLogFileName);
 
             String time = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneId.systemDefault()).format(java.time.Instant.now());
             String entry = String.format("%s [%s] %s%n", time, clientInfo == null ? "-" : clientInfo, rawMessage);
@@ -933,7 +1208,8 @@ public class MpbandServer implements SmartLifecycle {
                 Files.write(deviceLog, entry.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             }
         } catch (Exception e) {
-            log.warn("追加设备日志失败: {}", e.getMessage());
+            // 不再打印WARN级别日志，保持控制台简洁
+            // log.warn("追加设备日志失败: {}");
         }
     }
 
@@ -942,24 +1218,56 @@ public class MpbandServer implements SmartLifecycle {
         if (in == null) return "unknown";
         return in.replaceAll("[^a-zA-Z0-9._-]", "_");
     }
+    
+    /**
+     * 保存服务器回复信息到设备日志文件
+     * 格式：{时间} [客户端信息] [SENT] {回复内容}
+     */
+    private void saveResponseLog(String response, String imei, String clientInfo) {
+        // 追加到设备日志
+        try {
+            String id = (imei != null && !imei.isEmpty()) ? imei : (clientInfo != null ? clientInfo.replace(':','_').replace('/','_').replace('\\','_') : "unknown");
+            String safe = sanitizeFilename(id);
+            String day = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneId.systemDefault()).format(java.time.Instant.now());
+            // 设备日志文件名格式：{imei}_yyyyMMdd.log，每个设备每天一个文件
+            String deviceLogFileName = String.format("%s_%s.log", safe, day);
+            Path deviceLog = (deviceDirPath != null) ? deviceDirPath.resolve(deviceLogFileName) : Paths.get(System.getProperty("user.dir")).resolve(deviceLogFileName);
+
+            String time = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneId.systemDefault()).format(java.time.Instant.now());
+            // 使用 [SENT] 标记这是服务器发送的回复
+            String entry = String.format("%s [%s] [SENT] %s%n", time, clientInfo == null ? "-" : clientInfo, response);
+
+            // 并发写入保护：每个 imei/useKey 一个锁对象
+            Object lock = deviceLocks.computeIfAbsent(safe, k -> new Object());
+            synchronized (lock) {
+                Files.write(deviceLog, entry.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            }
+        } catch (Exception e) {
+            // 不再打印WARN级别日志，保持控制台简洁
+            // log.warn("追加回复日志失败: {}");
+        }
+    }
 
     private void handleApTp(String payload, String clientInfo, String imei) {
         // APTP：体温包，格式示例： temp,wrist_temp  或单个值
         if (payload == null || payload.isEmpty()) return;
-        log.debug("APTP 来自 {} 的 payload: {}", clientInfo, payload);
+        // 不再打印DEBUG级别日志，保持控制台简洁
+        // log.debug("APTP 来自 {} 的 payload: {}");
         String[] p = payload.split(",");
         Map<String, String> params = new LinkedHashMap<>();
         if (p.length >= 1 && p[0] != null && !p[0].isEmpty()) params.put("temp", p[0]);
         if (p.length >= 2 && p[1] != null && !p[1].isEmpty()) params.put("wrist_temp", p[1]);
         // 保存为健康数据（saveHealthData 会识别 temp 字段并标记为 temperature）
         saveHealthData(params, imei);
-        log.info("APTP 体温数据已保存: {}", params);
+        // 不再打印INFO级别日志，保持控制台简洁
+        // log.info("APTP 体温数据已保存: {}");
     }
 
     private void handleApVr(String payload, String clientInfo, String imei) {
         // APVR：版本信息，示例： imei,firmware  或单个 firmware
         if (payload == null || payload.isEmpty()) return;
-        log.debug("APVR 来自 {} 的 payload: {}", clientInfo, payload);
+        // 不再打印DEBUG级别日志，保持控制台简洁
+        // log.debug("APVR 来自 {} 的 payload: {}");
         String[] p = payload.split(",", 2);
         Map<String, String> params = new LinkedHashMap<>();
         if (p.length >= 2) {
@@ -977,13 +1285,15 @@ public class MpbandServer implements SmartLifecycle {
             if (pImei != null) imei = pImei;
         }
         saveHealthData(params, imei);
-        log.info("APVR 版本信息已保存: {}", params);
+        // 不再打印INFO级别日志，保持控制台简洁
+        // log.info("APVR 版本信息已保存: {}");
     }
 
     private void handleApWr(String payload, String clientInfo, String imei) {
         // APWR：佩戴状态，示例： imei,wear_flag,timestamp
         if (payload == null || payload.isEmpty()) return;
-        log.debug("APWR 来自 {} 的 payload: {}", clientInfo, payload);
+        // 不再打印DEBUG级别日志，保持控制台简洁
+        // log.debug("APWR 来自 {} 的 payload: {}");
         String[] p = payload.split(",", 3);
         Map<String, String> params = new LinkedHashMap<>();
         if (p.length >= 1) params.put("imei", p[0]);
@@ -995,6 +1305,7 @@ public class MpbandServer implements SmartLifecycle {
         }
         // 把佩戴状态作为心跳/状态保存
         saveHeartbeatData(params, imei);
-        log.info("APWR 佩戴状态已保存: {}", params);
+        // 不再打印INFO级别日志，保持控制台简洁
+        // log.info("APWR 佩戴状态已保存: {}");
     }
 }

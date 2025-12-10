@@ -8,10 +8,14 @@
     "preview": "vite preview --port 5173"
   },
   "dependencies": {
-    "vue": "^3.3.0",
-    "vue-router": "^4.2.0",
+    "axios": "^1.13.2",
+    "coordtransform": "^2.1.2",
+    "element-plus": "^2.11.8",
     "leaflet": "^1.9.4",
-    "leaflet-draw": "^1.0.4"
+    "leaflet-draw": "^1.0.4",
+    "pinia": "^3.0.4",
+    "vue": "^3.3.0",
+    "vue-router": "^4.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.0.0",

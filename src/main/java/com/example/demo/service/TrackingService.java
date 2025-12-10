@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -38,17 +38,15 @@ public class TrackingService {
 
     public long reportLocation(DeviceLocation dl) {
         // 1) 写入历史位置
-        if (dl.getTime() == null) dl.setTime(LocalDateTime.now());
         long id = locationRepo.insert(dl);
 
         // 2) 更新实时状态
         DeviceStatus s = new DeviceStatus();
         s.setDeviceId(dl.getDeviceId());
-        s.setLastLocationTime(dl.getTime());
-        s.setLastLatitude(dl.getLatitude());
-        s.setLastLongitude(dl.getLongitude());
         s.setBatteryLevel(dl.getBatteryLevel());
         s.setIsOnline(true);
+        // 同步写入 imei 到 DeviceStatus，便于在设备状态接口回显
+        s.setImei(dl.getImei());
         statusRepo.upsert(s);
 
         // 3) 围栏判断：仅当有上一点坐标时再判断进出
@@ -60,7 +58,7 @@ public class TrackingService {
         return id;
     }
 
-    private void checkFencesAndAlert(DeviceLocation curr, BigDecimal prevLat, BigDecimal prevLng) {
+    private void checkFencesAndAlert(DeviceLocation curr, Double prevLat, Double prevLng) {
         // 查询设备所有者的围栏集合
         List<UserDevice> rels = userDeviceRepo.findByDevice(curr.getDeviceId());
         List<Long> ownerUserIds = rels.stream()
@@ -73,24 +71,31 @@ public class TrackingService {
         for (Long uid : ownerUserIds) {
             List<GeoFence> fences = fenceRepo.listActiveByUser(uid);
             for (GeoFence f : fences) {
+                // 只处理圆形围栏
+                if (!"circle".equalsIgnoreCase(f.getType())) continue;
+                
                 boolean wasInside = inside(prevLat, prevLng, f);
                 boolean nowInside = inside(curr.getLatitude(), curr.getLongitude(), f);
                 if (wasInside == nowInside) continue; // 未发生状态变化
-                if (nowInside && ("enter".equalsIgnoreCase(f.getTriggerType()) || "both".equalsIgnoreCase(f.getTriggerType()))) {
-                    alertRepo.create(f.getFenceId(), curr.getDeviceId(), "enter");
-                    log.info("Fence enter alert device={} fence={}", curr.getDeviceId(), f.getFenceId());
-                } else if (!nowInside && ("exit".equalsIgnoreCase(f.getTriggerType()) || "both".equalsIgnoreCase(f.getTriggerType()))) {
-                    alertRepo.create(f.getFenceId(), curr.getDeviceId(), "exit");
-                    log.info("Fence exit alert device={} fence={}", curr.getDeviceId(), f.getFenceId());
-                }
+                
+                // 简化处理：默认支持所有围栏类型的进出告警
+                String alertType = nowInside ? "enter" : "exit";
+                alertRepo.create(f.getId(), curr.getDeviceId(), alertType);
+                log.info("Fence {} alert device={} fence={}", alertType, curr.getDeviceId(), f.getId());
             }
         }
     }
 
     private boolean inside(BigDecimal lat, BigDecimal lng, GeoFence f) {
-        if (lat == null || lng == null || f.getCenterLatitude() == null || f.getCenterLongitude() == null || f.getRadius() == null) return false;
-        double d = distanceMeters(lat.doubleValue(), lng.doubleValue(), f.getCenterLatitude().doubleValue(), f.getCenterLongitude().doubleValue());
-        return d <= f.getRadius().doubleValue();
+        if (lat == null || lng == null || f.getCenterLat() == null || f.getCenterLng() == null || f.getRadius() == null) return false;
+        double d = distanceMeters(lat.doubleValue(), lng.doubleValue(), f.getCenterLat(), f.getCenterLng());
+        return d <= f.getRadius();
+    }
+
+    private boolean inside(Double lat, Double lng, GeoFence f) {
+        if (lat == null || lng == null || f.getCenterLat() == null || f.getCenterLng() == null || f.getRadius() == null) return false;
+        double d = distanceMeters(lat, lng, f.getCenterLat(), f.getCenterLng());
+        return d <= f.getRadius();
     }
 
     // Haversine distance in meters
@@ -105,4 +110,3 @@ public class TrackingService {
         return R * c;
     }
 }
-

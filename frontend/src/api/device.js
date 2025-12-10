@@ -1,59 +1,104 @@
-// 前端设备 API 封装：与后端 `DeviceController` 对应的接口交互
-// 包含：list, get, getByImei, create, update, remove
+import api from './axios'
 
-const base = '/api/devices'
+export const deviceApi = {
+  // 获取设备列表
+  getDevices(limit = 20, offset = 0) {
+    return api.get('/devices', { params: { limit, offset } })
+      .then(response => {
+        console.log('getDevices API返回结果:', response)
+        // 确保返回数组，处理不同的数据格式
+        let responseData = response;
+        if (response && response.data) {
+          responseData = response.data;
+        }
+        
+        // 处理后端返回的{code, message, data: {list, total}}格式
+        if (responseData && responseData.code === 200 && responseData.data) {
+          responseData = responseData.data;
+        }
+        
+        if (Array.isArray(responseData)) {
+          return responseData
+        } else if (responseData && Array.isArray(responseData.list)) {
+          return responseData.list
+        } else if (responseData && Array.isArray(responseData.items)) {
+          return responseData.items
+        } else if (responseData && Array.isArray(responseData.content)) {
+          return responseData.content
+        } else {
+          console.warn('getDevices API返回的不是预期格式:', responseData)
+          return []
+        }
+      })
+      .catch(error => {
+        console.error('Failed to get devices:', error)
+        return []
+      })
+  },
+  
+  // 获取可用设备列表（未关联病人的设备）
+  getAvailableDevices() {
+    return api.get('/devices/available')
+      .then(response => {
+        console.log('getAvailableDevices API返回结果:', response)
+        // 确保返回数组
+        if (Array.isArray(response)) {
+          return response
+        } else if (response && Array.isArray(response.data)) {
+          return response.data
+        } else {
+          console.warn('getAvailableDevices API返回的不是数组:', response)
+          return []
+        }
+      })
+      .catch(error => {
+        console.error('Failed to get available devices:', error)
+        return []
+      })
+  },
 
-async function list(limit = 20, offset = 0) {
-  const url = new URL(base, window.location.origin)
-  url.searchParams.set('limit', limit)
-  url.searchParams.set('offset', offset)
-  const res = await fetch(url.toString(), { credentials: 'include' })
-  if (!res.ok) throw new Error(`list failed ${res.status}`)
-  return res.json()
+  // 获取设备详情
+  getDevice(id) {
+    return api.get(`/devices/${id}`)
+      .catch(error => {
+        console.error(`Failed to get device ${id}:`, error)
+        throw error
+      })
+  },
+
+  // 根据IMEI获取设备
+  getDeviceByImei(imei) {
+    return api.get(`/devices/by-imei/${imei}`)
+      .catch(error => {
+        console.error(`Failed to get device by imei ${imei}:`, error)
+        throw error
+      })
+  },
+
+  // 创建设备
+  createDevice(device) {
+    return api.post('/devices', device)
+      .catch(error => {
+        console.error('Failed to create device:', error)
+        throw error
+      })
+  },
+
+  // 更新设备
+  updateDevice(id, device) {
+    return api.put(`/devices/${id}`, device)
+      .catch(error => {
+        console.error(`Failed to update device ${id}:`, error)
+        throw error
+      })
+  },
+
+  // 删除设备
+  deleteDevice(id) {
+    return api.delete(`/devices/${id}`)
+      .catch(error => {
+        console.error(`Failed to delete device ${id}:`, error)
+        throw error
+      })
+  }
 }
-
-async function get(id) {
-  const res = await fetch(`${base}/${id}`, { credentials: 'include' })
-  if (!res.ok) throw new Error(`get failed ${res.status}`)
-  return res.json()
-}
-
-async function getByImei(imei) {
-  const res = await fetch(`${base}/by-imei/${encodeURIComponent(imei)}`, { credentials: 'include' })
-  if (!res.ok) throw new Error(`getByImei failed ${res.status}`)
-  return res.json()
-}
-
-async function create(device) {
-  const res = await fetch(base, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(device)
-  })
-  if (!res.ok) throw new Error(`create failed ${res.status}`)
-  return res.json()
-}
-
-async function update(id, device) {
-  const res = await fetch(`${base}/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(device)
-  })
-  if (!res.ok) throw new Error(`update failed ${res.status}`)
-  return res
-}
-
-async function remove(id) {
-  const res = await fetch(`${base}/${id}`, {
-    method: 'DELETE',
-    credentials: 'include'
-  })
-  if (!res.ok) throw new Error(`delete failed ${res.status}`)
-  return res
-}
-
-export default { list, get, getByImei, create, update, remove }
-

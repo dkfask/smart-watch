@@ -1,9 +1,11 @@
 package com.example.demo.repository;
 
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
 import org.springframework.stereotype.Repository;
 import com.example.demo.model.Device;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -94,4 +96,12 @@ public interface DeviceRepository extends CrudRepository<Device, Long> {
      * @return 设备数量
      */
     long count();
+    
+    /**
+     * 查询所有未关联病人的设备。
+     *
+     * @return 未关联设备列表
+     */
+    @Query(value = "SELECT d.* FROM devices d WHERE d.id NOT IN (SELECT device_id FROM patient_devices WHERE is_active = true)", nativeQuery = true)
+    List<Device> findAvailableDevices();
 }

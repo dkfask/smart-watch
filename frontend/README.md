@@ -51,6 +51,7 @@ xcopy /E /I /Y frontend\dist ..\src\main\resources\static\
 - `DeviceDetail.vue`：设备详情页面，展示设备基础信息、最近位置和日志摘要（演示 mock，可按需接入真实 API）。
 - `Realtime.vue`：实时监控页面（演示），显示在线设备列表与地图占位；生产可接入 WebSocket/SSE 或第三方地图组件（Leaflet/Mapbox）。
 - `Settings.vue`：系统设置页面（示例），用于配置数据保存目录与轮询间隔（需配合后端 API 实现持久化）。
+- `MapView.vue`：地图页面组件，配合后端数据库设计展示设备轨迹与定位点。
 
 公共组件：
 - `components/NavBar.vue`：全局导航栏，包含仪表盘、设备、实时、设置等入口，所有页面已集成此组件（便于统一导航与 UX）。
@@ -65,6 +66,7 @@ xcopy /E /I /Y frontend\dist ..\src\main\resources\static\
 - `/devices/:id` -> 设备详情
 - `/realtime` -> 实时监控
 - `/settings` -> 系统设置
+- `/map` -> 地图页面
 
 ## 前端与后端交互（简要）
 - 设备相关接口（由后端 `DeviceController` 提供）：
@@ -222,3 +224,101 @@ function zoomToDevice() {
 ---
 
 以上为 `LeafletMap` 组件的快速上手与使用说明，已覆盖安装、props、事件、示例与常见注意事项。如需我将 README 中的示例代码改为 Options API 风格或把 CSS 引入改为按需引入（仅在该组件内），我可以继续修改文档或代码。
+
+## 新增：前端地图定位显示模块（基于后端数据库设计调整）
+
+本次迭代新增了前端地图定位显示模块，目的是配合后端数据库设计（`devices` 与 `location_records`，定位记录包含 `device_id` 与 `imei` 字段）更可靠地展示设备轨迹与定位点。
+
+新增文件（均为新增）：
+- `src/stores/mapStore.js` — 前端地图数据管理模块（composable 风格）。
+  - 说明：管理设备列表、当前选中设备与定位记录；封装对 `src/api/device.js` 与 `src/api/location.js` 的调用。
+  - 注释：文件内包含完整中文注释，说明函数、状态与用法。
+- `src/views/MapView.vue` — 地图页面组件（基于已有 `LeafletMap.vue` 复用）。
+  - 说明：页面层组件，提供设备切换、按时间范围查询、加载最近定位、轨迹显示与简单回放功能；Marker 弹窗会显示 `device_id` 与 `imei`，便于按设备号查询与调试。
+
+前端依赖（若尚未安装）
+1) 在 `frontend` 目录下安装 Leaflet（以及 leaflet-draw 如果需要绘制工具）：
+
+```cmd
+cd frontend
+npm install leaflet leaflet-draw
+```
+
+注：项目入口 `src/main.js` 已引入 Leaflet 全局 CSS（若你修改入口文件，请保留相应的 CSS 引入）。
+
+后端 API 要求（前端默认依赖，下列接口应由后端提供）：
+- `GET /api/devices?limit=&offset=` — 返回设备列表（数组），每项应包含 `id` 与 `imei` 字段。
+- `GET /api/locations/device/{deviceId}` — 返回指定设备最近定位记录（`src/api/location.js` 中 recentByDevice 使用这个路径）。
+- `GET /api/locations/device/{deviceId}/range?start=&end=&limit=` — 返回指定设备在时间范围内的定位记录（rangeByDevice 使用这个路径）。
+
+注意：后端在接收定位数据时应把当前连接的设备号（`device_id` 与/或 `imei`）写入 `location_records` 表，如 schema.sql 中定义，这样前端可以直接按 `device_id` 查询并在弹窗中显示 `imei` 与 `device_id`。
+
+如何在项目中使用 `MapView` 页面（快速步骤）：
+1) 确保已安装依赖并在 `src/main.js` 中引入 Leaflet CSS（项目已默认引入）。
+2) 添加路由（示例，编辑 `src/router/index.js`）：
+
+```js
+// 在路由中新增
+import MapView from '@/views/MapView.vue'
+{ path: '/map', name: 'Map', component: MapView }
+```
+
+3) 打开 `http://localhost:5173/#/map`（或开发服务器的对应地址）即可访问地图页面；页面会自动加载设备列表并默认选择第一个设备显示最近定位记录。
+
+MapView 功能说明
+- 设备选择：下拉选择设备（显示 imei 与 id），切换后会加载对应设备的定位记录。\
+- 按时间查询：输入起止时间后点击“按时间查询”会调用 range API，并在地图上显示对应的轨迹与点。\
+- 加载最近：快速加载最近 N 条定位记录（默认 200 条）。\
+- 回放：逐点聚焦并展示轨迹（简单实现，若需更精细的回放速度控制或时间插值可再扩展）。\
+- 弹窗信息：每个定位点的弹窗会展示后端记录的 `imei`、`device_id`、`recv_time`、`address`、`speed` 等字段，便于按设备号查询与核对数据源。
+
+开发者说明（设计决策）
+- 采用最小依赖的 composable store（`src/stores/mapStore.js`），避免引入 Pinia 作为新增依赖；如果你希望使用 Pinia 可将该模块迁移为 Pinia store（提供 actions 与 getters）。
+- 地图渲染复用项目内已有 `LeafletMap.vue`，该组件已支持 markers、tracks、fences、editable 等功能，MapView 只是把后端的定位记录映射为 markers/tracks 并传入组件。
+- 后端应确保 `location_records` 表在写入定位数据时同时填充 `device_id`（外键指向 `devices.id`）与 `imei` 字段，这样前端和后端查询都有明确的设备归属。
+
+变更清单（本次提交）
+- 新增文件：
+  - `frontend/src/stores/mapStore.js` （新增） — 包含完整注释，负责设备与定位记录管理。
+  - `frontend/src/views/MapView.vue` （新增） — 地图页面，复用 `LeafletMap.vue` 渲染地图与轨迹。
+- README 增加以上模块的使用说明与后端接口要求（本节即为该变更）。
+
+如需我：
+- 把 `MapView` 中的回放功能增强为带时间轴和播放速度控制的完整回放播放器（我可以新增一个控制条组件）；
+- 或把 `mapStore` 改为 Pinia store 并添加单元测试；
+请告诉我你的优先项，我会继续实现。
+
+## 使用 Leaflet 瓦片 API 和切换底图
+
+为了方便使用不同的地图瓦片服务（例如 OpenStreetMap、Stamen、Carto、Esri 等），本项目新增了一个瓦片提供者工具模块：`frontend/src/utils/tileProviders.js`。
+
+- 新增模块：`src/utils/tileProviders.js`
+  - 说明：集中管理常用瓦片提供者（url 模板、attribution、subdomains、options），便于在运行时或静态配置中选择底图。
+  - 使用方法（概要）：
+    - 引入：`import { providers, getProvider } from '@/utils/tileProviders'`
+    - 获取某个 provider：`const p = getProvider('osm')` 或 `providers['stamenToner']`
+    - 在组件创建阶段或运行时通过 `LeafletMap` 的 `setTileProvider` 方法切换底图：
+      - 示例：`mapRef.value.setTileProvider({ urlTemplate: p.url, attribution: p.attribution, subdomains: p.subdomains, options: p.options })`
+
+LeafletMap 组件已扩展以支持自定义瓦片相关 props：
+- `tileUrlTemplate`：瓦片 URL 模板，默认使用 OpenStreetMap（`https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png`）。
+- `tileAttribution`：attribution 文本（默认 OSM 文本）。
+- `tileSubdomains`：子域字符串或数组（例如 'abc' 或 ['a','b','c']），用于替换 {s}。
+- `tileOptions`：传给 `L.tileLayer` 的额外选项（例如 { maxZoom: 19 }）。
+
+使用两种方式选择/切换底图：
+1) 静态配置（在父组件模板中通过 props）：
+   - 在使用 `LeafletMap` 时直接传入 `:tileUrlTemplate`, `:tileAttribution`, `:tileSubdomains`, `:tileOptions`。
+2) 运行时切换（通过组件方法）：
+   - `LeafletMap` 暴露了 `setTileProvider({ urlTemplate, attribution, subdomains, options })` 方法（可通过 `ref` 调用），用于在运行时替换底图图层；示例见 `src/views/MapView.vue` 中的底图选择控件实现（页面加载时会把当前选中的 provider 初始化到底图，切换下拉会调用 `setTileProvider`）。
+
+注意事项与许可
+- 许多瓦片服务在商业或大流量使用场景下有使用限制或需要 API key（例如 Mapbox、Esri 的某些服务等）。在生产环境中请务必检查并遵守所选瓦片提供者的许可条款。
+- 对于高并发或商业项目，建议使用付费/自托管的瓦片服务或 CDN，避免依赖公共免费瓦片（因速率限制或不可用导致地图不可用）。
+
+示例（要点说明）：
+- 项目中已在 `src/views/MapView.vue` 添加了底图下拉列表，基于 `src/utils/tileProviders.js` 的 `providers` 列表初始化并允许切换；这示例展示了如何把 provider 的 `url`、`attribution`、`subdomains` 和 `options` 传给 `LeafletMap.setTileProvider`。
+
+调试小贴士
+- 如果切换后看不到瓦片，请检查 Network 面板中瓦片请求的 HTTP 状态码（是否被阻止或 403/429）；对于带有 {r} 或 @2x 等用法的模板（用于 Retina），请确认你的 tile URL 支持该占位符。
+- 若你需要集成需要 API key 的服务（例如 Mapbox），请不要把 key 硬编码到前端仓库，改为在后端代理或通过运行时配置注入（环境变量或配置接口）。

@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 import java.sql.PreparedStatement;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.util.Date;
 import java.util.List;
 
 @Repository
@@ -25,7 +26,7 @@ public class UserDeviceRepository {
         ud.setDeviceId(rs.getLong("device_id"));
         ud.setRelationship(rs.getString("relationship"));
         Timestamp c = rs.getTimestamp("created_at");
-        ud.setCreatedAt(c != null ? c.toLocalDateTime() : null);
+        ud.setCreatedAt(c != null ? new Date(c.getTime()) : null);
         return ud;
     };
 

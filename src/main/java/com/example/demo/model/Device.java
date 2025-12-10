@@ -14,6 +14,9 @@ public class Device {
     @Column(nullable = false, unique = true, length = 15)
     private String imei;
 
+    @Column(name = "device_model", length = 50)
+    private String deviceModel;
+
     @Column(length = 8)
     private String mcc;
 
@@ -29,8 +32,29 @@ public class Device {
     @Column(length = 64)
     private String imsi;
 
+    @Column(name = "firmware_version", length = 20)
+    private String firmwareVersion;
+
+    @Column(name = "hardware_version", length = 20)
+    private String hardwareVersion;
+
+    @Column(nullable = false, length = 20, columnDefinition = "varchar(20) default 'inactive'")
+    private String status;
+
     @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "datetime default current_timestamp")
     private Date createdAt;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "updated_at", nullable = false, columnDefinition = "datetime default current_timestamp on update current_timestamp")
+    private Date updatedAt;
+
+    // Default constructor
+    public Device() {
+        this.createdAt = new Date();
+        this.updatedAt = new Date();
+        this.status = "inactive";
+    }
 
     public Long getId() {
         return id;
@@ -46,6 +70,14 @@ public class Device {
 
     public void setImei(String imei) {
         this.imei = imei;
+    }
+
+    public String getDeviceModel() {
+        return deviceModel;
+    }
+
+    public void setDeviceModel(String deviceModel) {
+        this.deviceModel = deviceModel;
     }
 
     public String getMcc() {
@@ -88,12 +120,44 @@ public class Device {
         this.imsi = imsi;
     }
 
+    public String getFirmwareVersion() {
+        return firmwareVersion;
+    }
+
+    public void setFirmwareVersion(String firmwareVersion) {
+        this.firmwareVersion = firmwareVersion;
+    }
+
+    public String getHardwareVersion() {
+        return hardwareVersion;
+    }
+
+    public void setHardwareVersion(String hardwareVersion) {
+        this.hardwareVersion = hardwareVersion;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
     public Date getCreatedAt() {
         return createdAt;
     }
 
     public void setCreatedAt(Date createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public Date getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(Date updatedAt) {
+        this.updatedAt = updatedAt;
     }
 }
 

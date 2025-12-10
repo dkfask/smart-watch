@@ -24,7 +24,7 @@ public class GeoFenceController {
 
     @PutMapping("/{id}")
     public ResponseEntity<?> update(@PathVariable long id, @RequestBody GeoFence f) {
-        f.setFenceId(id);
+        f.setId(id);
         int n = repo.update(f);
         return n > 0 ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
     }
@@ -33,6 +33,24 @@ public class GeoFenceController {
     public ResponseEntity<?> get(@PathVariable long id) {
         Optional<GeoFence> f = repo.findById(id);
         return f.<ResponseEntity<?>>map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    @GetMapping
+    public List<GeoFence> getFences(
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(defaultValue = "0") int offset) {
+        // 目前返回所有围栏，后续可根据需求添加真正的分页逻辑
+        return repo.listAll();
+    }
+
+    @GetMapping("/all")
+    public List<GeoFence> getAllFences() {
+        return repo.listAll();
+    }
+
+    @GetMapping("/active")
+    public List<GeoFence> getActiveFences() {
+        return repo.listActive();
     }
 
     @GetMapping("/by-user/{userId}")

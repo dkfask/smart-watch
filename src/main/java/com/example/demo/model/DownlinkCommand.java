@@ -30,11 +30,11 @@ public class DownlinkCommand {
     @Lob
     private String payload;
 
-    @Column(length = 32)
+    @Column(length = 32, columnDefinition = "varchar(32) default 'pending'")
     private String status;
 
     @Temporal(TemporalType.TIMESTAMP)
-    @Column(name = "created_at")
+    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "datetime default current_timestamp")
     private Date createdAt;
 
     @Temporal(TemporalType.TIMESTAMP)
@@ -44,11 +44,18 @@ public class DownlinkCommand {
     @Lob
     private String response;
 
-    @Column(name = "retry_count")
+    @Column(name = "retry_count", nullable = false, columnDefinition = "int default 0")
     private Integer retryCount = 0;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "updated_at", nullable = false, columnDefinition = "datetime default current_timestamp on update current_timestamp")
+    private Date updatedAt;
 
     public DownlinkCommand() {
         this.createdAt = new Date();
+        this.updatedAt = new Date();
+        this.retryCount = 0;
+        this.status = "pending";
     }
 
     // getters & setters
@@ -84,5 +91,8 @@ public class DownlinkCommand {
 
     public Integer getRetryCount() { return retryCount; }
     public void setRetryCount(Integer retryCount) { this.retryCount = retryCount; }
+
+    public Date getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Date updatedAt) { this.updatedAt = updatedAt; }
 }
 

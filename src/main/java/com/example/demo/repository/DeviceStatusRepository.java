@@ -6,7 +6,7 @@ import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Timestamp;
-import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,30 +20,32 @@ public class DeviceStatusRepository {
         DeviceStatus s = new DeviceStatus();
         s.setDeviceId(rs.getLong("device_id"));
         var t = rs.getTimestamp("last_location_time");
-        s.setLastLocationTime(t != null ? t.toLocalDateTime() : null);
-        s.setLastLatitude(rs.getBigDecimal("last_latitude"));
-        s.setLastLongitude(rs.getBigDecimal("last_longitude"));
+        s.setLastLocationTime(t != null ? new Date(t.getTime()) : null);
+        s.setLastLatitude(rs.getBigDecimal("last_latitude") != null ? rs.getBigDecimal("last_latitude").doubleValue() : null);
+        s.setLastLongitude(rs.getBigDecimal("last_longitude") != null ? rs.getBigDecimal("last_longitude").doubleValue() : null);
         Object bat = rs.getObject("battery_level");
         s.setBatteryLevel(bat == null ? null : rs.getInt("battery_level"));
         Object on = rs.getObject("is_online");
         s.setIsOnline(on == null ? null : rs.getBoolean("is_online"));
         var up = rs.getTimestamp("updated_at");
-        s.setUpdatedAt(up != null ? up.toLocalDateTime() : null);
+        s.setUpdatedAt(up != null ? new Date(up.getTime()) : null);
+        // 新增：读取 imei 字段以便回显
+        s.setImei(rs.getString("imei"));
         return s;
     };
 
     public int upsert(DeviceStatus s) {
         // PRIMARY KEY(device_id)
-        return jdbc.update("INSERT INTO device_status(device_id,last_location_time,last_latitude,last_longitude,battery_level,is_online,updated_at) " +
-                        "VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP) " +
-                        "ON DUPLICATE KEY UPDATE last_location_time=VALUES(last_location_time), last_latitude=VALUES(last_latitude), last_longitude=VALUES(last_longitude), battery_level=VALUES(battery_level), is_online=VALUES(is_online), updated_at=CURRENT_TIMESTAMP",
+        return jdbc.update("INSERT INTO device_status(device_id,last_location_time,last_latitude,last_longitude,battery_level,is_online,updated_at,imei) " +
+                        "VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP,?) " +
+                        "ON DUPLICATE KEY UPDATE last_location_time=VALUES(last_location_time), last_latitude=VALUES(last_latitude), last_longitude=VALUES(last_longitude), battery_level=VALUES(battery_level), is_online=VALUES(is_online), updated_at=CURRENT_TIMESTAMP, imei=VALUES(imei)",
                 s.getDeviceId(),
-                s.getLastLocationTime() == null ? null : Timestamp.valueOf(s.getLastLocationTime()),
-                s.getLastLatitude(), s.getLastLongitude(), s.getBatteryLevel(), s.getIsOnline());
+                s.getLastLocationTime() == null ? null : new Timestamp(s.getLastLocationTime().getTime()),
+                s.getLastLatitude(), s.getLastLongitude(), s.getBatteryLevel(), s.getIsOnline(), s.getImei());
     }
 
     public Optional<DeviceStatus> findById(long deviceId) {
-        List<DeviceStatus> list = jdbc.query("SELECT * FROM device_status WHERE device_id=?", MAPPER, deviceId);
+        List<DeviceStatus> list = jdbc.query("SELECT * FROM device_status WHERE device_id= ?", MAPPER, deviceId);
         return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
     }
 
@@ -55,4 +57,3 @@ public class DeviceStatusRepository {
         return jdbc.update("UPDATE device_status SET updated_at=CURRENT_TIMESTAMP WHERE device_id=?", deviceId);
     }
 }
-

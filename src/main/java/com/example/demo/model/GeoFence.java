@@ -1,36 +1,86 @@
 package com.example.demo.model;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
+import jakarta.persistence.*;
+import java.util.Date;
 
+@Entity
+@Table(name = "geo_fences")
 public class GeoFence {
-    private Long fenceId;
-    private Long userId;
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    @Column(nullable = false, length = 100)
     private String name;
-    private BigDecimal centerLatitude;
-    private BigDecimal centerLongitude;
-    private BigDecimal radius; // meters
-    private String triggerType; // enter, exit, both
-    private Boolean isActive;
-    private LocalDateTime createdAt;
+    
+    @Column(name = "type", nullable = false, length = 20)
+    private String type; // circle, polygon, rectangle
+    
+    @Column(name = "center_lat")
+    private Double centerLat;
+    
+    @Column(name = "center_lng")
+    private Double centerLng;
+    
+    @Column(name = "radius")
+    private Integer radius; // 单位：米（仅用于圆形围栏）
+    
+    @Column(name = "coordinates", nullable = false)
+    private String coordinates; // 围栏坐标，JSON格式
+    
+    @Column(name = "status", nullable = false, length = 20, columnDefinition = "varchar(20) default 'active'")
+    private String status; // active, inactive
+    
+    @Column(name = "description")
+    private String description;
+    
+    @Column(name = "created_by")
+    private Long createdBy;
+    
+    @Column(name = "patient_id")
+    private Long patientId; // 关联的病人ID
+    
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "datetime default current_timestamp")
+    private Date createdAt;
+    
+    @Temporal(TemporalType.TIMESTAMP)
+    @Column(name = "updated_at", nullable = false, columnDefinition = "datetime default current_timestamp on update current_timestamp")
+    private Date updatedAt;
+    
+    // Default constructor
+    public GeoFence() {
+        this.type = "circle";
+        this.status = "active";
+        this.createdAt = new Date();
+        this.updatedAt = new Date();
+    }
 
-    public Long getFenceId() { return fenceId; }
-    public void setFenceId(Long fenceId) { this.fenceId = fenceId; }
-    public Long getUserId() { return userId; }
-    public void setUserId(Long userId) { this.userId = userId; }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
-    public BigDecimal getCenterLatitude() { return centerLatitude; }
-    public void setCenterLatitude(BigDecimal centerLatitude) { this.centerLatitude = centerLatitude; }
-    public BigDecimal getCenterLongitude() { return centerLongitude; }
-    public void setCenterLongitude(BigDecimal centerLongitude) { this.centerLongitude = centerLongitude; }
-    public BigDecimal getRadius() { return radius; }
-    public void setRadius(BigDecimal radius) { this.radius = radius; }
-    public String getTriggerType() { return triggerType; }
-    public void setTriggerType(String triggerType) { this.triggerType = triggerType; }
-    public Boolean getIsActive() { return isActive; }
-    public void setIsActive(Boolean active) { isActive = active; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public String getType() { return type; }
+    public void setType(String type) { this.type = type; }
+    public Double getCenterLat() { return centerLat; }
+    public void setCenterLat(Double centerLat) { this.centerLat = centerLat; }
+    public Double getCenterLng() { return centerLng; }
+    public void setCenterLng(Double centerLng) { this.centerLng = centerLng; }
+    public Integer getRadius() { return radius; }
+    public void setRadius(Integer radius) { this.radius = radius; }
+    public String getCoordinates() { return coordinates; }
+    public void setCoordinates(String coordinates) { this.coordinates = coordinates; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    public Long getCreatedBy() { return createdBy; }
+    public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
+    public Long getPatientId() { return patientId; }
+    public void setPatientId(Long patientId) { this.patientId = patientId; }
+    public Date getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }
+    public Date getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Date updatedAt) { this.updatedAt = updatedAt; }
 }
 

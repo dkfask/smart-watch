@@ -68,17 +68,29 @@
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
         </dependency>
+        <!-- WebSocket 支持 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- 性能监控依赖 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
-        <!-- 指定构建输出目录（可使用相对路径或绝对路径） -->
-        <directory>E:\smart\output</directory>
-        <!-- 固定可执行 JAR 名称为 demo2.jar -->
+        <!-- 使用默认的target目录作为构建输出目录 -->
         <finalName>demo2-${maven.build.timestamp}</finalName>
         <plugins>
             <plugin>
