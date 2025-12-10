@@ -1,5 +1,6 @@
 package com.example.demo.socket;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
@@ -20,6 +21,9 @@ public class WebSocketHandler extends TextWebSocketHandler {
     
     // 存储所有活跃的WebSocket会话
     private static final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
+    
+    // Jackson ObjectMapper，用于JSON序列化
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
      * 连接建立时调用
@@ -112,13 +116,18 @@ public class WebSocketHandler extends TextWebSocketHandler {
     }
 
     /**
-     * 简单的对象转JSON方法（实际项目中建议使用Jackson或Gson）
+     * 使用Jackson进行JSON序列化
      */
     private static String toJson(Object data) {
         if (data == null) {
             return "null";
         }
-        return data.toString();
+        try {
+            return objectMapper.writeValueAsString(data);
+        } catch (Exception e) {
+            System.err.println("JSON序列化失败: " + e.getMessage());
+            return data.toString();
+        }
     }
 
     /**
@@ -133,5 +142,19 @@ public class WebSocketHandler extends TextWebSocketHandler {
      */
     public static int getSessionCount() {
         return sessions.size();
+    }
+    
+    /**
+     * 推送报警消息
+     */
+    public static void pushAlarm(Object alarm) {
+        broadcast("alarm", "new", alarm);
+    }
+    
+    /**
+     * 推送报警状态更新
+     */
+    public static void pushAlarmUpdate(Object alarm) {
+        broadcast("alarm", "update", alarm);
     }
 }

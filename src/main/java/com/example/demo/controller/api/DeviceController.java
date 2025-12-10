@@ -1,5 +1,6 @@
 package com.example.demo.controller.api;
 
+import com.example.demo.model.ApiResponse;
 import com.example.demo.model.Device;
 import com.example.demo.model.DeviceStatus;
 import com.example.demo.repository.DeviceRepository;

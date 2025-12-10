@@ -1,5 +1,6 @@
 package com.example.demo.controller.api;
 
+import com.example.demo.model.ApiResponse;
 import com.example.demo.model.DeviceLocation;
 import com.example.demo.repository.DeviceLocationRepository;
 import com.example.demo.service.TrackingService;

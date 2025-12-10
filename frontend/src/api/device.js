@@ -6,7 +6,7 @@ export const deviceApi = {
     return api.get('/devices', { params: { limit, offset } })
       .then(response => {
         console.log('getDevices API返回结果:', response)
-        // 确保返回数组，处理不同的数据格式
+        // 确保返回完整响应数据，包括list和total字段
         let responseData = response;
         if (response && response.data) {
           responseData = response.data;
@@ -17,22 +17,12 @@ export const deviceApi = {
           responseData = responseData.data;
         }
         
-        if (Array.isArray(responseData)) {
-          return responseData
-        } else if (responseData && Array.isArray(responseData.list)) {
-          return responseData.list
-        } else if (responseData && Array.isArray(responseData.items)) {
-          return responseData.items
-        } else if (responseData && Array.isArray(responseData.content)) {
-          return responseData.content
-        } else {
-          console.warn('getDevices API返回的不是预期格式:', responseData)
-          return []
-        }
+        // 直接返回完整数据，让调用方处理
+        return responseData;
       })
       .catch(error => {
         console.error('Failed to get devices:', error)
-        return []
+        return { list: [], total: 0 }
       })
   },
   

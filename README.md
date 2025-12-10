@@ -50,9 +50,11 @@
 - 角色管理
 
 ### 报警管理
-- 设备低电报警
-- 围栏越界报警
-- 报警历史记录
+- 多种报警类型：围栏越界、低电量、SOS报警、跌倒报警、心率异常等
+- 报警级别：紧急、警告、信息
+- 报警处理流程：支持未处理、已处理、误报状态管理
+- 报警历史记录和查询
+- 报警统计功能：按类型、状态、时间范围统计报警数据
 
 ## 项目结构
 
@@ -232,6 +234,40 @@
 | GET  | /api/patient-devices/by-patient/{patientId} | 获取病人关联设备 | N/A | 关联列表 |
 | GET  | /api/patient-devices/by-device/{deviceId} | 获取设备关联病人 | N/A | 关联列表 |
 
+### 报警管理API
+
+| 方法 | 路径 | 功能 | 请求参数 | 响应格式 |
+|------|------|------|----------|----------|
+| GET  | /api/alarms | 获取报警列表 | `page`: 页码（默认0）<br>`size`: 每页数量（默认20）<br>`deviceId`: 设备ID（可选）<br>`patientId`: 病人ID（可选）<br>`status`: 状态（可选，pending/handled/false_alarm） | 分页报警列表 |
+| GET  | /api/alarms/{id} | 获取报警详情 | N/A | 报警详情对象 |
+| GET  | /api/alarms/device/{deviceId} | 按设备获取报警 | `page`: 页码（默认0）<br>`size`: 每页数量（默认20）<br>`status`: 状态（可选） | 分页报警列表 |
+| GET  | /api/alarms/patient/{patientId} | 按病人获取报警 | `page`: 页码（默认0）<br>`size`: 每页数量（默认20）<br>`status`: 状态（可选） | 分页报警列表 |
+| PUT  | /api/alarms/{id}/read | 标记报警为已读 | `read`: 是否已读（默认true） | `{"success": true}` |
+| PUT  | /api/alarms/{id}/handle | 处理报警 | `status`: 处理状态（handled/false_alarm）<br>`result`: 处理结果（可选）<br>`remark`: 处理备注（可选） | `{"success": true}` |
+| GET  | /api/alarms/stats | 获取报警统计 | N/A | 报警统计数据 |
+| GET  | /api/alarms/unread-count | 获取未读报警数量 | `deviceId`: 设备ID（可选）<br>`patientId`: 病人ID（可选） | `{"count": 5}` |
+| GET  | /api/alarms/recent | 获取最近报警 | `limit`: 数量（默认10） | 最近报警列表 |
+
+#### 报警信息格式
+
+```json
+{
+  "id": 1,
+  "deviceId": 1,
+  "patientId": 1,
+  "alarmType": "fence_breach",
+  "alarmLevel": "critical",
+  "alarmData": "{\"fenceId\": 1, \"action\": \"exit\"}",
+  "latitude": 39.9042,
+  "longitude": 116.4074,
+  "address": "北京市东城区东华门街道天安门广场",
+  "triggeredTime": "2023-01-01T12:00:00Z",
+  "status": "pending",
+  "isRead": false,
+  "createdAt": "2023-01-01T12:00:00Z"
+}
+```
+
 ### 实时数据推送API
 
 使用WebSocket进行实时数据推送，连接地址：`ws://{server}/ws`
@@ -242,7 +278,7 @@
 |------|------|----------|
 | device_status_update | 设备状态更新 | `{"deviceId": 1, "imei": "123456789012345", "isOnline": true, "batteryLevel": 85}` |
 | location_update | 位置更新 | `{"deviceId": 1, "imei": "123456789012345", "latitude": 39.9042, "longitude": 116.4074, "time": "2023-01-01T12:00:00Z"}` |
-| alarm | 告警信息 | `{"deviceId": 1, "imei": "123456789012345", "type": "fence", "message": "设备离开围栏", "level": "high"}` |
+| alarm | 告警信息 | `{"id": 1, "deviceId": 1, "imei": "123456789012345", "alarmType": "fence_breach", "alarmLevel": "critical", "latitude": 39.9042, "longitude": 116.4074, "address": "北京市东城区东华门街道天安门广场", "triggeredTime": "2023-01-01T12:00:00Z", "status": "pending"}` |
 
 ### 电子围栏API
 

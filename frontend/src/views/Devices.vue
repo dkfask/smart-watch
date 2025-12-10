@@ -18,6 +18,13 @@
         <el-table :data="devices" style="width: 100%" v-loading="loading">
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="imei" label="IMEI" width="180" />
+          <el-table-column prop="isOnline" label="在线状态" width="100">
+            <template #default="scope">
+              <el-tag :type="scope.row.isOnline ? 'success' : 'danger'" size="small">
+                {{ scope.row.isOnline ? '在线' : '离线' }}
+              </el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="patient.name" label="关联病人" width="120">
             <template #default="scope">
               {{ scope.row.patient?.name || '-' }}
