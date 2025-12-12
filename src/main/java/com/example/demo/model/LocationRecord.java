@@ -24,7 +24,7 @@ public class LocationRecord {
 
     // 可选的设备外键关联
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "device_id")
+    @JoinColumn(name = "device_id", foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
     private Device device;
 
     @Column(name = "patient_id")

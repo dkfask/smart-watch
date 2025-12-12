@@ -22,7 +22,7 @@ import java.util.Set;
  * - 本控制器仅做只读透传（不修改内部状态），返回不可变集合以保证线程安全。
  */
 @RestController
-@RequestMapping("/api")
+@RequestMapping("/api/downlink")
 public class DownlinkController {
     private static final Logger log = LoggerFactory.getLogger(DownlinkController.class);
 

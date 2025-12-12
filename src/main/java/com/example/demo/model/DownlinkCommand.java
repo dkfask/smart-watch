@@ -15,7 +15,7 @@ public class DownlinkCommand {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "device_id")
+    @JoinColumn(name = "device_id", foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
     private Device device;
 
     @Column(length = 15)
@@ -51,11 +51,37 @@ public class DownlinkCommand {
     @Column(name = "updated_at", nullable = false, columnDefinition = "datetime default current_timestamp on update current_timestamp")
     private Date updatedAt;
 
+    @Column(name = "command_type", length = 50, nullable = false)
+    private String commandType;
+
+    @Column(name = "command_content", nullable = false)
+    @Lob
+    private String commandContent;
+
+    @Column(name = "priority", length = 20, columnDefinition = "varchar(20) default 'normal'", nullable = false)
+    private String priority = "normal";
+
+    @Column(name = "sent_time")
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date sentTime;
+
+    @Column(name = "delivered_time")
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date deliveredTime;
+
+    @Column(name = "failed_reason")
+    @Lob
+    private String failedReason;
+
+    @Column(name = "created_by")
+    private Long createdBy;
+
     public DownlinkCommand() {
         this.createdAt = new Date();
         this.updatedAt = new Date();
         this.retryCount = 0;
         this.status = "pending";
+        this.priority = "normal";
     }
 
     // getters & setters
@@ -94,5 +120,26 @@ public class DownlinkCommand {
 
     public Date getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Date updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getCommandType() { return commandType; }
+    public void setCommandType(String commandType) { this.commandType = commandType; }
+
+    public String getCommandContent() { return commandContent; }
+    public void setCommandContent(String commandContent) { this.commandContent = commandContent; }
+
+    public String getPriority() { return priority; }
+    public void setPriority(String priority) { this.priority = priority; }
+
+    public Date getSentTime() { return sentTime; }
+    public void setSentTime(Date sentTime) { this.sentTime = sentTime; }
+
+    public Date getDeliveredTime() { return deliveredTime; }
+    public void setDeliveredTime(Date deliveredTime) { this.deliveredTime = deliveredTime; }
+
+    public String getFailedReason() { return failedReason; }
+    public void setFailedReason(String failedReason) { this.failedReason = failedReason; }
+
+    public Long getCreatedBy() { return createdBy; }
+    public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
 }
 

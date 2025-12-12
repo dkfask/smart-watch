@@ -2,6 +2,7 @@ package com.example.demo.repository;
 
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.CrudRepository;
+import org.springframework.data.repository.PagingAndSortingRepository;
 import org.springframework.stereotype.Repository;
 import com.example.demo.model.Device;
 
@@ -36,7 +37,7 @@ import java.util.Optional;
  * - IMEI 在本系统中被视为设备唯一标识，应在数据库层设置唯一约束。
  */
 @Repository
-public interface DeviceRepository extends CrudRepository<Device, Long> {
+public interface DeviceRepository extends PagingAndSortingRepository<Device, Long> {
 
     /**
      * 根据设备 IMEI 查找单个设备。

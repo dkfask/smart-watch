@@ -483,6 +483,14 @@ const drawAllFences = () => {
   fences.value.forEach(fence => {
     drawFence(fence)
   })
+  
+  // 如果有选中的围栏，自动定位到该围栏位置
+  if (selectedFenceId.value) {
+    const selectedFence = fences.value.find(fence => fence.id === selectedFenceId.value)
+    if (selectedFence) {
+      highlightFence(selectedFence)
+    }
+  }
 }
 
 // 在地图上绘制单个围栏

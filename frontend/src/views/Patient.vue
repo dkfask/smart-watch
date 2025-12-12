@@ -37,15 +37,12 @@
             </template>
           </el-table-column>
           <el-table-column prop="createdAt" label="创建时间" width="180" :formatter="formatDate" />
-          <el-table-column label="操作" width="250" fixed="right">
+          <el-table-column label="操作" width="180" fixed="right">
             <template #default="scope">
               <el-button type="primary" size="small" @click="handleEditPatient(scope.row)">
                 编辑
               </el-button>
-              <el-button type="success" size="small" @click="handleAssignDevice(scope.row)">
-                关联设备
-              </el-button>
-              <el-button type="info" size="small" @click="handleViewHealthData(scope.row)">
+              <el-button type="warning" size="small" @click="handleViewHealthData(scope.row)">
                 健康数据
               </el-button>
               <el-button type="danger" size="small" @click="handleDeletePatient(scope.row.id)">
@@ -113,30 +110,7 @@
       </template>
     </el-dialog>
 
-    <!-- 关联设备对话框 -->
-    <el-dialog v-model="assignDialogVisible" title="关联设备" width="500px">
-      <el-form :model="assignForm" :rules="assignRules" ref="assignFormRef" label-width="100px">
-        <el-form-item label="病人ID" prop="patientId">
-          <el-input v-model="assignForm.patientId" disabled placeholder="病人ID" />
-        </el-form-item>
-        <el-form-item label="设备IMEI" prop="deviceId">
-          <el-select v-model="assignForm.deviceId" placeholder="请选择设备">
-            <el-option
-              v-for="device in availableDevices"
-              :key="device.id"
-              :label="device.imei"
-              :value="device.id"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="assignDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="handleSaveAssign" :loading="assignLoading">保存</el-button>
-        </span>
-      </template>
-    </el-dialog>
+
 
     <!-- 健康数据查看对话框 -->
     <el-dialog v-model="showHealthData" title="健康数据" width="800px">
@@ -317,15 +291,7 @@ const patientForm = reactive({
 })
 const dialogLoading = ref(false)
 
-// 关联设备对话框
-const assignDialogVisible = ref(false)
-const assignFormRef = ref()
-const assignForm = reactive({
-  patientId: null,
-  deviceId: null
-})
-const assignLoading = ref(false)
-const availableDevices = ref([])
+
 
 // 健康数据相关
 const showHealthData = ref(false)
@@ -373,11 +339,7 @@ const rules = {
   ]
 }
 
-const assignRules = {
-  deviceId: [
-    { required: true, message: '请选择设备', trigger: 'change' }
-  ]
-}
+
 
 // 格式化日期
 const formatDate = (row, column, cellValue) => {
@@ -414,18 +376,6 @@ const fetchPatients = async () => {
     console.error('Failed to fetch patients:', error)
   } finally {
     loading.value = false
-  }
-}
-
-// 获取可用设备列表
-const fetchAvailableDevices = async () => {
-  try {
-    // 获取未关联设备列表
-    const data = await deviceApi.getAvailableDevices()
-    availableDevices.value = Array.isArray(data) ? data : data.data || []
-  } catch (error) {
-    ElMessage.error('获取设备列表失败')
-    console.error('Failed to fetch available devices:', error)
   }
 }
 
@@ -489,36 +439,6 @@ const handleDeletePatient = (id) => {
     }
   }).catch(() => {
     // 取消删除
-  })
-}
-
-// 关联设备
-const handleAssignDevice = (patient) => {
-  assignForm.patientId = patient.id
-  assignForm.deviceId = null
-  fetchAvailableDevices()
-  assignDialogVisible.value = true
-}
-
-// 保存关联设备
-const handleSaveAssign = async () => {
-  if (!assignFormRef.value) return
-  
-  await assignFormRef.value.validate(async (valid) => {
-    if (valid) {
-      assignLoading.value = true
-      try {
-        await patientApi.assignDevice(assignForm.patientId, assignForm.deviceId)
-        ElMessage.success('设备关联成功')
-        assignDialogVisible.value = false
-        fetchPatients()
-      } catch (error) {
-        ElMessage.error('设备关联失败')
-        console.error('Failed to assign device:', error)
-      } finally {
-        assignLoading.value = false
-      }
-    }
   })
 }
 

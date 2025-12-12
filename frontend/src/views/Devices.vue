@@ -676,7 +676,20 @@ const handleDeleteDevice = (id) => {
 const fetchAvailablePatients = async () => {
   try {
     const data = await patientApi.getPatients(100, 0)
-    availablePatients.value = data
+    console.log('获取到的病人数据:', data)
+    
+    // 确保返回的数据是数组，如果是对象则提取list或data字段
+    let patientList = []
+    if (Array.isArray(data)) {
+      patientList = data
+    } else if (data && Array.isArray(data.list)) {
+      patientList = data.list
+    } else if (data && Array.isArray(data.data)) {
+      patientList = data.data
+    }
+    
+    availablePatients.value = patientList
+    console.log('处理后的病人列表:', availablePatients.value)
   } catch (error) {
     ElMessage.error('获取病人列表失败')
     console.error('Failed to fetch patients:', error)

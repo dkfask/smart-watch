@@ -38,12 +38,12 @@ public class SecurityDataInitializer {
                 u.setRole("user");
                 u.setStatus("active");
                 User savedUser = userRepository.save(u);
-                log.info("Initialized default user '{}' (id={})");
+                log.info("Initialized default user '{}' (id={})", username, savedUser.getId());
             } else {
-                log.debug("Default user '{}' already exists");
+                log.debug("Default user '{}' already exists", username);
             }
         } catch (Exception e) {
-            log.warn("Failed to ensure user '{}': {}");
+            log.warn("Failed to ensure user '{}': {}", username, e.getMessage());
         }
     }
 }

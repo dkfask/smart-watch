@@ -25,16 +25,16 @@
                   </div>
                   <el-radio-button
                     v-else
-                    v-for="(device, index) in devices"
-                    :key="index"
-                    :label="device.id || index"
+                    v-for="device in devices"
+                    :key="device.id"
+                    :label="device.id"
                     class="device-radio"
                   >
                     <div class="device-info">
                       <div class="device-imei">{{ device.imei }}</div>
                       <div class="device-status">
-                        <el-tag :type="getDeviceStatus(device.id || index) ? 'success' : 'danger'" size="small">
-                          {{ getDeviceStatus(device.id || index) ? '在线' : '离线' }}
+                        <el-tag :type="getDeviceStatus(device.id) ? 'success' : 'danger'" size="small">
+                          {{ getDeviceStatus(device.id) ? '在线' : '离线' }}
                         </el-tag>
                       </div>
                     </div>
@@ -102,7 +102,13 @@ const fetchDevices = async () => {
   loading.value = true
   try {
     const data = await deviceApi.getDevices(100, 0) // 获取所有设备
-    devices.value = data
+    console.log('设备列表API返回数据:', data)
+    // 提取list字段作为设备数组
+    let deviceList = data
+    if (data && data.list) {
+      deviceList = data.list
+    }
+    devices.value = deviceList
     // 修复设备列表显示
     fixDeviceListDisplay()
     if (devices.value.length > 0 && !selectedDeviceId.value) {
@@ -126,8 +132,44 @@ const fetchDevices = async () => {
 const fetchFences = async () => {
   try {
     const data = await fenceApi.getFences(100, 0)
-    fences.value = data
-    drawAllFences()
+    console.log('获取到的围栏原始数据:', data)
+    
+    // 转换围栏数据格式以匹配前端要求
+    let fenceList = []
+    
+    // 确保返回的数据是数组，如果是对象则提取list或data字段
+    if (Array.isArray(data)) {
+      fenceList = data
+    } else if (data && Array.isArray(data.list)) {
+      fenceList = data.list
+    } else if (data && Array.isArray(data.data)) {
+      fenceList = data.data
+    }
+    
+    // 转换围栏数据格式，特别是将JSON字符串转换为坐标数组
+    fences.value = fenceList.map(fence => ({
+      id: fence.id,
+      name: fence.name,
+      type: fence.type,
+      radius: fence.radius,
+      // 将JSON字符串转换为坐标数组，处理可能的异常
+      coordinates: typeof fence.coordinates === 'string' ? JSON.parse(fence.coordinates) : [],
+      // 将字符串状态转换为布尔值
+      status: fence.status === 'active',
+      // 添加其他需要的字段
+      centerLat: fence.centerLat,
+      centerLng: fence.centerLng
+    }))
+    
+    console.log('转换后的围栏数据:', fences.value)
+    
+    // 绘制围栏，捕获可能的绘制错误
+    try {
+      drawAllFences()
+    } catch (error) {
+      console.error('Failed to draw fences:', error)
+      // 只记录错误，不显示给用户，因为围栏绘制失败不影响主要功能
+    }
   } catch (error) {
     console.error('Failed to fetch fences:', error)
     ElMessage.error('获取围栏信息失败')
@@ -143,8 +185,38 @@ const drawAllFences = () => {
 
   if (!showFences.value) return
 
-  // 绘制所有围栏
-  fences.value.forEach(fence => {
+  // 过滤掉无效的围栏，只绘制有效的围栏
+  const validFences = fences.value.filter(fence => {
+    // 验证围栏数据是否有效
+    if (!fence || !fence.type || !Array.isArray(fence.coordinates)) {
+      console.warn('无效的围栏数据:', fence)
+      return false
+    }
+    
+    // 验证坐标格式
+    if (fence.type === 'circle') {
+      // 圆形围栏：坐标必须是 [lng, lat] 格式的数字数组
+      return fence.coordinates.length === 2 && 
+             typeof fence.coordinates[0] === 'number' && 
+             typeof fence.coordinates[1] === 'number'
+    } else if (fence.type === 'polygon') {
+      // 多边形围栏：必须至少有3个坐标点，每个坐标点必须是 [lng, lat] 格式的数字数组
+      return fence.coordinates.length >= 3 && 
+             fence.coordinates.every(coord => 
+               Array.isArray(coord) && 
+               coord.length === 2 && 
+               typeof coord[0] === 'number' && 
+               typeof coord[1] === 'number'
+             )
+    }
+    
+    return false
+  })
+  
+  console.log('有效的围栏数量:', validFences.length)
+  
+  // 绘制所有有效围栏
+  validFences.forEach(fence => {
     drawFence(fence)
   })
 }
@@ -153,30 +225,58 @@ const drawAllFences = () => {
 const drawFence = (fence) => {
   if (!map) return
 
+  // 验证围栏数据是否有效
+  if (!fence || !fence.type || !Array.isArray(fence.coordinates)) {
+    console.warn('无效的围栏数据:', fence)
+    return
+  }
+
   let layer
   if (fence.type === 'circle') {
-    // 绘制圆形围栏
-    layer = L.circle(
-      [fence.coordinates[1], fence.coordinates[0]],
-      {
-        radius: fence.radius,
-        color: '#ff6b6b',
-        fillColor: '#ff6b6b',
-        fillOpacity: 0.3,
-        weight: 2,
-        interactive: false
-      }
-    )
+    // 绘制圆形围栏，验证坐标格式是否为 [lng, lat] 格式
+    if (fence.coordinates.length === 2 && typeof fence.coordinates[0] === 'number' && typeof fence.coordinates[1] === 'number') {
+      layer = L.circle(
+        [fence.coordinates[1], fence.coordinates[0]],
+        {
+          radius: fence.radius || 50,
+          color: '#ff6b6b',
+          fillColor: '#ff6b6b',
+          fillOpacity: 0.3,
+          weight: 2,
+          interactive: false
+        }
+      )
+    } else {
+      console.warn('圆形围栏坐标格式无效:', fence.coordinates)
+      return
+    }
   } else if (fence.type === 'polygon') {
-    // 绘制多边形围栏
-    const latLngs = fence.coordinates.map(coord => [coord[1], coord[0]])
-    layer = L.polygon(latLngs, {
-      color: '#4ecdc4',
-      fillColor: '#4ecdc4',
-      fillOpacity: 0.3,
-      weight: 2,
-      interactive: false
-    })
+    // 绘制多边形围栏，验证坐标数组是否有效
+    if (fence.coordinates.length >= 3) {
+      try {
+        const latLngs = fence.coordinates.map(coord => {
+          if (Array.isArray(coord) && coord.length === 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number') {
+            return [coord[1], coord[0]]
+          } else {
+            throw new Error('无效的坐标点: ' + coord)
+          }
+        })
+        
+        layer = L.polygon(latLngs, {
+          color: '#4ecdc4',
+          fillColor: '#4ecdc4',
+          fillOpacity: 0.3,
+          weight: 2,
+          interactive: false
+        })
+      } catch (error) {
+        console.warn('多边形围栏坐标格式无效:', error.message)
+        return
+      }
+    } else {
+      console.warn('多边形围栏顶点数量不足:', fence.coordinates.length)
+      return
+    }
   }
 
   if (layer) {
@@ -202,9 +302,15 @@ const clearAllFences = () => {
 const fetchDeviceLatestLocation = async (deviceId) => {
   try {
     const location = await locationApi.getLatestLocationWithAmap(deviceId)
-    deviceLocations.value.set(deviceId, location)
-    deviceStatus.value.set(deviceId, true) // 有位置数据则认为在线
-    updateMarker(deviceId, location)
+    console.log(`设备 ${deviceId} 的最新位置:`, location)
+    if (location && location.latitude && location.longitude) {
+      deviceLocations.value.set(deviceId, location)
+      deviceStatus.value.set(deviceId, true) // 有位置数据则认为在线
+      updateMarker(deviceId, location)
+    } else {
+      console.warn(`设备 ${deviceId} 没有有效位置数据`)
+      deviceStatus.value.set(deviceId, false) // 没有位置数据则认为离线
+    }
   } catch (error) {
     console.error(`Failed to fetch location for device ${deviceId}:`, error)
     deviceStatus.value.set(deviceId, false) // 获取失败则认为离线
@@ -228,10 +334,65 @@ const fixDeviceListDisplay = () => {
 // 刷新所有设备位置
 const refreshAllLocations = async () => {
   for (const device of devices.value) {
-    // 使用设备ID或IMEI作为标识符
-    const deviceIdentifier = device.id || device.imei
+    // 使用设备ID作为标识符
+    const deviceIdentifier = device.id
     await fetchDeviceLatestLocation(deviceIdentifier)
   }
+  
+  // 刷新完所有设备位置后，自动定位到设备位置
+  autoLocateToDevices()
+}
+
+// 自动定位到设备和围栏位置
+const autoLocateToDevices = () => {
+  if (!map) return
+  
+  // 收集所有有效的设备位置和围栏位置
+  const allLatLngs = []
+  
+  // 添加所有设备位置
+  deviceLocations.value.forEach((location, deviceId) => {
+    if (location && location.latitude && location.longitude) {
+      allLatLngs.push([location.latitude, location.longitude])
+    }
+  })
+  
+  // 添加所有围栏的位置
+  fences.value.forEach(fence => {
+    if (fence && fence.type && Array.isArray(fence.coordinates)) {
+      if (fence.type === 'circle') {
+        // 圆形围栏，添加中心点
+        if (fence.coordinates.length === 2 && typeof fence.coordinates[0] === 'number' && typeof fence.coordinates[1] === 'number') {
+          allLatLngs.push([fence.coordinates[1], fence.coordinates[0]])
+        }
+      } else if (fence.type === 'polygon') {
+        // 多边形围栏，添加所有顶点
+        fence.coordinates.forEach(coord => {
+          if (Array.isArray(coord) && coord.length === 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number') {
+            allLatLngs.push([coord[1], coord[0]])
+          }
+        })
+      }
+    }
+  })
+  
+  // 如果没有任何位置数据，保持默认视图
+  if (allLatLngs.length === 0) {
+    console.log('没有设备或围栏位置数据，保持默认视图')
+    return
+  }
+  
+  // 如果只有一个位置，直接定位到该位置
+  if (allLatLngs.length === 1) {
+    map.setView(allLatLngs[0], 15)
+    console.log('只有一个位置数据，定位到该位置:', allLatLngs[0])
+    return
+  }
+  
+  // 如果有多个位置，计算合适的地图边界
+  const bounds = L.latLngBounds(allLatLngs)
+  map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 })
+  console.log('有多个位置数据，自动调整地图边界')
 }
 
 // 初始化地图
@@ -328,7 +489,10 @@ onMounted(() => {
     refreshAllLocations()
     startAutoRefresh()
   })
-  fetchFences()
+  fetchFences().then(() => {
+    // 获取完围栏信息后，自动定位到设备和围栏位置
+    autoLocateToDevices()
+  })
 })
 
 onBeforeUnmount(() => {

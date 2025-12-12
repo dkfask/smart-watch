@@ -4,7 +4,7 @@ import { handleApiResponse, handleApiError } from './utils'
 export const alarmApi = {
   // 获取报警列表
   getAlarms(limit = 20, offset = 0, status = null) {
-    const params = { limit, offset }
+    const params = { page: Math.floor(offset / limit), size: limit }
     if (status !== null) {
       params.status = status
     }
@@ -29,14 +29,14 @@ export const alarmApi = {
 
   // 获取设备相关的报警
   getAlarmsByDeviceId(deviceId, limit = 20, offset = 0) {
-    return api.get(`/alarms/device/${deviceId}`, { params: { limit, offset } })
+    return api.get(`/alarms/device/${deviceId}`, { params: { page: Math.floor(offset / limit), size: limit } })
       .then(handleApiResponse)
       .catch(handleApiError)
   },
 
   // 获取病人相关的报警
   getAlarmsByPatientId(patientId, limit = 20, offset = 0) {
-    return api.get(`/alarms/patient/${patientId}`, { params: { limit, offset } })
+    return api.get(`/alarms/patient/${patientId}`, { params: { page: Math.floor(offset / limit), size: limit } })
       .then(handleApiResponse)
       .catch(handleApiError)
   },

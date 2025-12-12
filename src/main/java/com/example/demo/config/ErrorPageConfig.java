@@ -19,6 +19,9 @@ public class ErrorPageConfig {
         
         // 添加错误页面，将所有错误状态码转发到/index.html
         // Tomcat会自动处理错误页面的转发，位置必须以/开头
+        // 注意：这个配置会影响所有请求，包括API请求
+        // 如果API请求返回错误状态码，也会被转发到index.html
+        // 为了解决这个问题，我们需要在WebMvcConfig中配置API路径的处理
         ErrorPage errorPage = new ErrorPage("/index.html");
         factory.addErrorPages(errorPage);
         

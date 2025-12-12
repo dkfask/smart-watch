@@ -94,6 +94,9 @@ public class DownlinkManager {
         DownlinkCommand cmd = new DownlinkCommand();
         cmd.setImei(imei);
         cmd.setPayload(message);
+        // 设置commandType和commandContent字段，这些是数据库表中的必填字段
+        cmd.setCommandType("MANUAL");
+        cmd.setCommandContent(message);
         // 尝试关联 device
         try {
             if (imei != null && !imei.isEmpty()) {

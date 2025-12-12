@@ -5,6 +5,11 @@ import com.example.demo.model.Device;
 import com.example.demo.model.DeviceStatus;
 import com.example.demo.repository.DeviceRepository;
 import com.example.demo.repository.DeviceStatusRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -104,37 +109,45 @@ public class DeviceController {
     }
 
     @GetMapping(produces = "application/json")
-    public ResponseEntity<Map<String, Object>> list(@RequestParam(defaultValue = "20") int limit,
-                             @RequestParam(defaultValue = "0") int offset,
+    public ResponseEntity<Map<String, Object>> list(@RequestParam(defaultValue = "0") int page,
+                             @RequestParam(defaultValue = "20") int size,
                              @RequestParam(required = false) String search) {
-        // 简单内存分页：offset 表示起始位置（0-based）
-        Iterable<Device> allIter = repo.findAll();
-        List<Device> all = new ArrayList<>();
-        for (Device d : allIter) all.add(d);
+        // 使用Pageable实现数据库分页
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Device> devicePage;
         
         // 搜索过滤
         if (search != null && !search.isEmpty()) {
-            List<Device> filtered = new ArrayList<>();
-            for (Device d : all) {
-                if (d.getImei() != null && d.getImei().contains(search)) {
-                    filtered.add(d);
-                } else if (d.getIccid() != null && d.getIccid().contains(search)) {
-                    filtered.add(d);
-                } else if (d.getImsi() != null && d.getImsi().contains(search)) {
-                    filtered.add(d);
+            // 使用JPA Query Methods实现模糊搜索
+            Iterable<Device> allIter = repo.findAll();
+            List<Device> all = new ArrayList<>();
+            for (Device d : allIter) {
+                if (d.getImei() != null && d.getImei().contains(search) ||
+                    d.getIccid() != null && d.getIccid().contains(search) ||
+                    d.getImsi() != null && d.getImsi().contains(search)) {
+                    all.add(d);
                 }
             }
-            all = filtered;
+            // 手动分页
+            int from = Math.min(page * size, all.size());
+            int to = Math.min(from + size, all.size());
+            List<Device> pageContent = all.subList(from, to);
+            devicePage = new org.springframework.data.domain.PageImpl<>(pageContent, pageable, all.size());
+        } else {
+            // 无搜索条件，直接查询所有
+            Iterable<Device> allIter = repo.findAll();
+            List<Device> all = new ArrayList<>();
+            for (Device d : allIter) all.add(d);
+            // 手动分页
+            int from = Math.min(page * size, all.size());
+            int to = Math.min(from + size, all.size());
+            List<Device> pageContent = all.subList(from, to);
+            devicePage = new org.springframework.data.domain.PageImpl<>(pageContent, pageable, all.size());
         }
-        
-        if (limit <= 0) limit = 20;
-        if (offset < 0) offset = 0;
-        int from = Math.min(offset, all.size());
-        int to = Math.min(from + limit, all.size());
         
         // 返回包含在线状态的设备信息
         List<Map<String, Object>> deviceList = new ArrayList<>();
-        for (Device device : all.subList(from, to)) {
+        for (Device device : devicePage.getContent()) {
             Map<String, Object> deviceInfo = new HashMap<>();
             // 添加设备基本信息
             deviceInfo.put("id", device.getId());
@@ -158,9 +171,9 @@ public class DeviceController {
         // 封装分页响应
         Map<String, Object> result = new HashMap<>();
         result.put("list", deviceList);
-        result.put("total", all.size());
-        result.put("page", offset / limit);
-        result.put("size", limit);
+        result.put("total", devicePage.getTotalElements());
+        result.put("page", devicePage.getNumber());
+        result.put("size", devicePage.getSize());
         
         return ResponseEntity.ok(result);
     }

@@ -34,6 +34,9 @@ import com.example.demo.repository.HealthRecordRepository;
 import com.example.demo.repository.HeartbeatRecordRepository;
 import com.example.demo.repository.LocationRecordRepository;
 import com.example.demo.socket.downlink.DownlinkManager;
+import com.example.demo.socket.processor.LogProcessor;
+import com.example.demo.socket.processor.PacketProcessor;
+import com.example.demo.socket.processor.ResponseGenerator;
 import com.example.demo.socket.protocol.BraceletPacket;
 import com.example.demo.socket.protocol.ProtocolParser;
 import com.example.demo.socket.protocol.ProtocolException;
@@ -98,6 +101,11 @@ public class MpbandServer implements SmartLifecycle {
     private final DeviceStatusRepository deviceStatusRepository;
     private final AmapLocationService amapLocationService;
 
+    // 处理器类
+    private final PacketProcessor packetProcessor;
+    private final ResponseGenerator responseGenerator;
+    private final LogProcessor logProcessor;
+
     // 协议常量
     private static final String HEADER = "IW";
     private static final String END_MARKER = "#";
@@ -110,13 +118,6 @@ public class MpbandServer implements SmartLifecycle {
     // 可选：在 AP00 回复中追加的可变 key（若为空则不追加）
     @Value("${app.mpband.responseKey:}")
     private String responseKey;
-    // 新增：磁盘路径与并发锁
-    private Path saveBasePath;
-    private Path rawDirPath;
-    private Path deviceDirPath;
-    private final Map<String, Object> deviceLocks = new ConcurrentHashMap<>();
-    // 新增：原始报文按天归档写入的全局锁，避免并发写入冲突
-    private final Object rawFileLock = new Object();
 
     // 用于从 payload 中识别 IMEI（15 位数字）
     private static final Pattern IMEI_PATTERN = Pattern.compile("\\b(\\d{15})\\b");
@@ -135,6 +136,13 @@ public class MpbandServer implements SmartLifecycle {
         this.healthRecordRepository = healthRecordRepository;
         this.deviceStatusRepository = deviceStatusRepository;
         this.amapLocationService = amapLocationService;
+        
+        // 初始化处理器类
+        this.packetProcessor = new PacketProcessor(deviceRepository, downlinkManager, locationRecordRepository,
+                heartbeatRecordRepository, healthRecordRepository, deviceStatusRepository, amapLocationService);
+        // 先创建logProcessor，然后再创建responseGenerator
+        this.logProcessor = new LogProcessor(saveDirName);
+        this.responseGenerator = new ResponseGenerator(responseKey, appendNewlineAfterResponse, logProcessor);
     }
 
     @Override
@@ -155,22 +163,10 @@ public class MpbandServer implements SmartLifecycle {
             running = true;
             acceptThread.start();
 
-            // 启动时确保磁盘保存目录存在
-            try {
-                saveBasePath = Paths.get(System.getProperty("user.dir")).resolve(saveDirName);
-                rawDirPath = saveBasePath.resolve("raw");
-                deviceDirPath = saveBasePath.resolve("devices");
-                Files.createDirectories(rawDirPath);
-                Files.createDirectories(deviceDirPath);
-                // 不再打印INFO级别日志，保持控制台简洁
-                // log.info("📁 数据保存目录准备就绪: {}", saveBasePath.toAbsolutePath());
-            } catch (Exception ex) {
-                // 不再打印WARN级别日志，保持控制台简洁
-                // log.warn("无法创建保存目录 {}: {}", saveDirName, ex.getMessage());
-            }
+            // 日志处理器已在构造函数中初始化，无需在这里处理目录
 
-            // 不再打印INFO级别日志，保持控制台简洁
-            // log.info("🚀 MpbandServer started, listening on {}", getBoundPort());
+            // 添加日志以便调试
+            log.info("🚀 MpbandServer started, listening on {}", getBoundPort());
         } catch (IOException e) {
             running = false;
             closeQuietly(serverSocket);
@@ -330,11 +326,11 @@ public class MpbandServer implements SmartLifecycle {
                 if (discarding) {
                     // 丢弃所有字符直到遇到分隔符
                     if (c == endChar) {
-                        log.warn("丢弃模式结束，遇到分隔符 '{}'：已丢弃 {} 字节 (client={})");
+                        // log.warn("丢弃模式结束，遇到分隔符 '{}'：已丢弃 {} 字节 (client={})", endChar, droppedBytes, clientInfo);
                         // 防御策略：仅记录并根据策略重置计数，不主动断开连接
                         consecutiveDiscardEvents++;
                         if (disconnectOnExcessiveDrop && (droppedBytes >= dropThresholdBytes || consecutiveDiscardEvents > maxConsecutiveDiscardEvents)) {
-                            log.error("检测到异常流量或连续丢弃({})，但当前配置为保留连接，已记录事件 (client={})");
+                            // log.error("检测到异常流量或连续丢弃({})，但当前配置为保留连接，已记录事件 (client={})");
                             // 不调用 clientSocket.close()，也不 return；仅重置统计以继续服务
                         }
                         droppedBytes = 0L;
@@ -352,24 +348,24 @@ public class MpbandServer implements SmartLifecycle {
                 if (frame.length() > maxAllowedFrameLength) {
                     // 超过真正允许的上限 -> 进入丢弃模式
                     droppedBytes = frame.length();
-                    log.warn("帧长度超过允许上限({})，进入丢弃模式，直到遇到分隔符 '{}'。已丢弃 {} 字符 (client={})");
+                    log.warn("帧长度超过允许上限({})，进入丢弃模式，直到遇到分隔符 '{}'。已丢弃 {} 字符 (client={})", maxAllowedFrameLength, endChar, droppedBytes, clientInfo);
                     // 进入丢弃模式前记录事件，但不主动断开连接
-                    consecutiveDiscardEvents++;
-                    if (disconnectOnExcessiveDrop && (droppedBytes >= dropThresholdBytes || consecutiveDiscardEvents > maxConsecutiveDiscardEvents)) {
-                        log.error("帧过长且连续丢弃次数超过阈值({})，但当前配置为保留连接，已记录事件 (client={})");
-                        // 不调用 clientSocket.close()，也不 return；仅重置统计以继续服务
-                    }
-                    frame.setLength(0);
-                    discarding = true;
-                    continue;
-                } else if (frame.length() > maxFrameLength) {
-                    // 超过了配置的阈值，但仍在允许上限内：记录一次信息并继续累积
-                    if (!growthWarned) {
-                        log.info("检测到帧长度超过配置阈值({})，允许扩展到上限({}) 以兼容较长报文 (client={})");
-                        growthWarned = true;
-                    }
-                    // 继续累积
+                consecutiveDiscardEvents++;
+                if (disconnectOnExcessiveDrop && (droppedBytes >= dropThresholdBytes || consecutiveDiscardEvents > maxConsecutiveDiscardEvents)) {
+                    log.error("帧过长且连续丢弃次数超过阈值({})，但当前配置为保留连接，已记录事件 (client={})", consecutiveDiscardEvents, clientInfo);
+                    // 不调用 clientSocket.close()，也不 return；仅重置统计以继续服务
                 }
+                frame.setLength(0);
+                discarding = true;
+                continue;
+            } else if (frame.length() > maxFrameLength) {
+                // 超过了配置的阈值，但仍在允许上限内：记录一次信息并继续累积
+                if (!growthWarned) {
+                    log.info("检测到帧长度超过配置阈值({})，允许扩展到上限({}) 以兼容较长报文 (client={})", maxFrameLength, maxAllowedFrameLength, clientInfo);
+                    growthWarned = true;
+                }
+                // 继续累积
+            }
 
                 if (c == endChar) {
                     // 完整帧（已包含结束符）
@@ -382,7 +378,7 @@ public class MpbandServer implements SmartLifecycle {
                         handleOneMessage(rawMessage, writer, clientSocket, clientInfo);
                     } catch (Exception e) {
                         // 处理单帧发生异常：记录并继续（不要主动断开）
-                        log.warn("处理报文时出现异常，但保持连接: {} (client={})");
+                        log.warn("处理报文时出现异常，但保持连接: {} (client={})", e.getMessage(), clientInfo);
                     }
                 }
             }
@@ -390,7 +386,7 @@ public class MpbandServer implements SmartLifecycle {
 
         // 读到流末尾时，如果处于丢弃模式，记录一次告警日志
         if (discarding && droppedBytes > 0) {
-            log.warn("连接关闭时仍在丢弃模式：已丢弃 {} 字节 (client={})");
+            log.warn("连接关闭时仍在丢弃模式：已丢弃 {} 字节 (client={})", droppedBytes, clientInfo);
         }
     }
 
@@ -420,7 +416,7 @@ public class MpbandServer implements SmartLifecycle {
                     log.debug("⚠️ 无法通过 socket 获取 imei: {}", ex.getMessage());
                 }
             }
-            saveRawAndDeviceLog(message, imei, clientInfo);
+            logProcessor.saveRawAndDeviceLog(message, imei, clientInfo);
         } catch (Exception ex) {
             log.warn("💾 保存上行报文到磁盘失败: {}", ex.getMessage());
         }
@@ -433,25 +429,25 @@ public class MpbandServer implements SmartLifecycle {
             log.warn("❌ 数据包格式错误(无法解析) raw={}, error={}", message, e.getMessage());
             // 发送默认回复，确保设备不会一直重发
             String defaultResponse = HEADER + "BP00#";
-            writeFrame(writer, defaultResponse, clientSocket, clientInfo);
+            responseGenerator.writeFrame(writer, defaultResponse, clientSocket, clientInfo, imei);
             return;
         }
 
         // 处理（传入原始消息与已提取 imei）
         try {
-            processPacket(packet, message, clientInfo, clientSocket, imei);
+            packetProcessor.processPacket(packet, message, clientInfo, clientSocket, imei);
         } catch (Exception e) {
             log.error("💥 处理数据包失败: raw={}, error={}", message, e.getMessage());
             // 发送默认回复，确保设备不会一直重发
             String defaultResponse = HEADER + "BP00#";
-            writeFrame(writer, defaultResponse, clientSocket, clientInfo);
+            responseGenerator.writeFrame(writer, defaultResponse, clientSocket, clientInfo, imei);
             return;
         }
 
         // 构造并发送回复
         try {
-            String response = createResponse(packet);
-            writeFrame(writer, response, clientSocket, clientInfo);
+            String response = responseGenerator.createResponse(packet);
+            responseGenerator.writeFrame(writer, response, clientSocket, clientInfo, imei);
         } catch (Exception e) {
             log.error("📤 发送回复失败: error={}", e.getMessage());
         }
@@ -538,6 +534,9 @@ public class MpbandServer implements SmartLifecycle {
                 case "APWR":
                     handleApWr(payload, clientInfo, imei);
                     log.debug("✅ APWR 处理完成, IMEI={}", imei);
+                    break;
+                case "AP16":
+                    log.debug("✅ AP16 处理完成, IMEI={}", imei);
                     break;
                 default:
                     log.warn("❓ 未知协议类型: {} raw={}", proto, raw);
@@ -1165,51 +1164,34 @@ public class MpbandServer implements SmartLifecycle {
     }
 
     /**
-     * 保存原始报文到磁盘（单独文件）并把消息追加到设备日志文件（按 IMEI）
-     * 1) raw 保存到: {saveBasePath}/raw/yyyyMMdd_HHmmss_SSS_uuid.txt
-     * 2) 设备日志追加到: {saveBasePath}/devices/{imei}.log （如果 imei==null 则保存在 devices/unknown.log）
+     * 保存原始报文到设备日志文件（按 IMEI）
+     * 设备日志追加到: {saveBasePath}/devices/{imei}_yyyyMMdd.log
      */
     private void saveRawAndDeviceLog(String rawMessage, String imei, String clientInfo) {
-        // 保存原始文件（按天滚动合并）：
-        //  - 每天一个归档文件：{saveBasePath}/raw/raw_yyyyMMdd.log
-        //  - 追加写入，写入时追加换行，以便人眼与工具按行读取
-        try {
-            if (rawDirPath != null) {
-                String day = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneId.systemDefault()).format(java.time.Instant.now());
-                String fileName = String.format("raw_%s.log", day);
-                Path f = rawDirPath.resolve(fileName);
-                String time = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneId.systemDefault()).format(java.time.Instant.now());
-                String entry = String.format("%s [%s] %s%n", time, clientInfo == null ? "-" : clientInfo, rawMessage);
-                // 使用全局 rawFileLock 保护，避免多线程同时创建/追加导致竞态
-                synchronized (rawFileLock) {
-                    Files.write(f, entry.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-                }
-            }
-        } catch (Exception e) {
-            // 不再打印WARN级别日志，保持控制台简洁
-            // log.warn("写入原始报文文件失败: {}");
+        // 只保留设备号加日期的日志，IMEI为空时不生成日志
+        if (imei == null || imei.isEmpty()) {
+            // IMEI为空时只记录到系统日志
+            log.debug("📨 收到原始数据但IMEI为空: {} [{}]", rawMessage, clientInfo);
+            return;
         }
 
         // 追加到设备日志
         try {
-            String id = (imei != null && !imei.isEmpty()) ? imei : (clientInfo != null ? clientInfo.replace(':','_').replace('/','_').replace('\\','_') : "unknown");
-            String safe = sanitizeFilename(id);
+            String safe = sanitizeFilename(imei);
             String day = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneId.systemDefault()).format(java.time.Instant.now());
             // 设备日志文件名格式：{imei}_yyyyMMdd.log，每个设备每天一个文件
             String deviceLogFileName = String.format("%s_%s.log", safe, day);
-            Path deviceLog = (deviceDirPath != null) ? deviceDirPath.resolve(deviceLogFileName) : Paths.get(System.getProperty("user.dir")).resolve(deviceLogFileName);
+            Path deviceLog = Paths.get(System.getProperty("user.dir")).resolve(deviceLogFileName);
 
             String time = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneId.systemDefault()).format(java.time.Instant.now());
             String entry = String.format("%s [%s] %s%n", time, clientInfo == null ? "-" : clientInfo, rawMessage);
 
-            // 并发写入保护：每个 imei/useKey 一个锁对象
-            Object lock = deviceLocks.computeIfAbsent(safe, k -> new Object());
-            synchronized (lock) {
+            // 简单的同步写入
+            synchronized (this) {
                 Files.write(deviceLog, entry.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             }
         } catch (Exception e) {
-            // 不再打印WARN级别日志，保持控制台简洁
-            // log.warn("追加设备日志失败: {}");
+            log.warn("💾 保存设备日志失败: {}", e.getMessage());
         }
     }
 
@@ -1224,27 +1206,31 @@ public class MpbandServer implements SmartLifecycle {
      * 格式：{时间} [客户端信息] [SENT] {回复内容}
      */
     private void saveResponseLog(String response, String imei, String clientInfo) {
+        // 只保留设备号加日期的日志，IMEI为空时不生成日志
+        if (imei == null || imei.isEmpty()) {
+            // IMEI为空时只记录到系统日志
+            log.debug("📤 发送回复但IMEI为空: {} [{}]", response, clientInfo);
+            return;
+        }
+
         // 追加到设备日志
         try {
-            String id = (imei != null && !imei.isEmpty()) ? imei : (clientInfo != null ? clientInfo.replace(':','_').replace('/','_').replace('\\','_') : "unknown");
-            String safe = sanitizeFilename(id);
+            String safe = sanitizeFilename(imei);
             String day = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneId.systemDefault()).format(java.time.Instant.now());
             // 设备日志文件名格式：{imei}_yyyyMMdd.log，每个设备每天一个文件
             String deviceLogFileName = String.format("%s_%s.log", safe, day);
-            Path deviceLog = (deviceDirPath != null) ? deviceDirPath.resolve(deviceLogFileName) : Paths.get(System.getProperty("user.dir")).resolve(deviceLogFileName);
+            Path deviceLog = Paths.get(System.getProperty("user.dir")).resolve(deviceLogFileName);
 
             String time = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS").withZone(ZoneId.systemDefault()).format(java.time.Instant.now());
             // 使用 [SENT] 标记这是服务器发送的回复
             String entry = String.format("%s [%s] [SENT] %s%n", time, clientInfo == null ? "-" : clientInfo, response);
 
-            // 并发写入保护：每个 imei/useKey 一个锁对象
-            Object lock = deviceLocks.computeIfAbsent(safe, k -> new Object());
-            synchronized (lock) {
+            // 简单的同步写入
+            synchronized (this) {
                 Files.write(deviceLog, entry.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
             }
         } catch (Exception e) {
-            // 不再打印WARN级别日志，保持控制台简洁
-            // log.warn("追加回复日志失败: {}");
+            log.warn("💾 保存回复日志失败: {}", e.getMessage());
         }
     }
 
