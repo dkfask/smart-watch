@@ -20,7 +20,7 @@ public class PatientDeviceController {
         public String relationship = "wearing"; // 默认值
     }
 
-    // 关联设备和病人
+    // 关联设备和病人（一对一关系）
     @PostMapping
     public ResponseEntity<?> bind(@RequestBody BindRequest req) {
         // 检查是否已存在关联
@@ -33,7 +33,21 @@ public class PatientDeviceController {
             return ResponseEntity.ok(existing);
         }
         
-        // 创建新关联
+        // 1. 解除病人当前的设备关联（如果存在）
+        List<PatientDevice> patientExisting = repo.findByPatientId(req.patientId);
+        for (PatientDevice pd : patientExisting) {
+            pd.setIsActive(false);
+            repo.save(pd);
+        }
+        
+        // 2. 解除设备当前的病人关联（如果存在）
+        List<PatientDevice> deviceExisting = repo.findByDeviceId(req.deviceId);
+        for (PatientDevice pd : deviceExisting) {
+            pd.setIsActive(false);
+            repo.save(pd);
+        }
+        
+        // 3. 创建新关联
         PatientDevice pd = new PatientDevice();
         pd.setPatientId(req.patientId);
         pd.setDeviceId(req.deviceId);

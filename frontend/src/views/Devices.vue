@@ -274,6 +274,57 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 原始日志对话框 -->
+    <el-dialog v-model="rawLogDialogVisible" title="原始日志" width="1000px">
+      <div class="raw-log-header">
+        <el-form :model="rawLogForm" inline>
+          <el-form-item label="时间范围">
+            <el-date-picker
+              v-model="rawLogForm.dateRange"
+              type="daterange"
+              range-separator="至"
+              start-placeholder="开始日期"
+              end-placeholder="结束日期"
+              format="YYYY-MM-DD"
+              value-format="YYYY-MM-DD"
+              :disabled-date="(time) => {
+                // 只能选择最近15天的日期
+                return time.getTime() < Date.now() - 15 * 24 * 60 * 60 * 1000 || time.getTime() > Date.now();
+              }"
+            />
+          </el-form-item>
+          <el-form-item label="关键词">
+            <el-input v-model="rawLogForm.keyword" placeholder="请输入关键词" clearable />
+          </el-form-item>
+          <el-form-item>
+            <el-button type="primary" @click="handleQueryRawLogs" :loading="rawLogLoading">查询</el-button>
+            <el-button @click="handleResetRawLogs">重置</el-button>
+          </el-form-item>
+        </el-form>
+      </div>
+      <div class="raw-log-content" v-loading="rawLogLoading">
+        <pre v-if="rawLogContent" class="raw-log-text">{{ rawLogContent }}</pre>
+        <div v-else-if="!rawLogLoading" class="empty-logs">暂无日志数据</div>
+      </div>
+      <!-- 分页控件 -->
+      <div class="raw-log-pagination" v-if="rawLogTotal > 0">
+        <el-pagination
+          v-model:current-page="rawLogForm.page"
+          v-model:page-size="rawLogForm.size"
+          :page-sizes="[50, 100, 200, 500]"
+          layout="total, sizes, prev, pager, next, jumper"
+          :total="rawLogTotal"
+          @size-change="handleQueryRawLogs"
+          @current-change="handleQueryRawLogs"
+        />
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="rawLogDialogVisible = false">关闭</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -354,6 +405,90 @@ const commandRules = {
   command: [
     { required: true, message: '请输入指令', trigger: 'blur' }
   ]
+}
+
+// 原始日志对话框相关
+const rawLogDialogVisible = ref(false)
+const rawLogLoading = ref(false)
+const rawLogContent = ref('')
+const rawLogTotal = ref(0)
+const rawLogForm = reactive({
+  dateRange: [],
+  keyword: '',
+  page: 1,
+  size: 100,
+  deviceId: null,
+  imei: ''
+})
+
+// 查询原始日志
+const handleQueryRawLogs = async () => {
+  if (!rawLogForm.imei) {
+    ElMessage.error('设备IMEI不存在')
+    return
+  }
+  
+  // 检查时间范围
+  if (!rawLogForm.dateRange || rawLogForm.dateRange.length !== 2) {
+    ElMessage.error('请选择时间范围')
+    return
+  }
+  
+  rawLogLoading.value = true
+  try {
+    // 设置查询时间范围
+    const startDate = new Date(rawLogForm.dateRange[0])
+    const endDate = new Date(rawLogForm.dateRange[1])
+    const startTime = new Date(startDate.setHours(0, 0, 0, 0)).toISOString()
+    const endTime = new Date(endDate.setHours(23, 59, 59, 999)).toISOString()
+    
+    const response = await downlinkApi.getRawLogs(
+      rawLogForm.imei, 
+      startTime, 
+      endTime,
+      rawLogForm.page,
+      rawLogForm.size,
+      rawLogForm.keyword
+    )
+    rawLogContent.value = response.logs || ''
+    rawLogTotal.value = response.total || 0
+  } catch (error) {
+    console.error('Failed to get raw logs:', error)
+    ElMessage.error('获取原始日志失败')
+  } finally {
+    rawLogLoading.value = false
+  }
+}
+
+// 重置原始日志查询
+const handleResetRawLogs = () => {
+  // 设置默认时间范围为最近7天
+  const end = new Date()
+  const start = new Date()
+  start.setDate(end.getDate() - 7)
+  rawLogForm.dateRange = [start, end]
+  rawLogForm.keyword = ''
+  rawLogForm.page = 1
+  rawLogForm.size = 100
+  rawLogContent.value = ''
+  rawLogTotal.value = 0
+}
+
+// 打开原始日志对话框
+const handleOpenRawLogs = (device) => {
+  rawLogForm.deviceId = device.id
+  rawLogForm.imei = device.imei
+  // 设置默认时间范围为最近7天
+  const end = new Date()
+  const start = new Date()
+  start.setDate(end.getDate() - 7)
+  rawLogForm.dateRange = [start, end]
+  rawLogForm.keyword = ''
+  rawLogForm.page = 1
+  rawLogForm.size = 100
+  rawLogContent.value = ''
+  rawLogTotal.value = 0
+  rawLogDialogVisible.value = true
 }
 
 // 格式化日期
@@ -502,11 +637,11 @@ const handleCommand = async (deviceId, commandType) => {
         response = await downlinkApi.sendBP16(imei)
         break
       case 'sendMessage':
-        // 发信息
+        // 发信息（使用BP40协议）
         const message = await ElMessageBox.prompt('请输入要发送的信息', '发送信息', {
           inputType: 'textarea'
         })
-        response = await downlinkApi.sendMessage(imei, message.value)
+        response = await downlinkApi.sendBP40(imei, message.value)
         break
       case 'takePhoto':
         // 拍照
@@ -514,19 +649,19 @@ const handleCommand = async (deviceId, commandType) => {
         break
       case 'heartRate':
         // 心率监测
-        response = await downlinkApi.sendShortCommand(imei, 'HR')
+        response = await downlinkApi.sendBPXL(imei)
         break
       case 'bloodPressure':
         // 血压监测
-        response = await downlinkApi.sendShortCommand(imei, 'BP')
+        response = await downlinkApi.sendBPXY(imei)
         break
       case 'bloodOxygen':
         // 血氧监测
-        response = await downlinkApi.sendShortCommand(imei, 'SPO2')
+        response = await downlinkApi.sendBPXZ(imei)
         break
       case 'temperature':
         // 体温监测
-        response = await downlinkApi.sendShortCommand(imei, 'TEMP')
+        response = await downlinkApi.sendBPXX(imei)
         break
       case 'restart':
         // 重启
@@ -578,10 +713,8 @@ const handleCommand = async (deviceId, commandType) => {
         return
       case 'rawLogs':
         // 原始日志
-        response = await downlinkApi.getRawLogs(imei, new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), new Date().toISOString())
-        // 处理原始日志数据
-        console.log('Raw logs:', response)
-        ElMessage.success('获取原始日志成功')
+        // 打开原始日志对话框
+        handleOpenRawLogs(device)
         return
       case 'batteryReport':
         // 电池报告
@@ -873,5 +1006,63 @@ onMounted(() => {
 /* 调整第一个菜单项的上间距 */
 :deep(.el-dropdown-menu > .el-dropdown-item:first-child) {
   margin-top: 0;
+}
+
+/* 原始日志对话框样式 */
+.raw-log-header {
+  margin-bottom: 20px;
+}
+
+.raw-log-content {
+  max-height: 500px;
+  overflow-y: auto;
+  background-color: #f5f7fa;
+  border: 1px solid #e4e7ed;
+  border-radius: 4px;
+  padding: 10px;
+}
+
+.raw-log-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #303133;
+  margin: 0;
+}
+
+.empty-logs {
+  text-align: center;
+  color: #909399;
+  padding: 20px;
+}
+
+/* 分页控件样式 */
+.raw-log-pagination {
+  margin-top: 15px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+/* 滚动条样式 */
+.raw-log-content::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.raw-log-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.raw-log-content::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.raw-log-content::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 </style>

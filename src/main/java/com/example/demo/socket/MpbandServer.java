@@ -33,6 +33,9 @@ import com.example.demo.repository.DeviceStatusRepository;
 import com.example.demo.repository.HealthRecordRepository;
 import com.example.demo.repository.HeartbeatRecordRepository;
 import com.example.demo.repository.LocationRecordRepository;
+import com.example.demo.service.AmapLocationService;
+import com.example.demo.service.HealthMonitorService;
+import com.example.demo.service.TrackingService;
 import com.example.demo.socket.downlink.DownlinkManager;
 import com.example.demo.socket.processor.LogProcessor;
 import com.example.demo.socket.processor.PacketProcessor;
@@ -40,7 +43,6 @@ import com.example.demo.socket.processor.ResponseGenerator;
 import com.example.demo.socket.protocol.BraceletPacket;
 import com.example.demo.socket.protocol.ProtocolParser;
 import com.example.demo.socket.protocol.ProtocolException;
-import com.example.demo.service.AmapLocationService;
 
 /**
  * 最简单的手环协议服务器 - Spring 集成版本
@@ -100,6 +102,7 @@ public class MpbandServer implements SmartLifecycle {
     private final HealthRecordRepository healthRecordRepository;
     private final DeviceStatusRepository deviceStatusRepository;
     private final AmapLocationService amapLocationService;
+    private final TrackingService trackingService;
 
     // 处理器类
     private final PacketProcessor packetProcessor;
@@ -120,15 +123,18 @@ public class MpbandServer implements SmartLifecycle {
     private String responseKey;
 
     // 用于从 payload 中识别 IMEI（15 位数字）
-    private static final Pattern IMEI_PATTERN = Pattern.compile("\\b(\\d{15})\\b");
-
+    private static final Pattern IMEI_PATTERN = Pattern.compile("[0-9]{15}");
+    private final HealthMonitorService healthMonitorService;
+    
     public MpbandServer(DeviceRepository deviceRepository,
                         DownlinkManager downlinkManager,
                         LocationRecordRepository locationRecordRepository,
                         HeartbeatRecordRepository heartbeatRecordRepository,
                         HealthRecordRepository healthRecordRepository,
                         DeviceStatusRepository deviceStatusRepository,
-                        AmapLocationService amapLocationService) {
+                        AmapLocationService amapLocationService,
+                        HealthMonitorService healthMonitorService,
+                        TrackingService trackingService) {
         this.deviceRepository = deviceRepository;
         this.downlinkManager = downlinkManager;
         this.locationRecordRepository = locationRecordRepository;
@@ -136,10 +142,12 @@ public class MpbandServer implements SmartLifecycle {
         this.healthRecordRepository = healthRecordRepository;
         this.deviceStatusRepository = deviceStatusRepository;
         this.amapLocationService = amapLocationService;
+        this.healthMonitorService = healthMonitorService;
+        this.trackingService = trackingService;
         
         // 初始化处理器类
         this.packetProcessor = new PacketProcessor(deviceRepository, downlinkManager, locationRecordRepository,
-                heartbeatRecordRepository, healthRecordRepository, deviceStatusRepository, amapLocationService);
+                heartbeatRecordRepository, healthRecordRepository, deviceStatusRepository, amapLocationService, healthMonitorService, trackingService);
         // 先创建logProcessor，然后再创建responseGenerator
         this.logProcessor = new LogProcessor(saveDirName);
         this.responseGenerator = new ResponseGenerator(responseKey, appendNewlineAfterResponse, logProcessor);
@@ -239,9 +247,7 @@ public class MpbandServer implements SmartLifecycle {
                 }
             }
         } catch (IOException e) {
-            // IOException 包括远端主动关闭/其他 I/O 错误，视为设备断开或连接异常，记录并结束处理。
-            // 不再打印INFO级别日志，保持控制台简洁
-            // log.info("🔌 手环断开连接或发生 I/O 错误: {} - {}", clientInfo, e.getMessage());
+            
         } finally {
             // 断开时注销下行管理器中的映射
             try { 
@@ -361,7 +367,7 @@ public class MpbandServer implements SmartLifecycle {
             } else if (frame.length() > maxFrameLength) {
                 // 超过了配置的阈值，但仍在允许上限内：记录一次信息并继续累积
                 if (!growthWarned) {
-                    log.info("检测到帧长度超过配置阈值({})，允许扩展到上限({}) 以兼容较长报文 (client={})", maxFrameLength, maxAllowedFrameLength, clientInfo);
+                    
                     growthWarned = true;
                 }
                 // 继续累积
@@ -402,19 +408,24 @@ public class MpbandServer implements SmartLifecycle {
         // 保存原始报文到磁盘并追加到设备日志（尽量提取 IMEI）
         String imei = null;
         try {
-            imei = getImeiFromRaw(message);
-            // 如果原始报文中未包含 IMEI，尝试通过已注册的 socket->imei 映射获取设备号（在 AP00 登录后会由 DownlinkManager.register 注册）
-            if ((imei == null || imei.isEmpty()) && clientSocket != null) {
-                try {
-                    String bySocket = downlinkManager.getImeiBySocket(clientSocket);
-                    if (bySocket != null && !bySocket.isEmpty()) {
-                        imei = bySocket;
-                        log.debug("🔗 通过 socket 映射解析出 imei={} for client={}", bySocket, clientInfo);
+            // 对于AP03协议，完全跳过IMEI处理，因为AP03报文本身不包含IMEI信息
+            if (!message.startsWith("IWAP03")) {
+                imei = getImeiFromRaw(message);
+                // 如果原始报文中未包含 IMEI，尝试通过已注册的 socket->imei 映射获取设备号（在 AP00 登录后会由 DownlinkManager.register 注册）
+                if ((imei == null || imei.isEmpty()) && clientSocket != null) {
+                    try {
+                        String bySocket = downlinkManager.getImeiBySocket(clientSocket);
+                        if (bySocket != null && !bySocket.isEmpty()) {
+                            imei = bySocket;
+                            log.debug("🔗 通过 socket 映射解析出 imei={} for client={}", bySocket, clientInfo);
+                        }
+                    } catch (Exception ex) {
+                        // 忽略 getImeiBySocket 可能抛出的异常
+                        log.debug("⚠️ 无法通过 socket 获取 imei: {}", ex.getMessage());
                     }
-                } catch (Exception ex) {
-                    // 忽略 getImeiBySocket 可能抛出的异常
-                    log.debug("⚠️ 无法通过 socket 获取 imei: {}", ex.getMessage());
                 }
+            } else {
+                log.debug("📌 AP03协议，完全跳过IMEI处理");
             }
             logProcessor.saveRawAndDeviceLog(message, imei, clientInfo);
         } catch (Exception ex) {
@@ -1152,15 +1163,79 @@ public class MpbandServer implements SmartLifecycle {
 
     private String getImeiFromRaw(String raw) {
         if (raw == null) return null;
+        
+        log.debug("📌 正在从原始报文提取IMEI: {}", raw);
+        
+        // 提取协议类型
+        String protocol = "";
+        if (raw.startsWith("IW") && raw.length() >= 6) {
+            protocol = raw.substring(2, 6);
+        }
+        
+        // 对于AP03协议，完全跳过IMEI提取，因为AP03报文本身不包含IMEI信息
+        if ("AP03".equals(protocol)) {
+            log.debug("📌 识别到AP03协议，跳过IMEI提取");
+            return null;
+        }
+        
+        // 特别处理IWAP03报文，确保不会提取出无效IMEI
+        if (raw.contains("IWAP03")) {
+            log.debug("📌 识别到包含IWAP03的报文，跳过IMEI提取");
+            return null;
+        }
+        
         // 去掉开头 'IW' + 协议号 'APxx' (共6位) 后再查找 15 位数字
         String s = raw;
         if (s.startsWith("IW") && s.length() > 6) {
             int end = s.endsWith(END_MARKER) ? s.length() - 1 : s.length();
             s = s.substring(6, end);
         }
+        
         Matcher m = IMEI_PATTERN.matcher(s);
-        if (m.find()) return m.group(1);
+        if (m.find()) {
+            String imei = m.group(0);
+            
+            // 额外检查：确保提取的IMEI是有效的
+            if (!isValidImei(imei)) {
+                log.debug("📌 识别到无效IMEI值{}，跳过", imei);
+                return null;
+            }
+            
+            log.debug("📌 提取到有效IMEI: {}", imei);
+            return imei;
+        }
+        
+        log.debug("📌 未找到IMEI");
         return null;
+    }
+    
+    /**
+     * 验证IMEI是否有效
+     * @param imei 要验证的IMEI
+     * @return true if valid, false otherwise
+     */
+    private boolean isValidImei(String imei) {
+        if (imei == null || imei.length() != 15) {
+            return false;
+        }
+        
+        // 排除已知的无效IMEI
+        if ("05700008100008".equals(imei) || "000570001000000".equals(imei)) {
+            return false;
+        }
+        
+        // 排除全是0的IMEI
+        if (imei.matches("^0+$")) {
+            return false;
+        }
+        
+        // 排除以000开头的IMEI，这些看起来像是无效的测试值
+        if (imei.startsWith("000")) {
+            return false;
+        }
+        
+        // 可以添加Luhn算法验证，这里暂时省略
+        return true;
     }
 
     /**

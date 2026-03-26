@@ -9,9 +9,15 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 
 @RestController
@@ -511,6 +517,113 @@ public class DownlinkApiController {
     }
 
     /**
+     * Get raw logs for a device with pagination support.
+     * Query params:
+     * - imei: Device IMEI (required)
+     * - startTime: Start time, ISO format (required)
+     * - endTime: End time, ISO format (required)
+     * - page: Page number, default 1
+     * - size: Page size, default 100
+     * - keyword: Optional keyword for filtering logs
+     */
+    @GetMapping("/raw-logs")
+    public ResponseEntity<?> getRawLogs(
+            @RequestParam String imei,
+            @RequestParam String startTime,
+            @RequestParam String endTime,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "100") int size,
+            @RequestParam(required = false) String keyword) {
+        if (imei == null || imei.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "imei required"));
+        if (startTime == null || startTime.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "startTime required"));
+        if (endTime == null || endTime.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "endTime required"));
+        if (page < 1) page = 1;
+        if (size < 1 || size > 1000) size = 100;
+
+        try {
+            // 解析开始和结束时间
+            DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
+            LocalDateTime start = LocalDateTime.parse(startTime, formatter);
+            LocalDateTime end = LocalDateTime.parse(endTime, formatter);
+
+            // 生成日期范围
+            List<LocalDate> dates = new ArrayList<>();
+            LocalDate current = start.toLocalDate();
+            LocalDate endDate = end.toLocalDate();
+            while (!current.isAfter(endDate)) {
+                dates.add(current);
+                current = current.plusDays(1);
+            }
+
+            // 日志文件存储目录
+            String saveBasePath = "mpband_data";
+            Path deviceLogsPath = Paths.get(System.getProperty("user.dir"), saveBasePath, "devices");
+
+            // 收集所有符合条件的日志行
+            List<String> allLogLines = new ArrayList<>();
+            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+            for (LocalDate date : dates) {
+                // 设备日志文件名格式：{imei}_yyyyMMdd.log
+                String logFileName = String.format("%s_%s.log", imei, dateFormatter.format(date));
+                Path logFile = deviceLogsPath.resolve(logFileName);
+
+                if (Files.exists(logFile)) {
+                    // 读取文件内容并过滤
+                    List<String> lines = Files.readAllLines(logFile);
+                    for (String line : lines) {
+                        // 检查时间范围和关键词
+                        if (isLineInTimeRange(line, start, end) && (keyword == null || keyword.isEmpty() || line.contains(keyword))) {
+                            allLogLines.add(line);
+                        }
+                    }
+                }
+            }
+
+            // 计算分页
+            int total = allLogLines.size();
+            int startIndex = (page - 1) * size;
+            int endIndex = Math.min(startIndex + size, total);
+            List<String> pageLines = new ArrayList<>();
+            if (startIndex < endIndex) {
+                pageLines = allLogLines.subList(startIndex, endIndex);
+            }
+
+            // 构建响应
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("total", total);
+            response.put("page", page);
+            response.put("size", size);
+            response.put("pages", (total + size - 1) / size);
+            response.put("logs", String.join("\n", pageLines));
+            response.put("count", pageLines.size());
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            log.error("Failed to get raw logs for imei={}: {}", imei, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("status", "failed", "error", e.getMessage()));
+        }
+    }
+    
+    /**
+     * 检查日志行是否在指定时间范围内
+     */
+    private boolean isLineInTimeRange(String line, LocalDateTime start, LocalDateTime end) {
+        try {
+            // 日志行格式：[2025-12-17 11:11:38.336] ...
+            if (line.length() < 24) return false;
+            String timeStr = line.substring(1, 24);
+            DateTimeFormatter lineFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
+            LocalDateTime lineTime = LocalDateTime.parse(timeStr, lineFormatter);
+            return !lineTime.isBefore(start) && !lineTime.isAfter(end);
+        } catch (Exception e) {
+            // 解析失败的日志行默认包含
+            return true;
+        }
+    }
+
+    /**
      * Send BPPH command (SOS call switch). Query params: imei (required), setting (0=off, 1=on)
      */
     @PostMapping("/bpph")
@@ -644,6 +757,25 @@ public class DownlinkApiController {
             return ResponseEntity.ok(Map.of("status", "sent", "message", msg));
         } catch (IOException e) {
             log.warn("sendBpxz failed imei={} msg={} err={}", imei, msg, e.getMessage());
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("status", "failed", "error", e.getMessage()));
+        }
+    }
+
+    /**
+     * Send BPXX command (measure temperature). Query params: imei (required)
+     */
+    @PostMapping("/bpxx")
+    public ResponseEntity<?> sendBpxx(@RequestParam String imei, @RequestParam(required = false) String seq) {
+        if (imei == null || imei.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "imei required"));
+        String seqVal = seq != null ? seq : "1";
+
+        DownlinkService service = new DownlinkService();
+        String msg = service.buildBPXX(imei, seqVal);
+        try {
+            downlinkManager.sendToImei(imei, msg);
+            return ResponseEntity.ok(Map.of("status", "sent", "message", msg));
+        } catch (IOException e) {
+            log.warn("sendBpxx failed imei={} msg={} err={}", imei, msg, e.getMessage());
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("status", "failed", "error", e.getMessage()));
         }
     }

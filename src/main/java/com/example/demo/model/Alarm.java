@@ -16,6 +16,13 @@ public class Alarm {
     @Column(name = "patient_id")
     private Long patientId;
     
+    // 关联对象，用于前端显示设备和病人信息
+    @Transient
+    private Device device;
+    
+    @Transient
+    private Patient patient;
+    
     @Column(name = "alarm_type", nullable = false, length = 50)
     private String alarmType; // fence_breach, low_battery, sos, fall, heart_rate, etc.
     
@@ -79,6 +86,10 @@ public class Alarm {
     public void setDeviceId(Long deviceId) { this.deviceId = deviceId; }
     public Long getPatientId() { return patientId; }
     public void setPatientId(Long patientId) { this.patientId = patientId; }
+    public Device getDevice() { return device; }
+    public void setDevice(Device device) { this.device = device; }
+    public Patient getPatient() { return patient; }
+    public void setPatient(Patient patient) { this.patient = patient; }
     public String getAlarmType() { return alarmType; }
     public void setAlarmType(String alarmType) { this.alarmType = alarmType; }
     public String getAlarmLevel() { return alarmLevel; }

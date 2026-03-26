@@ -144,12 +144,11 @@ const initMap = () => {
     className: 'custom-marker',
     html: `
       <div class="marker-drop">
-        <div class="marker-icon">📍</div>
         <div class="marker-number">${device.value.id}</div>
       </div>
     `,
-    iconSize: [40, 40],
-    iconAnchor: [20, 40]
+    iconSize: [30, 30],
+    iconAnchor: [15, 30]
   });
 
   // 添加标记
@@ -229,8 +228,8 @@ onBeforeUnmount(() => {
 
 :deep(.marker-drop) {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 30px;
+  height: 30px;
   background-color: #1890ff;
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
@@ -240,27 +239,19 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-:deep(.marker-icon) {
-  transform: rotate(45deg);
-  font-size: 20px;
-  position: absolute;
-  top: 8px;
-  left: 8px;
-}
-
 :deep(.marker-number) {
   position: absolute;
-  bottom: -15px;
-  right: -15px;
+  bottom: -12px;
+  right: -12px;
   background-color: #fff;
   border: 2px solid #1890ff;
   border-radius: 50%;
-  width: 25px;
-  height: 25px;
+  width: 20px;
+  height: 20px;
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: bold;
   color: #1890ff;
   transform: rotate(45deg);

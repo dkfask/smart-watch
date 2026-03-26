@@ -3,8 +3,13 @@ package com.example.demo.controller.api;
 import com.example.demo.model.ApiResponse;
 import com.example.demo.model.Device;
 import com.example.demo.model.DeviceStatus;
+import com.example.demo.model.Patient;
+import com.example.demo.model.PatientDevice;
 import com.example.demo.repository.DeviceRepository;
 import com.example.demo.repository.DeviceStatusRepository;
+import com.example.demo.repository.PatientDeviceRepository;
+import com.example.demo.repository.PatientRepository;
+import com.example.demo.socket.downlink.DownlinkManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
@@ -25,10 +30,16 @@ import java.util.Optional;
 public class DeviceController {
     private final DeviceRepository repo;
     private final DeviceStatusRepository statusRepo;
+    private final PatientDeviceRepository patientDeviceRepo;
+    private final PatientRepository patientRepo;
+    private final DownlinkManager downlinkManager;
 
-    public DeviceController(DeviceRepository repo, DeviceStatusRepository statusRepo) {
+    public DeviceController(DeviceRepository repo, DeviceStatusRepository statusRepo, PatientDeviceRepository patientDeviceRepo, PatientRepository patientRepo, DownlinkManager downlinkManager) {
         this.repo = repo;
         this.statusRepo = statusRepo;
+        this.patientDeviceRepo = patientDeviceRepo;
+        this.patientRepo = patientRepo;
+        this.downlinkManager = downlinkManager;
     }
 
     @PostMapping
@@ -66,13 +77,36 @@ public class DeviceController {
         deviceInfo.put("createdAt", device.getCreatedAt());
         deviceInfo.put("updatedAt", device.getUpdatedAt());
         
-        // 获取设备在线状态
+        // 获取设备在线状态：优先使用实时连接状态，其次使用数据库状态
         Optional<DeviceStatus> status = statusRepo.findById(device.getId());
-        deviceInfo.put("isOnline", status.map(DeviceStatus::getIsOnline).orElse(false));
+        boolean isOnline = status.map(DeviceStatus::getIsOnline).orElse(false);
+        // 检查DownlinkManager中的实时连接状态
+        boolean realtimeOnline = downlinkManager.getOnlineImeis().contains(device.getImei());
+        deviceInfo.put("isOnline", realtimeOnline);
         deviceInfo.put("lastLocationTime", status.map(DeviceStatus::getLastLocationTime).orElse(null));
         deviceInfo.put("lastLatitude", status.map(DeviceStatus::getLastLatitude).orElse(null));
         deviceInfo.put("lastLongitude", status.map(DeviceStatus::getLastLongitude).orElse(null));
         deviceInfo.put("batteryLevel", status.map(DeviceStatus::getBatteryLevel).orElse(null));
+        
+        // 获取设备关联的病人信息
+        List<PatientDevice> patientDevices = patientDeviceRepo.findByDeviceId(device.getId());
+        if (!patientDevices.isEmpty()) {
+            // 取第一个关联的病人（一对一关系）
+            PatientDevice patientDevice = patientDevices.get(0);
+            Optional<Patient> patientOpt = patientRepo.findById(patientDevice.getPatientId());
+            if (patientOpt.isPresent()) {
+                Patient patient = patientOpt.get();
+                Map<String, Object> patientInfo = new HashMap<>();
+                patientInfo.put("id", patient.getId());
+                patientInfo.put("name", patient.getName());
+                patientInfo.put("gender", patient.getGender());
+                patientInfo.put("age", patient.getAge());
+                patientInfo.put("ward", patient.getWard());
+                patientInfo.put("bed", patient.getBed());
+                patientInfo.put("phone", patient.getPhone());
+                deviceInfo.put("patient", patientInfo);
+            }
+        }
         
         return ResponseEntity.ok(deviceInfo);
     }
@@ -97,13 +131,36 @@ public class DeviceController {
         deviceInfo.put("createdAt", device.getCreatedAt());
         deviceInfo.put("updatedAt", device.getUpdatedAt());
         
-        // 获取设备在线状态
+        // 获取设备在线状态：优先使用实时连接状态，其次使用数据库状态
         Optional<DeviceStatus> status = statusRepo.findById(device.getId());
-        deviceInfo.put("isOnline", status.map(DeviceStatus::getIsOnline).orElse(false));
+        boolean isOnline = status.map(DeviceStatus::getIsOnline).orElse(false);
+        // 检查DownlinkManager中的实时连接状态
+        boolean realtimeOnline = downlinkManager.getOnlineImeis().contains(device.getImei());
+        deviceInfo.put("isOnline", realtimeOnline);
         deviceInfo.put("lastLocationTime", status.map(DeviceStatus::getLastLocationTime).orElse(null));
         deviceInfo.put("lastLatitude", status.map(DeviceStatus::getLastLatitude).orElse(null));
         deviceInfo.put("lastLongitude", status.map(DeviceStatus::getLastLongitude).orElse(null));
         deviceInfo.put("batteryLevel", status.map(DeviceStatus::getBatteryLevel).orElse(null));
+        
+        // 获取设备关联的病人信息
+        List<PatientDevice> patientDevices = patientDeviceRepo.findByDeviceId(device.getId());
+        if (!patientDevices.isEmpty()) {
+            // 取第一个关联的病人（一对一关系）
+            PatientDevice patientDevice = patientDevices.get(0);
+            Optional<Patient> patientOpt = patientRepo.findById(patientDevice.getPatientId());
+            if (patientOpt.isPresent()) {
+                Patient patient = patientOpt.get();
+                Map<String, Object> patientInfo = new HashMap<>();
+                patientInfo.put("id", patient.getId());
+                patientInfo.put("name", patient.getName());
+                patientInfo.put("gender", patient.getGender());
+                patientInfo.put("age", patient.getAge());
+                patientInfo.put("ward", patient.getWard());
+                patientInfo.put("bed", patient.getBed());
+                patientInfo.put("phone", patient.getPhone());
+                deviceInfo.put("patient", patientInfo);
+            }
+        }
         
         return ResponseEntity.ok(deviceInfo);
     }
@@ -145,7 +202,7 @@ public class DeviceController {
             devicePage = new org.springframework.data.domain.PageImpl<>(pageContent, pageable, all.size());
         }
         
-        // 返回包含在线状态的设备信息
+        // 返回包含在线状态和关联病人的设备信息
         List<Map<String, Object>> deviceList = new ArrayList<>();
         for (Device device : devicePage.getContent()) {
             Map<String, Object> deviceInfo = new HashMap<>();
@@ -159,11 +216,34 @@ public class DeviceController {
             deviceInfo.put("createdAt", device.getCreatedAt());
             deviceInfo.put("updatedAt", device.getUpdatedAt());
             
-            // 获取设备在线状态
-            Optional<DeviceStatus> status = statusRepo.findById(device.getId());
-            deviceInfo.put("isOnline", status.map(DeviceStatus::getIsOnline).orElse(false));
-            deviceInfo.put("lastLocationTime", status.map(DeviceStatus::getLastLocationTime).orElse(null));
-            deviceInfo.put("batteryLevel", status.map(DeviceStatus::getBatteryLevel).orElse(null));
+            // 获取设备在线状态：优先使用实时连接状态，其次使用数据库状态
+            Optional<DeviceStatus> deviceStatus = statusRepo.findById(device.getId());
+            boolean isOnline = deviceStatus.map(DeviceStatus::getIsOnline).orElse(false);
+            // 检查DownlinkManager中的实时连接状态
+            boolean realtimeOnline = downlinkManager.getOnlineImeis().contains(device.getImei());
+            deviceInfo.put("isOnline", realtimeOnline);
+            deviceInfo.put("lastLocationTime", deviceStatus.map(DeviceStatus::getLastLocationTime).orElse(null));
+            deviceInfo.put("batteryLevel", deviceStatus.map(DeviceStatus::getBatteryLevel).orElse(null));
+            
+            // 获取设备关联的病人信息
+            List<PatientDevice> patientDevices = patientDeviceRepo.findByDeviceId(device.getId());
+            if (!patientDevices.isEmpty()) {
+                // 取第一个关联的病人（一对一关系）
+                PatientDevice patientDevice = patientDevices.get(0);
+                Optional<Patient> patientOpt = patientRepo.findById(patientDevice.getPatientId());
+                if (patientOpt.isPresent()) {
+                    Patient patient = patientOpt.get();
+                    Map<String, Object> patientInfo = new HashMap<>();
+                    patientInfo.put("id", patient.getId());
+                    patientInfo.put("name", patient.getName());
+                    patientInfo.put("gender", patient.getGender());
+                    patientInfo.put("age", patient.getAge());
+                    patientInfo.put("ward", patient.getWard());
+                    patientInfo.put("bed", patient.getBed());
+                    patientInfo.put("phone", patient.getPhone());
+                    deviceInfo.put("patient", patientInfo);
+                }
+            }
             
             deviceList.add(deviceInfo);
         }
@@ -196,10 +276,13 @@ public class DeviceController {
             deviceInfo.put("id", device.getId());
             deviceInfo.put("imei", device.getImei());
             
-            // 获取设备在线状态
-            Optional<DeviceStatus> status = statusRepo.findById(device.getId());
-            deviceInfo.put("isOnline", status.map(DeviceStatus::getIsOnline).orElse(false));
-            deviceInfo.put("batteryLevel", status.map(DeviceStatus::getBatteryLevel).orElse(null));
+            // 获取设备在线状态：优先使用实时连接状态，其次使用数据库状态
+            Optional<DeviceStatus> deviceStatus = statusRepo.findById(device.getId());
+            boolean isOnline = deviceStatus.map(DeviceStatus::getIsOnline).orElse(false);
+            // 检查DownlinkManager中的实时连接状态
+            boolean realtimeOnline = downlinkManager.getOnlineImeis().contains(device.getImei());
+            deviceInfo.put("isOnline", realtimeOnline);
+            deviceInfo.put("batteryLevel", deviceStatus.map(DeviceStatus::getBatteryLevel).orElse(null));
             
             result.add(deviceInfo);
         }

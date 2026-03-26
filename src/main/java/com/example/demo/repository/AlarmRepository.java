@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 
 public interface AlarmRepository extends JpaRepository<Alarm, Long> {
 
@@ -112,4 +113,7 @@ public interface AlarmRepository extends JpaRepository<Alarm, Long> {
     
     // 获取最近的报警记录
     List<Alarm> findTop100ByOrderByTriggeredTimeDesc();
+    
+    // 根据病人ID和报警类型获取最近的一条报警记录
+    Optional<Alarm> findTopByPatientIdAndAlarmTypeOrderByTriggeredTimeDesc(Long patientId, String alarmType);
 }

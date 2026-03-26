@@ -26,30 +26,34 @@ export const handleApiResponse = (response) => {
   }
   
   // 处理各种可能的数据格式
-  if (Array.isArray(responseData)) {
-    return responseData
-  } else if (responseData && Array.isArray(responseData.list)) {
-    return responseData.list
-  } else if (responseData && Array.isArray(responseData.items)) {
-    return responseData.items
-  } else if (responseData && Array.isArray(responseData.content)) {
-    return responseData.content
-  } else if (responseData && Array.isArray(responseData.data)) {
-    return responseData.data
-  } else {
-    console.warn('API返回的不是预期格式:', responseData)
-    // 根据不同API返回默认值
-    if (response.config && response.config.url) {
-      // 处理获取单条位置信息的API
-      if (response.config.url.includes('/api/locations/device/') && 
-          (response.config.url.includes('/latest') || response.config.url.includes('/latest-with-amap') || response.config.url.includes('/latest-with-address'))) {
-        return responseData || {} // 返回单个位置对象
-      } else if (response.config.url.includes('/api/fences')) {
-        return []
+    if (Array.isArray(responseData)) {
+      return responseData
+    } else if (responseData && Array.isArray(responseData.list)) {
+      return responseData.list
+    } else if (responseData && Array.isArray(responseData.items)) {
+      return responseData.items
+    } else if (responseData && Array.isArray(responseData.content)) {
+      // 对于报警API，返回完整的分页对象，以便获取totalElements
+      if (response.config && response.config.url && response.config.url.includes('/api/alarms')) {
+        return responseData
       }
+      return responseData.content
+    } else if (responseData && Array.isArray(responseData.data)) {
+      return responseData.data
+    } else {
+      console.warn('API返回的不是预期格式:', responseData)
+      // 根据不同API返回默认值
+      if (response.config && response.config.url) {
+        // 处理获取单条位置信息的API
+        if (response.config.url.includes('/api/locations/device/') && 
+            (response.config.url.includes('/latest') || response.config.url.includes('/latest-with-amap') || response.config.url.includes('/latest-with-address'))) {
+          return responseData || {} // 返回单个位置对象
+        } else if (response.config.url.includes('/api/fences')) {
+          return []
+        }
+      }
+      return responseData || {} // 对于非数组响应，直接返回响应数据
     }
-    return responseData || {} // 对于非数组响应，直接返回响应数据
-  }
 }
 
 /**

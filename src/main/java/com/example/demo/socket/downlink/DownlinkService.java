@@ -343,6 +343,15 @@ public class DownlinkService {
     }
 
     /**
+     * 构建 BPXX（测量体温）下行包
+     * 示例：IWBPXX,353456789012345,080835#
+     */
+    public String buildBPXX(String imei, String seq) {
+        String seq6 = normalizeSeq(seq);
+        return HEADER + String.format("BPXX,%s,%s", imei, seq6) + END_MARKER;
+    }
+
+    /**
      * 通用发送方法：将构建的下行命令通过 socket 发送到设备。
      * 使用 PrintWriter 且默认编码为 UTF-8 写入并 flush。
      *

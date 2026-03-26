@@ -26,12 +26,25 @@ public class LocationProtocolHandler extends BaseProtocolHandler {
         packet.setProtocol(protocol);
         
         // 按新协议格式解析：time(6) + valid(1) + lat(ddmm.mmmmN) + lng(dddmm.mmmmE) + speed + gpsTime(6) + course + params(14) + , + LBS(4 fields) + , + WIFI(groups)
-        String gpsPart = payload;
+        // 处理带有 {raw=...} 或 raw= 前缀的数据格式
+        String processedPayload = payload;
+        if (processedPayload.startsWith("{raw=")) {
+            // 处理 {raw=...} 格式
+            processedPayload = processedPayload.substring(5);
+            if (processedPayload.endsWith("}")) {
+                processedPayload = processedPayload.substring(0, processedPayload.length() - 1);
+            }
+        } else if (processedPayload.startsWith("raw=")) {
+            // 处理 raw= 格式
+            processedPayload = processedPayload.substring(4);
+        }
+        
+        String gpsPart = processedPayload;
         String restPart = "";
-        int idx = payload.indexOf(',');
+        int idx = processedPayload.indexOf(',');
         if (idx >= 0) {
-            gpsPart = payload.substring(0, idx);
-            restPart = payload.substring(idx + 1);
+            gpsPart = processedPayload.substring(0, idx);
+            restPart = processedPayload.substring(idx + 1);
         }
         packet.setExtra(restPart);
         packet.getParams().put("rawGpsPart", gpsPart);
@@ -88,88 +101,99 @@ public class LocationProtocolHandler extends BaseProtocolHandler {
             // 剩余部分通常为 speed + gpsTime(6) + course + paramsDigits
             if (pos < gpsPart.length()) {
                 String tail = gpsPart.substring(pos);
-                // 先提取 speed（包含小数）和 6 位 gpsTime，剩余部分作为 course+params
-                Pattern pat = Pattern.compile("([0-9]{3}\\.[0-9]+)");
-                Matcher m = pat.matcher(tail);
-                if (m.find()) {
-                    String speed = m.group(1);
-                    String gpsTime = "";
-                    String course = "";
-                    String paramsStr = "";
-                    
-                    int mEnd = m.end();
-                    if (tail.length() > mEnd) {
-                        String rest = tail.substring(mEnd);
-                        // gpsTime 6位
-                        if (rest.length() >= 6) {
-                            gpsTime = rest.substring(0, 6);
-                            rest = rest.substring(6);
-                            // direction 可为浮点
-                            Pattern m2 = Pattern.compile("([0-9]{1,3}\\.[0-9]+)");
-                            Matcher m2Matcher = m2.matcher(rest);
-                            if (m2Matcher.find()) {
-                                course = m2Matcher.group(1);
-                                rest = rest.substring(m2Matcher.end());
-                            }
-                            paramsStr = rest;
-                        }
+                
+                // 解析速度：寻找格式为ddd.d的speed部分
+                String speed = "";
+                // 使用正则表达式匹配速度格式
+                Pattern speedPattern = Pattern.compile("(\\d{3}\\.\\d{1})");
+                Matcher speedMatcher = speedPattern.matcher(tail);
+                if (speedMatcher.find()) {
+                    speed = speedMatcher.group(1);
+                }
+                
+                // 解析GPS时间：寻找6位数字的gpsTime
+                String gpsTime = "";
+                Pattern timePattern = Pattern.compile("\\d{3}\\.\\d{1}(\\d{6})");
+                Matcher timeMatcher = timePattern.matcher(tail);
+                if (timeMatcher.find()) {
+                    gpsTime = timeMatcher.group(1);
+                }
+                
+                // 解析方向：寻找格式为ddd.dd的direction部分
+                String course = "";
+                Pattern coursePattern = Pattern.compile("\\d{3}\\.\\d{1}\\d{6}(\\d{1,3}\\.\\d{2})");
+                Matcher courseMatcher = coursePattern.matcher(tail);
+                if (courseMatcher.find()) {
+                    course = courseMatcher.group(1);
+                    // 去掉方向角前面的零
+                    if (course.startsWith("0")) {
+                        course = course.replaceFirst("^0+", "");
                     }
-                    
-                    packet.setSpeed(speed);
-                    packet.setGpsTime(gpsTime);
-                    packet.setDirection(course);
-                    
-                    packet.getParams().put("speed", speed);
-                    packet.getParams().put("gps_time", gpsTime);
-                    packet.getParams().put("direction", course);
-                    
-                    // 解析固定长度的参数段（尽量按协议：3+3+3+1+2+2 = 14）
-                    if (!paramsStr.isEmpty() && paramsStr.length() >= 14) {
-                        try {
-                            String gsm = paramsStr.substring(0, 3);
-                            String satellite = paramsStr.substring(3, 6);
-                            String battery = paramsStr.substring(6, 9);
-                            String reserved = paramsStr.substring(9, 10);
-                            String arm = paramsStr.substring(10, 12);
-                            String workMode = paramsStr.substring(12, 14);
-                            packet.getParams().put("gsm", gsm);
-                            packet.getParams().put("satellite", satellite);
-                            packet.getParams().put("battery", battery);
-                            packet.getParams().put("reserved", reserved);
-                            packet.getParams().put("arm", arm);
-                            packet.getParams().put("workMode", workMode);
-                            packet.getParams().put("status_block", paramsStr); // 将整个paramsStr作为status_block保存
-                        } catch (Exception ex) {
-                            packet.getParams().put("paramsStr", paramsStr);
-                            packet.getParams().put("status_block", paramsStr); // 异常时也保存status_block
-                        }
-                    } else if (!paramsStr.isEmpty()) {
+                }
+                
+                // 解析参数：剩余部分
+                String paramsStr = "";
+                Pattern paramsPattern = Pattern.compile("\\d{3}\\.\\d{1}\\d{6}\\d{3}\\.\\d{2}(.*)");
+                Matcher paramsMatcher = paramsPattern.matcher(tail);
+                if (paramsMatcher.find()) {
+                    paramsStr = paramsMatcher.group(1);
+                }
+                
+                // 设置解析结果
+                packet.setSpeed(speed);
+                packet.setGpsTime(gpsTime);
+                packet.setDirection(course);
+                
+                packet.getParams().put("speed", speed);
+                packet.getParams().put("gps_time", gpsTime);
+                packet.getParams().put("direction", course);
+                
+                // 解析固定长度的参数段（尽量按协议：3+3+3+1+2+2 = 14）
+                if (!paramsStr.isEmpty() && paramsStr.length() >= 14) {
+                    try {
+                        String gsm = paramsStr.substring(0, 3);
+                        String satellite = paramsStr.substring(3, 6);
+                        String battery = paramsStr.substring(6, 9);
+                        String reserved = paramsStr.substring(9, 10);
+                        String arm = paramsStr.substring(10, 12);
+                        String workMode = paramsStr.substring(12, 14);
+                        packet.getParams().put("gsm", gsm);
+                        packet.getParams().put("satellite", satellite);
+                        packet.getParams().put("battery", battery);
+                        packet.getParams().put("reserved", reserved);
+                        packet.getParams().put("arm", arm);
+                        packet.getParams().put("workMode", workMode);
+                        packet.getParams().put("status_block", paramsStr); // 将整个paramsStr作为status_block保存
+                    } catch (Exception ex) {
                         packet.getParams().put("paramsStr", paramsStr);
-                        packet.getParams().put("status_block", paramsStr); // 非标准长度时也保存status_block
+                        packet.getParams().put("status_block", paramsStr); // 异常时也保存status_block
                     }
-                } else {
-                    // 无法匹配初步结构，保留原始 tail
-                    packet.setSpeed(tail);
-                    packet.getParams().put("gpsTail", tail);
-                    packet.getParams().put("status_block", tail); // 无法解析时保存tail为status_block
+                } else if (!paramsStr.isEmpty()) {
+                    packet.getParams().put("paramsStr", paramsStr);
+                    packet.getParams().put("status_block", paramsStr); // 非标准长度时也保存status_block
                 }
             }
         }
         
         // 解析 LBS 与 Wi-Fi（restPart）
-        // 如果 restPart 末尾包含 ",[lat@lon]"，先剥离出来单独保存为 wifiGeoLat/wifiGeoLon
+        // 如果 restPart 末尾包含 [lat@lon]，先剥离出来单独保存为 wifiGeoLat/wifiGeoLon
         if (restPart != null && restPart.endsWith("]")) {
-            int coordIdx = restPart.lastIndexOf(",[");
+            // 寻找 [ 的位置，处理多种格式：",[lat@lon]" 和 "-[lat@lon]" 或 "[lat@lon]"
+            int coordIdx = restPart.lastIndexOf('[');
             if (coordIdx >= 0) {
-                String coordPart = restPart.substring(coordIdx + 2, restPart.length() - 1);
+                String coordPart = restPart.substring(coordIdx + 1, restPart.length() - 1);
                 int at = coordPart.indexOf('@');
                 if (at > 0) {
                     String wifiGeoLat = coordPart.substring(0, at);
                     String wifiGeoLon = coordPart.substring(at + 1);
                     packet.getParams().put("wifiGeoLat", wifiGeoLat);
                     packet.getParams().put("wifiGeoLon", wifiGeoLon);
-                    // 从 restPart 中剥离掉末尾的 ",[lat@lon]"
+                    // 从 restPart 中剥离掉末尾的坐标部分
                     restPart = restPart.substring(0, coordIdx);
+                    // 如果剥离后最后一个字符是逗号，也去掉
+                    if (!restPart.isEmpty() && restPart.charAt(restPart.length() - 1) == ',') {
+                        restPart = restPart.substring(0, restPart.length() - 1);
+                    }
                     packet.getParams().put("rawExtraPart", restPart); // 更新 rawExtraPart
                 }
             }
@@ -222,15 +246,17 @@ public class LocationProtocolHandler extends BaseProtocolHandler {
                     if (wlat != null && !wlat.isEmpty()) {
                         Double dv = Double.parseDouble(wlat);
                         packet.setLat(dv);
-                        // 若 params 中尚无 lat 键，补充（供后续统一访问）
-                        if (!packet.getParams().containsKey("lat")) packet.getParams().put("lat", wlat);
+                        // 更新 params 中的 lat 键，无论是否已存在
+                        packet.getParams().put("lat", wlat);
                     }
                 } catch (NumberFormatException ignore) {}
                 try {
                     if (wlon != null && !wlon.isEmpty()) {
                         Double dv = Double.parseDouble(wlon);
                         packet.setLng(dv);
-                        if (!packet.getParams().containsKey("lon") && !packet.getParams().containsKey("lng")) packet.getParams().put("lon", wlon);
+                        // 更新 params 中的 lon 和 lng 键，无论是否已存在
+                        packet.getParams().put("lon", wlon);
+                        packet.getParams().put("lng", wlon);
                     }
                 } catch (NumberFormatException ignore) {}
                 packet.getParams().put("locationSource", "wifi");
@@ -244,7 +270,12 @@ public class LocationProtocolHandler extends BaseProtocolHandler {
                 && !lngRaw.startsWith("00000.0000");
         if (!gpsValid) {
             packet.getParams().put("useLbsOrWifi", "true");
-            packet.getParams().put("locationSource", "lbs"); // 默认使用lbs作为非GPS定位源
+            // 如果有wifiGeoLat/wifiGeoLon，则使用wifi作为定位源，否则使用lbs
+            if (hasWifiGeo) {
+                packet.getParams().put("locationSource", "wifi");
+            } else {
+                packet.getParams().put("locationSource", "lbs"); // 默认使用lbs作为非GPS定位源
+            }
         } else {
             packet.getParams().put("useGps", "true");
             packet.getParams().put("locationSource", "gps"); // GPS有效时明确标记为gps

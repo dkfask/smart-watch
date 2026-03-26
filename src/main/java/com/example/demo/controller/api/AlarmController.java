@@ -1,6 +1,10 @@
 package com.example.demo.controller.api;
 
 import com.example.demo.model.Alarm;
+import com.example.demo.model.Device;
+import com.example.demo.model.Patient;
+import com.example.demo.repository.DeviceRepository;
+import com.example.demo.repository.PatientRepository;
 import com.example.demo.service.AlarmService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -19,6 +23,12 @@ public class AlarmController {
     @Autowired
     private AlarmService alarmService;
     
+    @Autowired
+    private DeviceRepository deviceRepository;
+    
+    @Autowired
+    private PatientRepository patientRepository;
+    
     // 创建报警
     @PostMapping
     public ResponseEntity<?> create(@RequestBody Alarm alarm) {
@@ -29,8 +39,15 @@ public class AlarmController {
     // 获取报警详情
     @GetMapping("/{id}")
     public ResponseEntity<?> get(@PathVariable long id) {
-        Optional<Alarm> alarm = alarmService.getAlarmById(id);
-        return alarm.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+        Optional<Alarm> alarmOpt = alarmService.getAlarmById(id);
+        if (alarmOpt.isPresent()) {
+            Alarm alarm = alarmOpt.get();
+            // 填充设备和病人信息
+            populateAlarmRelations(alarm);
+            return ResponseEntity.ok(alarm);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
     }
     
     // 获取报警列表
@@ -58,6 +75,9 @@ public class AlarmController {
             alarms = alarmService.getAlarms(page, size);
         }
         
+        // 填充设备和病人信息
+        populateAlarmRelations(alarms.getContent());
+        
         return ResponseEntity.ok(alarms);
     }
     
@@ -76,6 +96,9 @@ public class AlarmController {
             alarms = alarmService.getAlarmsByDeviceId(deviceId, page, size);
         }
         
+        // 填充设备和病人信息
+        populateAlarmRelations(alarms.getContent());
+        
         return ResponseEntity.ok(alarms);
     }
     
@@ -93,6 +116,9 @@ public class AlarmController {
         } else {
             alarms = alarmService.getAlarmsByPatientId(patientId, page, size);
         }
+        
+        // 填充设备和病人信息
+        populateAlarmRelations(alarms.getContent());
         
         return ResponseEntity.ok(alarms);
     }
@@ -168,6 +194,28 @@ public class AlarmController {
     @GetMapping("/recent")
     public ResponseEntity<?> recent(@RequestParam(defaultValue = "10") int limit) {
         List<Alarm> alarms = alarmService.getRecentAlarms(limit);
+        // 填充设备和病人信息
+        populateAlarmRelations(alarms);
         return ResponseEntity.ok(alarms);
+    }
+    
+    // 填充单个报警的设备和病人信息
+    private void populateAlarmRelations(Alarm alarm) {
+        // 获取设备信息
+        Optional<Device> deviceOpt = deviceRepository.findById(alarm.getDeviceId());
+        deviceOpt.ifPresent(alarm::setDevice);
+        
+        // 获取病人信息
+        if (alarm.getPatientId() != null) {
+            Optional<Patient> patientOpt = patientRepository.findById(alarm.getPatientId());
+            patientOpt.ifPresent(alarm::setPatient);
+        }
+    }
+    
+    // 填充多个报警的设备和病人信息
+    private void populateAlarmRelations(List<Alarm> alarms) {
+        for (Alarm alarm : alarms) {
+            populateAlarmRelations(alarm);
+        }
     }
 }

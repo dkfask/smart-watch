@@ -205,6 +205,13 @@ export const downlinkApi = {
       .catch(handleApiError)
   },
 
+  // 30. 下发BPXX指令（测量体温）
+  sendBPXX(imei, seq = "1") {
+    return api.post(`/downlink/bpxx?imei=${imei}&seq=${seq}`)
+      .then(handleApiResponse)
+      .catch(handleApiError)
+  },
+
   // 下发短命令
   sendShortCommand(imei, command) {
     return api.post(`/downlink/short-command?imei=${imei}`, { command })
@@ -226,11 +233,10 @@ export const downlinkApi = {
       .catch(handleApiError)
   },
 
-  // 发信息
+  // 发信息（已改为使用BP40协议）
   sendMessage(imei, message) {
-    return api.post(`/downlink/message?imei=${imei}`, { message })
-      .then(handleApiResponse)
-      .catch(handleApiError)
+    // 兼容旧调用，重定向到sendBP40
+    return this.sendBP40(imei, message)
   },
 
   // 获取电池报告
@@ -276,8 +282,8 @@ export const downlinkApi = {
   },
 
   // 获取原始日志
-  getRawLogs(imei, startTime, endTime) {
-    return api.get(`/downlink/raw-logs?imei=${imei}&startTime=${startTime}&endTime=${endTime}`)
+  getRawLogs(imei, startTime, endTime, page = 1, size = 100, keyword = '') {
+    return api.get(`/downlink/raw-logs?imei=${imei}&startTime=${startTime}&endTime=${endTime}&page=${page}&size=${size}&keyword=${encodeURIComponent(keyword)}`)
       .then(handleApiResponse)
       .catch(handleApiError)
   },

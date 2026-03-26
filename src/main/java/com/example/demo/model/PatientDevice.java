@@ -10,8 +10,16 @@ public class PatientDevice {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "patient_id", nullable = false, insertable = false, updatable = false)
+    private Patient patient;
+    
     @Column(name = "patient_id", nullable = false)
     private Long patientId;
+    
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "device_id", nullable = false, insertable = false, updatable = false)
+    private Device device;
     
     @Column(name = "device_id", nullable = false)
     private Long deviceId;
@@ -46,8 +54,12 @@ public class PatientDevice {
     // Getters and setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+    public Patient getPatient() { return patient; }
+    public void setPatient(Patient patient) { this.patient = patient; }
     public Long getPatientId() { return patientId; }
     public void setPatientId(Long patientId) { this.patientId = patientId; }
+    public Device getDevice() { return device; }
+    public void setDevice(Device device) { this.device = device; }
     public Long getDeviceId() { return deviceId; }
     public void setDeviceId(Long deviceId) { this.deviceId = deviceId; }
     public Date getBindTime() { return bindTime; }

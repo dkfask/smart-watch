@@ -3,6 +3,8 @@ package com.example.demo.socket.processor;
 import com.example.demo.model.*;
 import com.example.demo.repository.*;
 import com.example.demo.service.AmapLocationService;
+import com.example.demo.service.HealthMonitorService;
+import com.example.demo.service.TrackingService;
 import com.example.demo.socket.downlink.DownlinkManager;
 import com.example.demo.socket.protocol.BraceletPacket;
 import org.slf4j.Logger;
@@ -26,6 +28,8 @@ public class PacketProcessor {
     private final HealthRecordRepository healthRecordRepository;
     private final DeviceStatusRepository deviceStatusRepository;
     private final AmapLocationService amapLocationService;
+    private final HealthMonitorService healthMonitorService;
+    private final TrackingService trackingService;
 
     public PacketProcessor(DeviceRepository deviceRepository,
                           DownlinkManager downlinkManager,
@@ -33,7 +37,9 @@ public class PacketProcessor {
                           HeartbeatRecordRepository heartbeatRecordRepository,
                           HealthRecordRepository healthRecordRepository,
                           DeviceStatusRepository deviceStatusRepository,
-                          AmapLocationService amapLocationService) {
+                          AmapLocationService amapLocationService,
+                          HealthMonitorService healthMonitorService,
+                          TrackingService trackingService) {
         this.deviceRepository = deviceRepository;
         this.downlinkManager = downlinkManager;
         this.locationRecordRepository = locationRecordRepository;
@@ -41,6 +47,8 @@ public class PacketProcessor {
         this.healthRecordRepository = healthRecordRepository;
         this.deviceStatusRepository = deviceStatusRepository;
         this.amapLocationService = amapLocationService;
+        this.healthMonitorService = healthMonitorService;
+        this.trackingService = trackingService;
     }
 
     /**
@@ -62,7 +70,12 @@ public class PacketProcessor {
                     handleAp00(payload, clientSocket, clientInfo);
                     break;
                 case "AP01":
-                    handleAp01(parseKeyValueParams(payload), imei);
+                    // 使用 packet 对象中的参数，而不是重新解析 raw 数据
+                    Map<String, String> paramsToSave = new LinkedHashMap<>();
+                    if (packet.getParams() != null) {
+                        paramsToSave.putAll(packet.getParams());
+                    }
+                    handleAp01(paramsToSave, imei);
                     log.debug("✅ AP01 处理完成, IMEI={}", imei);
                     break;
                 case "AP02":
@@ -71,7 +84,12 @@ public class PacketProcessor {
                     log.debug("✅ AP02 处理完成, IMEI={}", imei);
                     break;
                 case "AP03":
-                    handleAp03(payload, clientInfo, imei);
+                    // 使用 packet 对象中的参数，而不是重新解析 raw 数据
+                    Map<String, String> ap03Params = new LinkedHashMap<>();
+                    if (packet.getParams() != null) {
+                        ap03Params.putAll(packet.getParams());
+                    }
+                    handleAp03(ap03Params, clientInfo, imei);
                     log.debug("✅ AP03 处理完成, IMEI={}", imei);
                     break;
                 case "AP04":
@@ -170,27 +188,43 @@ public class PacketProcessor {
     }
 
     /** 处理 AP03 心跳包 */
-    private void handleAp03(String payload, String clientInfo, String imei) {
-        if (payload == null || payload.isEmpty()) return;
-        String[] parts = payload.split(",");
-        Map<String, String> params = new LinkedHashMap<>();
-        params.put("param_block", parts.length > 0 ? parts[0] : "");
-        if (parts.length > 1) params.put("steps", parts[1]);
-        if (parts.length > 2) params.put("roll_count", parts[2]);
-        if (parts.length > 3) params.put("work_mode", parts[3]);
-        if (parts.length > 4) params.put("interval", parts[4]);
+    private void handleAp03(Map<String, String> params, String clientInfo, String imei) {
+        if (params == null || params.isEmpty()) return;
 
-        saveHeartbeatData(params, imei);
+        // 对于AP03心跳包，只有当IMEI有效时才保存关联数据
+        // 确保不会使用无效的IMEI创建设备
+        final String validImei;
+        if (imei != null && imei.length() == 15 && imei.chars().allMatch(Character::isDigit)) {
+            validImei = imei;
+        } else {
+            validImei = null;
+        }
+
+        saveHeartbeatData(params, validImei);
         // 更新设备在线状态：收到AP03心跳包即表示设备在线
-        if (imei != null && !imei.isEmpty()) {
-            deviceRepository.findByImei(imei).ifPresent(device -> {
+        if (validImei != null) {
+            deviceRepository.findByImei(validImei).ifPresent(device -> {
                 DeviceStatus status = new DeviceStatus();
                 status.setDeviceId(device.getId());
-                status.setImei(imei);
+                status.setImei(validImei);
                 status.setIsOnline(true);
+                // 设置电池电量
+                if (params.containsKey("battery_level")) {
+                    try {
+                        status.setBatteryLevel(Integer.parseInt(params.get("battery_level")));
+                    } catch (NumberFormatException e) {
+                        log.warn("Invalid battery_level value: {}", params.get("battery_level"));
+                    }
+                } else if (params.containsKey("battery")) {
+                    try {
+                        status.setBatteryLevel(Integer.parseInt(params.get("battery")));
+                    } catch (NumberFormatException e) {
+                        log.warn("Invalid battery value: {}", params.get("battery"));
+                    }
+                }
                 status.setUpdatedAt(new java.util.Date());
                 deviceStatusRepository.upsert(status);
-                log.debug("✅ 更新设备在线状态: IMEI={}, 在线状态={}", imei, true);
+                log.debug("✅ 更新设备在线状态: IMEI={}, 在线状态={}, 电池电量={}", validImei, true, status.getBatteryLevel());
             });
         }
     }
@@ -264,11 +298,11 @@ public class PacketProcessor {
                     params.put("value", valStr);
                     break;
                 case "3": // 体温
-                    params.put("data_type", "temperature");
+                    params.put("data_type", "body_temperature");
                     params.put("value", valStr);
                     break;
                 case "4": // 血氧
-                    params.put("data_type", "spo2");
+                    params.put("data_type", "blood_oxygen");
                     params.put("value", valStr);
                     break;
                 default:
@@ -380,7 +414,11 @@ public class PacketProcessor {
             if (imei != null && !imei.isEmpty()) {
                 rec.setImei(imei);
                 Device d = findOrCreateDeviceByImei(imei);
-                if (d != null) rec.setDevice(d);
+                if (d != null) {
+                    rec.setDevice(d);
+                    // 保存位置数据后，调用跟踪服务进行围栏检查
+                    trackingService.processLocationRecord(rec);
+                }
             }
 
             locationRecordRepository.save(rec);
@@ -396,14 +434,20 @@ public class PacketProcessor {
             HealthRecord rec = new HealthRecord();
             // 保存数据类型和值
             if (params.containsKey("temp")) {
-                rec.setDataType("temperature");
+                rec.setDataType("body_temperature");
                 rec.setValue(params.get("temp"));
             } else if (params.containsKey("data_type")) {
                 rec.setDataType(params.get("data_type"));
                 rec.setValue(params.getOrDefault("value", params.toString()));
             } else if (params.containsKey("wrist_temp")) {
-                rec.setDataType("temperature");
+                rec.setDataType("body_temperature");
                 rec.setValue(params.get("wrist_temp"));
+            } else if (params.containsKey("spo2")) {
+                rec.setDataType("blood_oxygen");
+                rec.setValue(params.get("spo2"));
+            } else if (params.containsKey("hr")) {
+                rec.setDataType("heart_rate");
+                rec.setValue(params.get("hr"));
             } else {
                 rec.setDataType("unknown");
                 rec.setValue(params.toString());
@@ -434,8 +478,15 @@ public class PacketProcessor {
                 if (d != null) rec.setDeviceId(d.getId());
             }
 
+            // 保存原始数据
+            rec.setRawData(params.toString());
+            
+            // 保存健康数据到数据库
             healthRecordRepository.save(rec);
-            log.debug("✅ 成功保存健康数据: IMEI={}", imei);
+            log.debug("✅ 成功保存健康数据: IMEI={}, 类型={}", imei, rec.getDataType());
+            
+            // 调用健康监测服务检测是否异常
+            healthMonitorService.checkHealthData(rec);
         } catch (Exception e) {
             log.error("❌ 保存健康数据失败: IMEI={}, 错误={}", imei, e.getMessage());
         }
@@ -468,15 +519,17 @@ public class PacketProcessor {
             // 保存原始负载
             rec.setRawPayload(params.toString());
 
-            // 关联设备
-            if (imei != null && !imei.isEmpty()) {
-                rec.setImei(imei);
-                Device d = findOrCreateDeviceByImei(imei);
-                if (d != null) rec.setDevice(d);
+            // 关联设备 - 只有当IMEI有效时才创建关联
+            String validImei = null;
+            if (imei != null && imei.length() == 15 && imei.chars().allMatch(Character::isDigit)) {
+                validImei = imei;
+                rec.setImei(validImei);
+                // 只查找现有设备，不创建新设备
+                deviceRepository.findByImei(validImei).ifPresent(rec::setDevice);
             }
 
             heartbeatRecordRepository.save(rec);
-            log.debug("✅ 成功保存心跳数据: IMEI={}", imei);
+            log.debug("✅ 成功保存心跳数据: IMEI={}", validImei);
         } catch (Exception e) {
             log.error("❌ 保存心跳数据失败: IMEI={}, 错误={}", imei, e.getMessage());
         }
@@ -509,6 +562,13 @@ public class PacketProcessor {
     /** 查找或创建设备 */
     private Device findOrCreateDeviceByImei(String imei) {
         if (imei == null || imei.isEmpty()) return null;
+        
+        // 验证IMEI是否有效
+        if (!isValidImei(imei)) {
+            log.debug("📌 跳过创建无效IMEI设备: {}", imei);
+            return null;
+        }
+        
         Optional<Device> opt = deviceRepository.findByImei(imei);
         if (opt.isPresent()) {
             return opt.get();
@@ -518,5 +578,34 @@ public class PacketProcessor {
         d.setImei(imei);
         d.setCreatedAt(new java.util.Date());
         return deviceRepository.save(d);
+    }
+    
+    /**
+     * 验证IMEI是否有效
+     * @param imei 要验证的IMEI
+     * @return true if valid, false otherwise
+     */
+    private boolean isValidImei(String imei) {
+        if (imei == null || imei.length() != 15) {
+            return false;
+        }
+        
+        // 排除已知的无效IMEI
+        if ("05700008100008".equals(imei) || "000570001000000".equals(imei)) {
+            return false;
+        }
+        
+        // 排除全是0的IMEI
+        if (imei.matches("^0+$")) {
+            return false;
+        }
+        
+        // 排除以000开头的IMEI，这些看起来像是无效的测试值
+        if (imei.startsWith("000")) {
+            return false;
+        }
+        
+        // 可以添加Luhn算法验证，这里暂时省略
+        return true;
     }
 }

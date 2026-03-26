@@ -38,7 +38,10 @@ public class GeoFence {
     private Long createdBy;
     
     @Column(name = "patient_id")
-    private Long patientId; // 关联的病人ID
+    private Long patientId; // 关联的病人ID（兼容旧数据）
+    
+    @Column(name = "is_multi_patient")
+    private Boolean isMultiPatient = false; // 是否支持多病人关联
     
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "datetime default current_timestamp")
@@ -78,6 +81,8 @@ public class GeoFence {
     public void setCreatedBy(Long createdBy) { this.createdBy = createdBy; }
     public Long getPatientId() { return patientId; }
     public void setPatientId(Long patientId) { this.patientId = patientId; }
+    public Boolean getIsMultiPatient() { return isMultiPatient; }
+    public void setIsMultiPatient(Boolean isMultiPatient) { this.isMultiPatient = isMultiPatient; }
     public Date getCreatedAt() { return createdAt; }
     public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }
     public Date getUpdatedAt() { return updatedAt; }

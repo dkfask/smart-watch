@@ -39,6 +39,15 @@
                         {{ fence.type === 'circle' ? '圆形' : '多边形' }}
                       </el-tag>
                     </div>
+                    <!-- 显示关联的病人信息 -->
+                    <div v-if="fence.patientIds && fence.patientIds.length > 0" class="fence-patients">
+                      <el-tag size="small" type="success" v-for="patientId in fence.patientIds" :key="patientId">
+                        {{ getPatientName(patientId) }}
+                      </el-tag>
+                    </div>
+                    <div v-else class="no-patients">
+                      <el-tag size="small" type="info">未关联病人</el-tag>
+                    </div>
                   </div>
                 </el-radio-button>
               </el-radio-group>
@@ -434,8 +443,14 @@ const fetchFences = async () => {
       centerLng: fence.centerLng,
       createdBy: fence.createdBy,
       createdAt: fence.createdAt,
-      // 转换patientId为patientIds数组，支持多选
-      patientIds: fence.patientId ? [fence.patientId] : [] // 兼容旧数据，将单个patientId转换为数组
+      // 处理多种可能的字段名：patientIds, patientId, patient_id
+      patientIds: 
+        // 优先使用patientIds数组
+        (fence.patientIds && Array.isArray(fence.patientIds) ? fence.patientIds : 
+        // 然后尝试patientId（驼峰式）
+        (fence.patientId ? [fence.patientId] : 
+        // 最后尝试patient_id（下划线式）
+        (fence.patient_id ? [fence.patient_id] : [])))
     }))
     
     // 在地图上绘制所有围栏
@@ -493,6 +508,13 @@ const drawAllFences = () => {
   }
 }
 
+// 根据病人ID获取病人名称
+const getPatientName = (patientId) => {
+  if (!patientId) return ''
+  const patient = patients.value.find(p => p.id === patientId)
+  return patient ? `${patient.name} - ${patient.ward}病房${patient.bed}床` : `病人ID: ${patientId}`
+}
+
 // 在地图上绘制单个围栏
 const drawFence = (fence) => {
   if (!map) return
@@ -522,7 +544,22 @@ const drawFence = (fence) => {
   }
 
   if (layer) {
-    layer.bindPopup(`<b>${fence.name}</b><br>类型: ${fence.type === 'circle' ? '圆形' : '多边形'}`)
+    // 构建弹出信息，包含关联的病人信息
+    let popupContent = `<b>${fence.name}</b><br>类型: ${fence.type === 'circle' ? '圆形' : '多边形'}`
+    if (fence.patientIds && fence.patientIds.length > 0) {
+      popupContent += '<br><br><b>关联病人:</b><br>'
+      fence.patientIds.forEach(patientId => {
+        const patient = patients.value.find(p => p.id === patientId)
+        if (patient) {
+          popupContent += `- ${patient.name} - ${patient.ward}病房${patient.bed}床<br>`
+        } else {
+          popupContent += `- 病人ID: ${patientId}<br>`
+        }
+      })
+    } else {
+      popupContent += '<br><br><b>关联病人:</b><br>未关联病人'
+    }
+    layer.bindPopup(popupContent)
     layer.addTo(map)
     // 保存围栏ID到图层
     layer.fenceId = fence.id
@@ -894,18 +931,39 @@ onBeforeUnmount(() => {
 
 .fence-info {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-start;
   width: 100%;
+  gap: 8px;
+  padding: 5px 0;
 }
 
 .fence-name {
   font-size: 14px;
   font-weight: 500;
+  width: 100%;
 }
 
 .fence-type {
-  margin-left: 10px;
+  margin-left: 0;
+}
+
+.fence-patients {
+  width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.no-patients {
+  width: 100%;
+  margin-top: 5px;
+}
+
+.fence-patients .el-tag,
+.no-patients .el-tag {
+  margin: 0;
 }
 
 .fence-actions {

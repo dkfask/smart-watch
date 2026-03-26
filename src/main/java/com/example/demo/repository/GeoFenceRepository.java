@@ -35,6 +35,8 @@ public class GeoFenceRepository {
         f.setDescription(rs.getString("description"));
         // 使用getObject处理可能为null的Long值
         f.setCreatedBy(rs.getObject("created_by", Long.class));
+        // 设置patientId字段
+        f.setPatientId(rs.getObject("patient_id", Long.class));
         Timestamp c = rs.getTimestamp("created_at");
         f.setCreatedAt(c != null ? new Date(c.getTime()) : null);
         Timestamp u = rs.getTimestamp("updated_at");
@@ -94,6 +96,19 @@ public class GeoFenceRepository {
 
     public int deactivate(long fenceId) {
         return jdbc.update("UPDATE geo_fences SET status='inactive' WHERE id=?", fenceId);
+    }
+    
+    /**
+     * 根据病人ID获取关联的围栏列表
+     * @param patientId 病人ID
+     * @return 围栏列表
+     */
+    public List<GeoFence> listByPatient(Long patientId) {
+        return jdbc.query(
+            "SELECT * FROM geo_fences WHERE patient_id = ? AND status='active' ORDER BY id DESC", 
+            MAPPER, 
+            patientId
+        );
     }
 }
 

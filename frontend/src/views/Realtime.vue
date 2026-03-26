@@ -94,7 +94,9 @@ const filteredDevices = computed(() => {
 
 // 获取设备状态
 const getDeviceStatus = (deviceId) => {
-  return deviceStatus.value.get(deviceId) || false
+  // 直接使用设备对象中的isOnline字段，而不是根据位置获取结果判断
+  const device = devices.value.find(d => d.id === deviceId)
+  return device ? device.isOnline : false
 }
 
 // 获取设备列表
@@ -305,15 +307,12 @@ const fetchDeviceLatestLocation = async (deviceId) => {
     console.log(`设备 ${deviceId} 的最新位置:`, location)
     if (location && location.latitude && location.longitude) {
       deviceLocations.value.set(deviceId, location)
-      deviceStatus.value.set(deviceId, true) // 有位置数据则认为在线
       updateMarker(deviceId, location)
     } else {
       console.warn(`设备 ${deviceId} 没有有效位置数据`)
-      deviceStatus.value.set(deviceId, false) // 没有位置数据则认为离线
     }
   } catch (error) {
     console.error(`Failed to fetch location for device ${deviceId}:`, error)
-    deviceStatus.value.set(deviceId, false) // 获取失败则认为离线
   }
 }
 
@@ -421,12 +420,11 @@ const updateMarker = (deviceId, location) => {
     className: 'custom-marker',
     html: `
       <div class="marker-drop">
-        <div class="marker-icon">📍</div>
         <div class="marker-number">${device.id}</div>
       </div>
     `,
-    iconSize: [40, 40],
-    iconAnchor: [20, 40]
+    iconSize: [30, 30],
+    iconAnchor: [15, 30]
   });
 
   // 创建标记
@@ -594,8 +592,8 @@ onBeforeUnmount(() => {
 
 :deep(.marker-drop) {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 30px;
+  height: 30px;
   background-color: #1890ff;
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
@@ -605,27 +603,19 @@ onBeforeUnmount(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-:deep(.marker-icon) {
-  transform: rotate(45deg);
-  font-size: 20px;
-  position: absolute;
-  top: 8px;
-  left: 8px;
-}
-
 :deep(.marker-number) {
   position: absolute;
-  bottom: -15px;
-  right: -15px;
+  bottom: -12px;
+  right: -12px;
   background-color: #fff;
   border: 2px solid #1890ff;
   border-radius: 50%;
-  width: 25px;
-  height: 25px;
+  width: 20px;
+  height: 20px;
   display: flex;
   justify-content: center;
   align-items: center;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: bold;
   color: #1890ff;
   transform: rotate(45deg);
