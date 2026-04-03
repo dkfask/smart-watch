@@ -56,4 +56,23 @@ public class DeviceStatusRepository {
     public int touch(long deviceId) {
         return jdbc.update("UPDATE device_status SET updated_at=CURRENT_TIMESTAMP WHERE device_id=?", deviceId);
     }
+
+    public List<DeviceStatus> findAll() {
+        return jdbc.query("SELECT * FROM device_status", MAPPER);
+    }
+    
+    /**
+     * 根据设备ID列表查询设备状态
+     * @param deviceIds 设备ID列表
+     * @return 设备状态列表
+     */
+    public List<DeviceStatus> findAllById(List<Long> deviceIds) {
+        if (deviceIds.isEmpty()) {
+            return List.of();
+        }
+        // 构建IN查询语句
+        String placeholders = String.join(",", deviceIds.stream().map(id -> "?").toArray(String[]::new));
+        String sql = "SELECT * FROM device_status WHERE device_id IN (" + placeholders + ")";
+        return jdbc.query(sql, MAPPER, deviceIds.toArray());
+    }
 }

@@ -2,6 +2,7 @@ package com.example.demo.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -12,26 +13,27 @@ import java.util.concurrent.TimeUnit;
  * 用于预留缓存接口，后续可替换为Redis等实际缓存实现
  */
 @Service
+@Primary
 public class DefaultCacheService implements CacheService {
     private static final Logger log = LoggerFactory.getLogger(DefaultCacheService.class);
 
     @Override
-    public <T> void set(String key, T value, long timeout, TimeUnit unit) {
-        log.debug("CacheService (default): set key={}, value={}, timeout={}, unit={}", key, value, timeout, unit);
+    public void set(String key, Object value, long expire, TimeUnit timeUnit) {
+        log.debug("CacheService (default): set key={}, value={}, expire={}, timeUnit={}", key, value, expire, timeUnit);
         // 默认实现：不做任何操作
     }
 
     @Override
-    public <T> void set(String key, T value) {
+    public void set(String key, Object value) {
         log.debug("CacheService (default): set key={}, value={}", key, value);
         // 默认实现：不做任何操作
     }
 
     @Override
-    public <T> Optional<T> get(String key, Class<T> type) {
-        log.debug("CacheService (default): get key={}, type={}", key, type.getName());
-        // 默认实现：返回空
-        return Optional.empty();
+    public <T> T get(String key, Class<T> clazz) {
+        log.debug("CacheService (default): get key={}, clazz={}", key, clazz.getName());
+        // 默认实现：返回null
+        return null;
     }
 
     @Override
@@ -48,15 +50,21 @@ public class DefaultCacheService implements CacheService {
     }
 
     @Override
-    public void clear() {
-        log.debug("CacheService (default): clear");
+    public void expire(String key, long expire, TimeUnit timeUnit) {
+        log.debug("CacheService (default): expire key={}, expire={}, timeUnit={}", key, expire, timeUnit);
         // 默认实现：不做任何操作
     }
 
     @Override
-    public boolean expire(String key, long timeout, TimeUnit unit) {
-        log.debug("CacheService (default): expire key={}, timeout={}, unit={}", key, timeout, unit);
-        // 默认实现：返回false
-        return false;
+    public long getExpire(String key, TimeUnit timeUnit) {
+        log.debug("CacheService (default): getExpire key={}, timeUnit={}", key, timeUnit);
+        // 默认实现：返回0
+        return 0;
+    }
+
+    @Override
+    public void clear() {
+        log.debug("CacheService (default): clear");
+        // 默认实现：不做任何操作
     }
 }

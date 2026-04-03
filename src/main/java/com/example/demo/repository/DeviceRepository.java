@@ -105,4 +105,14 @@ public interface DeviceRepository extends PagingAndSortingRepository<Device, Lon
      */
     @Query(value = "SELECT d.* FROM devices d WHERE d.id NOT IN (SELECT device_id FROM patient_devices WHERE is_active = true)", nativeQuery = true)
     List<Device> findAvailableDevices();
+    
+    /**
+     * 根据IMEI、ICCID或IMSI模糊搜索设备
+     * @param imei IMEI搜索关键词
+     * @param iccid ICCID搜索关键词
+     * @param imsi IMSI搜索关键词
+     * @param pageable 分页参数
+     * @return 分页设备列表
+     */
+    org.springframework.data.domain.Page<Device> findByImeiContainingOrIccidContainingOrImsiContaining(String imei, String iccid, String imsi, org.springframework.data.domain.Pageable pageable);
 }

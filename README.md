@@ -282,23 +282,85 @@
 
 ### 电子围栏API
 
-| 方法 | 路径 | 功能 |
-|------|------|------|
-| GET  | /api/fences | 获取围栏列表 |
-| GET  | /api/fences/{id} | 获取围栏详情 |
-| POST | /api/fences | 创建新围栏 |
-| PUT  | /api/fences/{id} | 更新围栏信息 |
-| DELETE | /api/fences/{id} | 删除围栏 |
-| GET  | /api/fences/alerts | 获取围栏警报列表 |
+| 方法 | 路径 | 功能 | 请求参数 | 响应格式 |
+|------|------|------|----------|----------|
+| GET  | /api/fences | 获取围栏列表 | `page`: 页码（默认0）<br>`size`: 每页数量（默认20）<br>`search`: 搜索关键词 | `{"list": [...], "total": 50, "page": 0, "size": 20}` |
+| GET  | /api/fences/{id} | 获取围栏详情 | N/A | 围栏详情对象 |
+| POST | /api/fences | 创建新围栏 | 围栏对象 | 围栏详情对象 |
+| PUT  | /api/fences/{id} | 更新围栏信息 | 围栏对象 | 围栏详情对象 |
+| DELETE | /api/fences/{id} | 删除围栏 | N/A | `{"success": true}` |
+| GET  | /api/fences/alerts | 获取围栏警报列表 | `page`: 页码（默认0）<br>`size`: 每页数量（默认20）<br>`fenceId`: 围栏ID（可选）<br>`deviceId`: 设备ID（可选） | 分页警报列表 |
+| GET  | /api/fences/device/{deviceId} | 获取设备关联的围栏 | N/A | 围栏列表 |
+| POST | /api/fences/{fenceId}/devices | 关联设备到围栏 | `{"deviceIds": [1, 2, 3]}` | `{"success": true}` |
+| DELETE | /api/fences/{fenceId}/devices | 解除设备与围栏的关联 | `deviceIds`: 设备ID列表 | `{"success": true}` |
+
+#### 围栏信息格式
+
+```json
+{
+  "id": 1,
+  "name": "医院围栏",
+  "type": "circle", // circle 或 polygon
+  "radius": 100, // 圆形围栏半径（米）
+  "center": {
+    "latitude": 39.9042,
+    "longitude": 116.4074
+  },
+  "points": [ // 多边形围栏顶点
+    {"latitude": 39.9042, "longitude": 116.4074},
+    {"latitude": 39.9052, "longitude": 116.4084},
+    {"latitude": 39.9062, "longitude": 116.4074},
+    {"latitude": 39.9052, "longitude": 116.4064}
+  ],
+  "status": "active", // active 或 inactive
+  "createdAt": "2023-01-01T12:00:00Z",
+  "updatedAt": "2023-01-01T12:00:00Z",
+  "devices": [ // 关联的设备
+    {
+      "id": 1,
+      "imei": "123456789012345",
+      "name": "老人手表 1"
+    }
+  ]
+}
+```
 
 ### 下行命令API
 
-| 方法 | 路径 | 功能 |
-|------|------|------|
-| GET  | /api/downlink/online | 获取在线设备IMEI列表 |
-| POST | /api/downlink/bp00 | 发送BP00授时命令 |
-| POST | /api/downlink/bp12 | 发送BP12设置SOS命令 |
-| POST | /api/downlink/custom | 发送自定义下行命令 |
+| 方法 | 路径 | 功能 | 请求参数 | 响应格式 |
+|------|------|------|----------|----------|
+| GET  | /api/downlink/online | 获取在线设备IMEI列表 | N/A | `{"imeis": ["123456789012345", "987654321098765"]}` |
+| POST | /api/downlink/bp00 | 发送BP00授时命令 | `imei`: 设备IMEI<br>`seq`: 序列号（默认1） | `{"success": true, "command": "IWBP00,123456789012345,012345,20230101120000#"}` |
+| POST | /api/downlink/bp12 | 发送BP12设置SOS命令 | `imei`: 设备IMEI<br>`seq`: 序列号（默认1）<br>`sos1`: SOS号码1<br>`sos2`: SOS号码2（可选）<br>`sos3`: SOS号码3（可选） | `{"success": true, "command": "IWBP12,123456789012345,012345,13800138000,13900139000,13700137000#"}` |
+| POST | /api/downlink/bp15 | 发送BP15定位间隔设置命令 | `imei`: 设备IMEI<br>`seq`: 序列号（默认1）<br>`interval`: 定位间隔（秒） | `{"success": true, "command": "IWBP15,123456789012345,012345,60#"}` |
+| POST | /api/downlink/bp16 | 发送BP16立即定位命令 | `imei`: 设备IMEI<br>`seq`: 序列号（默认1） | `{"success": true, "command": "IWBP16,123456789012345,012345#"}` |
+| POST | /api/downlink/bp19 | 发送BP19设置服务器信息命令 | `imei`: 设备IMEI<br>`seq`: 序列号（默认1）<br>`domainFlag`: 域名标志（0=IP，1=域名）<br>`hostOrIp`: 服务器IP或域名<br>`port`: 服务器端口 | `{"success": true, "command": "IWBP19,123456789012345,012345,0,192.168.1.1,9000#"}` |
+| POST | /api/downlink/custom | 发送自定义下行命令 | `imei`: 设备IMEI<br>`command`: 自定义命令内容（不含IW前缀和#后缀） | `{"success": true, "command": "IWBP00,123456789012345,012345,20230101120000#"}` |
+
+### 健康监测API
+
+| 方法 | 路径 | 功能 | 请求参数 | 响应格式 |
+|------|------|------|----------|----------|
+| GET  | /api/health/device/{deviceId} | 获取设备健康数据 | `start`: 开始时间<br>`end`: 结束时间<br>`type`: 数据类型（heartRate/step/temperature）<br>`page`: 页码（默认0）<br>`size`: 每页数量（默认20） | 分页健康数据列表 |
+| GET  | /api/health/device/{deviceId}/latest | 获取设备最新健康数据 | `type`: 数据类型（heartRate/step/temperature） | 最新健康数据对象 |
+| GET  | /api/health/patient/{patientId} | 获取病人健康数据 | `start`: 开始时间<br>`end`: 结束时间<br>`type`: 数据类型（heartRate/step/temperature）<br>`page`: 页码（默认0）<br>`size`: 每页数量（默认20） | 分页健康数据列表 |
+| GET  | /api/health/patient/{patientId}/latest | 获取病人最新健康数据 | `type`: 数据类型（heartRate/step/temperature） | 最新健康数据对象 |
+| GET  | /api/health/stats | 获取健康数据统计 | `deviceId`: 设备ID（可选）<br>`patientId`: 病人ID（可选）<br>`start`: 开始时间<br>`end`: 结束时间 | 健康数据统计对象 |
+
+#### 健康数据格式
+
+```json
+{
+  "id": 1,
+  "deviceId": 1,
+  "patientId": 1,
+  "type": "heartRate", // heartRate, step, temperature
+  "value": 75, // 心率（次/分钟）、步数、体温（摄氏度）
+  "unit": "bpm", // bpm（心率）、步（步数）、℃（体温）
+  "time": "2023-01-01T12:00:00Z",
+  "createdAt": "2023-01-01T12:00:00Z"
+}
+```
 
 ## 快速开始
 

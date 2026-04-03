@@ -29,4 +29,7 @@ public interface PatientDeviceRepository extends JpaRepository<PatientDevice, Lo
     @Modifying
     @Query(value = "DELETE FROM patient_devices WHERE patient_id = :patientId AND device_id = :deviceId", nativeQuery = true)
     int unbindDeviceFromPatient(@Param("patientId") Long patientId, @Param("deviceId") Long deviceId);
+    
+    // 根据设备ID列表查询关联
+    List<PatientDevice> findByDeviceIdIn(List<Long> deviceIds);
 }
