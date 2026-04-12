@@ -669,3 +669,72 @@ spring.datasource.hikari.pool-name=SmartWatchHikariPool
 - 每个 Phase 独立，可单独回滚
 - 数据库备份在 Phase 3 前完成
 - 旧表在 Phase 3 验证通过后再删除
+
+---
+
+## 10. 补充发现与附加建议
+
+### 10.1 安全问题 (CRITICAL)
+
+探索过程中发现以下安全问题，应在优化期间一并解决：
+
+| 问题 | 严重度 | 修复建议 |
+|------|--------|---------|
+| 数据库密码硬编码在 `application.properties` 中并提交到 Git | **CRITICAL** | 迁移到环境变量或 Spring Cloud Config |
+| 默认用户密码 `admin/admin123`、`user/user123` | **CRITICAL** | 强制首次登录修改密码 |
+| 远程数据库 `8.156.83.206:3306` 对外暴露 | **HIGH** | 限制 IP 白名单或通过 VPN 访问 |
+| 高德 API Key 和设备通信 Key 硬编码 | **HIGH** | 迁移到环境变量 |
+
+**密钥管理迁移方案**:
+
+```properties
+# application.properties - 改为引用环境变量
+spring.datasource.url=${DB_URL:jdbc:mysql://localhost:3306/smart_watch?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=utf8}
+spring.datasource.username=${DB_USERNAME:smart_user}
+spring.datasource.password=${DB_PASSWORD:}
+
+amap.web.key=${AMAP_WEB_KEY:}
+app.mpband.responseKey=${MPBAND_RESPONSE_KEY:}
+```
+
+### 10.2 Repository 策略不统一
+
+当前项目混用了 JPA Repository 和 JdbcTemplate：
+
+| Repository | 策略 |
+|-----------|------|
+| DeviceLocationRepository | JdbcTemplate |
+| DeviceStatusRepository | JdbcTemplate |
+| GeoFenceRepository | JdbcTemplate |
+| UserDeviceRepository | JdbcTemplate |
+| 其他 12 个 | JPA Repository |
+
+**建议**: 合并报警表后，统一使用 JPA Repository 策略。JdbcTemplate 仅在复杂原生 SQL 查询（如分区间接查询）时使用。
+
+### 10.3 引入数据库迁移工具
+
+当前完全依赖 `ddl-auto=update` 管理 Schema，存在问题：
+- 无法追踪变更历史
+- 无法回滚
+- 分区表 DDL 不被 Hibernate 支持
+
+**建议**: 引入 Flyway，将所有 Schema 变更纳入版本控制：
+
+```
+src/main/resources/db/migration/
+├── V1__initial_schema.sql
+├── V2__drop_redundant_indexes.sql
+├── V3__add_missing_indexes.sql
+├── V4__rebuild_partitions.sql
+├── V5__create_unified_alerts_table.sql
+├── V6__migrate_alert_data.sql
+├── V7__convert_varchar_to_enum.sql
+└── V8__drop_legacy_alert_tables.sql
+```
+
+并在 `application.properties` 中设置：
+```properties
+spring.jpa.hibernate.ddl-auto=validate
+spring.flyway.enabled=true
+spring.flyway.baseline-on-migrate=true
+```
