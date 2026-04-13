@@ -110,7 +110,7 @@ const rules = {
 
 const handleLogin = async () => {
   if (!loginFormRef.value) return
-  
+
   await loginFormRef.value.validate(async (valid) => {
     if (valid) {
       loading.value = true
@@ -120,10 +120,10 @@ const handleLogin = async () => {
         authStore.isAuthenticated = false
         authStore.user = null
         localStorage.removeItem('user')
-        
+
         // 调用authStore的login方法进行实际的API登录
         const success = await authStore.login(loginForm.username, loginForm.password)
-        
+
         if (success) {
           ElMessage.success('登录成功')
           console.log('准备跳转到 /')
@@ -152,19 +152,21 @@ const handleLogin = async () => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   min-height: 100vh;
-  background-color: #f5f7fa;
+  background-color: #F8FAFC;
+  font-family: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
   overflow: hidden;
 }
 
 /* 左侧登录表单区域 */
 .left-section {
   position: relative;
-  background-color: #ffffff;
+  background: #FFFFFF;
   display: flex;
   justify-content: center;
   align-items: center;
   overflow: hidden;
-  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
+  border-right: 1px solid #E2E8F0;
+  box-shadow: 1px 0 4px rgba(0, 0, 0, 0.04);
 }
 
 .login-card {
@@ -174,6 +176,8 @@ const handleLogin = async () => {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  position: relative;
+  z-index: 1;
 }
 
 .brand-info {
@@ -185,37 +189,64 @@ const handleLogin = async () => {
 .brand-name {
   font-size: 18px;
   font-weight: 600;
-  color: #666666;
+  color: #2563EB;
   letter-spacing: 0.5px;
 }
 
 .page-title {
   font-size: 32px;
   font-weight: 700;
-  color: #333333;
+  color: #1E293B;
   line-height: 1.2;
 }
 
 /* 表单样式 */
 .login-input {
   height: 48px;
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 14px;
-  border-color: #e0e0e0;
-  transition: all 0.3s ease;
-  background-color: #fafafa;
+  border: 1px solid #E2E8F0;
+  transition: all 0.2s ease;
+  background-color: #FFFFFF;
+  color: #1E293B;
 }
 
 .login-input:hover {
-  border-color: #9c27b0;
-  box-shadow: 0 0 0 2px rgba(156, 39, 176, 0.1);
-  background-color: #ffffff;
+  border-color: #CBD5E1;
 }
 
 .login-input:focus {
-  border-color: #9c27b0;
-  box-shadow: 0 0 0 2px rgba(156, 39, 176, 0.2);
-  background-color: #ffffff;
+  border-color: #2563EB;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+/* Element Plus 深度选择器覆盖 */
+:deep(.el-input__wrapper) {
+  border-radius: 12px;
+  border: 1px solid #E2E8F0;
+  background-color: #FFFFFF;
+  box-shadow: none;
+  transition: all 0.2s ease;
+  padding: 4px 12px;
+}
+
+:deep(.el-input__wrapper:hover) {
+  border-color: #CBD5E1;
+  box-shadow: none;
+}
+
+:deep(.el-input__wrapper.is-focus) {
+  border-color: #2563EB;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+:deep(.el-input__inner) {
+  color: #1E293B;
+  font-family: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+}
+
+:deep(.el-input__inner::placeholder) {
+  color: #94A3B8;
 }
 
 /* 表单操作区域 */
@@ -228,20 +259,24 @@ const handleLogin = async () => {
 
 .remember-checkbox {
   font-size: 14px;
-  color: #666666;
+  color: #1E293B;
   cursor: pointer;
+}
+
+:deep(.remember-checkbox .el-checkbox__label) {
+  color: #1E293B;
+  font-size: 14px;
 }
 
 .forgot-password {
   font-size: 14px;
-  color: #9c27b0;
+  color: #2563EB;
   text-decoration: none;
-  transition: color 0.3s ease;
+  transition: color 0.2s ease;
 }
 
 .forgot-password:hover {
-  color: #7b1fa2;
-  text-decoration: underline;
+  color: #1D4ED8;
 }
 
 /* 登录按钮 */
@@ -250,51 +285,50 @@ const handleLogin = async () => {
   height: 48px;
   font-size: 16px;
   font-weight: 600;
-  background: linear-gradient(135deg, #9c27b0 0%, #673ab7 100%);
+  background: #FF6B6B;
   border: none;
-  border-radius: 8px;
-  color: #ffffff;
+  border-radius: 12px;
+  color: #FFFFFF;
   letter-spacing: 0.5px;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(156, 39, 176, 0.3);
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 .login-btn:hover {
-  background: linear-gradient(135deg, #7b1fa2 0%, #512da8 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(156, 39, 176, 0.4);
-  color: #ffffff;
+  background: #E85555;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 107, 107, 0.25);
 }
 
 .login-btn:active {
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(156, 39, 176, 0.3);
+  background: #D94444;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 /* 注册引导 */
 .register-guide {
   text-align: center;
   font-size: 14px;
-  color: #666666;
+  color: #64748B;
   margin-top: 8px;
 }
 
 .register-link {
-  color: #9c27b0;
+  color: #2563EB;
   text-decoration: none;
   font-weight: 600;
-  transition: color 0.3s ease;
+  transition: color 0.2s ease;
 }
 
 .register-link:hover {
-  color: #7b1fa2;
-  text-decoration: underline;
+  color: #1D4ED8;
 }
 
 /* 右侧业务配图区域 */
 .right-section {
   position: relative;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -322,7 +356,7 @@ const handleLogin = async () => {
 .illustration-title {
   font-size: 28px;
   font-weight: 700;
-  color: #ffffff;
+  color: #FFFFFF;
   letter-spacing: 0.5px;
 }
 
@@ -342,8 +376,7 @@ const handleLogin = async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
 .illustration-image::before {
@@ -351,8 +384,8 @@ const handleLogin = async () => {
   position: absolute;
   width: 100%;
   height: 100%;
-  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-  opacity: 0.5;
+  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+  opacity: 0.6;
 }
 
 .illustration-features {
@@ -366,13 +399,13 @@ const handleLogin = async () => {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  color: #ffffff;
+  color: #FFFFFF;
 }
 
 .feature-icon {
   width: 40px;
   height: 40px;
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(37, 99, 235, 0.2);
   border-radius: 50%;
   display: flex;
   justify-content: center;
@@ -388,7 +421,7 @@ const handleLogin = async () => {
 .custom-icon {
   width: 18px;
   height: 18px;
-  color: #909399;
+  color: #94A3B8;
   vertical-align: middle;
   fill: currentColor;
 }

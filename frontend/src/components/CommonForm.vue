@@ -199,4 +199,48 @@ defineExpose({
   justify-content: flex-end;
   gap: 10px;
 }
+
+:deep(.el-form-item__label) {
+  color: var(--color-text-secondary) !important;
+  font-weight: 500;
+}
+
+:deep(.el-input__wrapper) {
+  background: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  box-shadow: 0 0 0 1px var(--color-border) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+:deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px var(--color-border-strong) !important;
+}
+
+:deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px var(--color-primary), 0 0 0 3px var(--color-primary-light) !important;
+}
+
+:deep(.el-input__inner) {
+  color: var(--color-text-primary) !important;
+}
+
+:deep(.el-input__inner::placeholder) {
+  color: var(--color-text-muted) !important;
+}
+
+:deep(.el-select .el-input__wrapper) {
+  background: var(--color-surface) !important;
+}
+
+:deep(.el-textarea__inner) {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+  border-radius: var(--radius-md);
+}
+
+:deep(.el-textarea__inner:focus) {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
 </style>

@@ -28,6 +28,12 @@ const routes = [
   },
   {    path: '/wearers',    redirect: '/patients'  },  {    path: '/patients',    name: 'Patients',    component: () => import('../views/Patient.vue'),    meta: { requiresAuth: true }  },
   {
+    path: '/patients/:id',
+    name: 'PatientDetail',
+    component: () => import('../views/PatientDetail.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/fences',
     name: 'Fences',
     component: () => import('../views/Fence.vue'),

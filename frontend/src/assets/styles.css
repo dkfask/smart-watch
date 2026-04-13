@@ -1,4 +1,115 @@
-/* 全局样式重置 */
+/* ============================================
+   Global CSS Variables — Light Professional Theme
+   Based on DESIGN.md: Airbnb warmth + Sentry monitoring + Revolut precision
+   ============================================ */
+:root {
+  /* Primary — Medical Trust Blue */
+  --color-primary: #2563EB;
+  --color-primary-light: #DBEAFE;
+  --color-primary-dark: #1D4ED8;
+  --color-primary-subtle: #EFF6FF;
+
+  /* Accent — Warm Coral (Airbnb-inspired) */
+  --color-accent: #FF6B6B;
+  --color-accent-light: #FFF0F0;
+  --color-accent-dark: #E85555;
+
+  /* Semantic — Status & Monitoring */
+  --color-success: #10B981;
+  --color-success-bg: #ECFDF5;
+  --color-warning: #F59E0B;
+  --color-warning-bg: #FFFBEB;
+  --color-danger: #EF4444;
+  --color-danger-bg: #FEF2F2;
+  --color-info: #3B82F6;
+  --color-info-bg: #EFF6FF;
+
+  /* Health Metric Colors */
+  --color-heart-rate: #EF4444;
+  --color-blood-pressure: #8B5CF6;
+  --color-blood-oxygen: #3B82F6;
+  --color-body-temp: #F59E0B;
+  --color-steps: #10B981;
+
+  /* Neutrals (Revolut-inspired precision) */
+  --color-bg: #F8FAFC;
+  --color-surface: #FFFFFF;
+  --color-surface-raised: #F1F5F9;
+  --color-border: #E2E8F0;
+  --color-border-strong: #CBD5E1;
+  --color-text-primary: #1E293B;
+  --color-text-secondary: #64748B;
+  --color-text-muted: #94A3B8;
+  --color-text-inverse: #FFFFFF;
+
+  /* Typography */
+  --font-sans: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", "Source Code Pro", monospace;
+
+  /* Type Scale */
+  --text-display: 40px;
+  --text-h1: 32px;
+  --text-h2: 24px;
+  --text-h3: 20px;
+  --text-h4: 16px;
+  --text-body: 14px;
+  --text-small: 12px;
+  --text-micro: 11px;
+
+  /* Spacing Scale */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Border Radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 24px;
+  --radius-full: 9999px;
+
+  /* Elevation / Shadows */
+  --elevation-0: none;
+  --elevation-1: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --elevation-2: 0 4px 6px rgba(0, 0, 0, 0.05), 0 2px 4px rgba(0, 0, 0, 0.04);
+  --elevation-3: 0 10px 15px rgba(0, 0, 0, 0.07), 0 4px 6px rgba(0, 0, 0, 0.04);
+  --elevation-4: 0 20px 25px rgba(0, 0, 0, 0.08), 0 8px 10px rgba(0, 0, 0, 0.04);
+  --elevation-5: 0 25px 50px rgba(0, 0, 0, 0.12);
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+
+  /* Legacy compat aliases (for gradual migration) */
+  --primary-color: var(--color-primary);
+  --primary-dark: var(--color-primary-dark);
+  --primary-light: var(--color-primary-light);
+  --success-color: var(--color-success);
+  --warning-color: var(--color-warning);
+  --danger-color: var(--color-danger);
+  --info-color: var(--color-info);
+  --text-primary: var(--color-text-primary);
+  --text-secondary: var(--color-text-secondary);
+  --text-muted: var(--color-text-muted);
+  --bg-dark: var(--color-bg);
+  --bg-card: var(--color-surface);
+  --bg-card-hover: var(--color-surface-raised);
+  --bg-input: var(--color-surface);
+  --border-color: var(--color-border);
+  --shadow-sm: var(--elevation-1);
+  --shadow-md: var(--elevation-2);
+  --shadow-lg: var(--elevation-4);
+}
+
+/* ============================================
+   Global Reset & Base Styles
+   ============================================ */
 * {
   margin: 0;
   padding: 0;
@@ -6,164 +117,707 @@
 }
 
 body {
-  font-family: Arial, sans-serif;
-  background-color: #f5f7fa;
-  color: #303133;
-  font-size: 14px;
-  line-height: 1.5;
+  font-family: var(--font-sans);
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* 滚动条样式 */
+#app {
+  min-height: 100vh;
+}
+
+/* Tabular figures for data alignment */
+.tabular-nums,
+.el-table .el-table__cell,
+.stats-number,
+.metric-value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Monospace for device IDs and timestamps */
+.mono,
+.imei-text,
+.timestamp-text {
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+}
+
+/* ============================================
+   Scrollbar Styles
+   ============================================ */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
+  background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
+  background: var(--color-text-muted);
+  border-radius: var(--radius-full);
+  transition: background var(--transition-fast);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--color-text-secondary);
 }
 
-/* 通用容器样式 */
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
-}
-
-/* 卡片通用样式 */
+/* ============================================
+   Card Styles — Light Theme
+   ============================================ */
 .card {
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
-  padding: 20px;
-  margin-bottom: 20px;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--elevation-1);
+  padding: var(--space-5);
+  margin-bottom: var(--space-4);
+  transition: box-shadow var(--transition-normal);
+  position: relative;
+  overflow: hidden;
 }
 
-/* 按钮通用样式 */
+.card:hover {
+  box-shadow: var(--elevation-2);
+}
+
+/* ============================================
+   Button Styles
+   ============================================ */
 .btn {
-  display: inline-block;
-  padding: 8px 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 10px 20px;
   border: none;
-  border-radius: 4px;
-  font-size: 14px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-body);
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all var(--transition-normal);
+  outline: none;
+  font-family: var(--font-sans);
 }
 
 .btn-primary {
-  background-color: #409eff;
-  color: #fff;
+  background: var(--color-accent);
+  color: var(--color-text-inverse);
+  box-shadow: var(--elevation-1);
 }
 
 .btn-primary:hover {
-  background-color: #66b1ff;
+  background: var(--color-accent-dark);
+  box-shadow: var(--elevation-2);
 }
 
-/* 表单通用样式 */
+.btn-primary:active {
+  background: var(--color-accent-dark);
+  box-shadow: var(--elevation-1);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.btn-ghost:hover {
+  background: var(--color-primary-light);
+}
+
+/* ============================================
+   Form Styles
+   ============================================ */
 .form-item {
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
 }
 
 .form-label {
   display: inline-block;
   width: 80px;
   text-align: right;
-  margin-right: 10px;
-  font-weight: bold;
+  margin-right: var(--space-3);
+  font-weight: 500;
+  color: var(--color-text-secondary);
+  font-size: var(--text-body);
 }
 
 .form-input {
-  padding: 8px 12px;
-  border: 1px solid #dcdfe6;
-  border-radius: 4px;
-  width: 300px;
+  padding: 10px 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-primary);
+  font-size: var(--text-body);
+  font-family: var(--font-sans);
+  transition: all var(--transition-fast);
+}
+
+.form-input:hover {
+  border-color: var(--color-border-strong);
 }
 
 .form-input:focus {
   outline: none;
-  border-color: #409eff;
-  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.2);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
-/* 表格通用样式 */
+/* ============================================
+   Table Styles
+   ============================================ */
 .table {
   width: 100%;
-  border-collapse: collapse;
-  background-color: #fff;
-  border-radius: 8px;
+  border-collapse: separate;
+  border-spacing: 0;
+  background-color: var(--color-surface);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--color-border);
 }
 
 .table th,
 .table td {
-  padding: 12px 15px;
+  padding: 12px 16px;
   text-align: left;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid var(--color-border);
 }
 
 .table th {
-  background-color: #f5f7fa;
-  font-weight: bold;
-  color: #303133;
+  background: var(--color-surface-raised);
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  font-size: var(--text-small);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
-.table tr:hover {
-  background-color: #f5f7fa;
+.table tbody tr {
+  transition: background var(--transition-fast);
 }
 
-/* 加载状态 */
+.table tbody tr:hover {
+  background: var(--color-surface-raised);
+}
+
+.table tbody tr:nth-child(even) {
+  background: var(--color-bg);
+}
+
+.table tbody tr:nth-child(even):hover {
+  background: var(--color-surface-raised);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* ============================================
+   Status Styles
+   ============================================ */
+.status-online {
+  color: var(--color-success);
+}
+
+.status-offline {
+  color: var(--color-text-muted);
+}
+
+.status-warning {
+  color: var(--color-warning);
+}
+
+/* Status dot indicators */
+.status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.status-dot.online {
+  background-color: var(--color-success);
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+.status-dot.offline {
+  background-color: var(--color-text-muted);
+}
+
+.status-dot.warning {
+  background-color: var(--color-warning);
+}
+
+.status-dot.critical {
+  background-color: var(--color-danger);
+  animation: pulse-urgent 1s ease-in-out infinite;
+}
+
+@keyframes pulse-soft {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(16, 185, 129, 0); }
+}
+
+@keyframes pulse-urgent {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+}
+
+/* Alarm severity stripe */
+.alarm-stripe {
+  position: relative;
+  padding-left: 16px;
+}
+
+.alarm-stripe::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  border-radius: 0 2px 2px 0;
+}
+
+.alarm-stripe.critical::before {
+  background-color: var(--color-danger);
+}
+
+.alarm-stripe.warning::before {
+  background-color: var(--color-warning);
+}
+
+.alarm-stripe.info::before {
+  background-color: var(--color-info);
+}
+
+/* ============================================
+   Loading State
+   ============================================ */
 .loading {
   display: flex;
   justify-content: center;
   align-items: center;
   height: 200px;
+  color: var(--color-primary);
 }
 
-/* 空状态 */
+.loading::after {
+  content: '';
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-left: 12px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ============================================
+   Empty State
+   ============================================ */
 .empty {
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   height: 200px;
-  color: #909399;
+  color: var(--color-text-muted);
+  gap: var(--space-3);
 }
 
-/* 错误状态 */
+.empty-icon {
+  font-size: 48px;
+  opacity: 0.4;
+}
+
+.empty-text {
+  font-size: var(--text-body);
+}
+
+/* ============================================
+   Error / Success / Warning / Info States
+   ============================================ */
 .error {
-  color: #f56c6c;
-  font-size: 14px;
-  margin-top: 5px;
+  color: var(--color-danger);
+  font-size: var(--text-body);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-danger-bg);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-2);
 }
 
-/* 成功状态 */
 .success {
-  color: #67c23a;
-  font-size: 14px;
-  margin-top: 5px;
+  color: var(--color-success);
+  font-size: var(--text-body);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-success-bg);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-2);
 }
 
-/* 警告状态 */
 .warning {
-  color: #e6a23c;
-  font-size: 14px;
-  margin-top: 5px;
+  color: var(--color-warning);
+  font-size: var(--text-body);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-warning-bg);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-2);
 }
 
-/* 信息状态 */
 .info {
-  color: #909399;
-  font-size: 14px;
-  margin-top: 5px;
+  color: var(--color-info);
+  font-size: var(--text-body);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-info-bg);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius-md);
+  margin-top: var(--space-2);
+}
+
+/* ============================================
+   Badge/Tag Styles — Pill shape
+   ============================================ */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-xl);
+  font-size: var(--text-small);
+  font-weight: 500;
+}
+
+.badge-primary {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.badge-success {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.badge-danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+}
+
+.badge-warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease forwards;
+}
+
+/* ============================================
+   Utility Classes
+   ============================================ */
+.text-gradient {
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================
+   Element Plus Light Theme Overrides
+   Per DESIGN.md Section 9
+   ============================================ */
+:root {
+  --el-color-primary: #2563EB;
+  --el-color-primary-light-3: #5B8DEF;
+  --el-color-primary-light-5: #92B5F5;
+  --el-color-primary-light-7: #DBEAFE;
+  --el-color-primary-light-9: #EFF6FF;
+  --el-color-primary-dark-2: #1D4ED8;
+  --el-color-danger: #EF4444;
+  --el-color-warning: #F59E0B;
+  --el-color-success: #10B981;
+  --el-color-info: #3B82F6;
+  --el-border-radius-base: 12px;
+  --el-border-radius-small: 8px;
+  --el-border-radius-round: 20px;
+  --el-font-family: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --el-font-size-base: 14px;
+  --el-bg-color: #F8FAFC;
+  --el-bg-color-overlay: #FFFFFF;
+  --el-text-color-primary: #1E293B;
+  --el-text-color-regular: #64748B;
+  --el-border-color: #E2E8F0;
+  --el-fill-color-blank: #FFFFFF;
+  --el-fill-color-light: #F1F5F9;
+}
+
+/* Input overrides — light theme */
+.el-input__wrapper {
+  background-color: var(--color-surface) !important;
+  box-shadow: 0 0 0 1px var(--color-border) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.el-input__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--color-border-strong) !important;
+}
+
+.el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px var(--color-primary), 0 0 0 3px var(--color-primary-light) !important;
+}
+
+.el-input__inner {
+  color: var(--color-text-primary) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.el-input__inner::placeholder {
+  color: var(--color-text-muted) !important;
+}
+
+/* Select overrides */
+.el-select__wrapper {
+  background-color: var(--color-surface) !important;
+  box-shadow: 0 0 0 1px var(--color-border) !important;
+  border-radius: var(--radius-md) !important;
+}
+
+.el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--color-border-strong) !important;
+}
+
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 1px var(--color-primary), 0 0 0 3px var(--color-primary-light) !important;
+}
+
+.el-select-dropdown {
+  background-color: var(--color-surface) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--elevation-3) !important;
+}
+
+.el-select-dropdown__item {
+  color: var(--color-text-primary) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.el-select-dropdown__item.is-hovering {
+  background-color: var(--color-surface-raised) !important;
+}
+
+.el-select-dropdown__item.is-selected {
+  color: var(--color-primary) !important;
+  font-weight: 600 !important;
+}
+
+/* Button overrides — coral primary */
+.el-button--primary {
+  --el-button-bg-color: #FF6B6B;
+  --el-button-border-color: #FF6B6B;
+  --el-button-hover-bg-color: #E85555;
+  --el-button-hover-border-color: #E85555;
+  --el-button-active-bg-color: #D04545;
+  --el-button-active-border-color: #D04545;
+  border-radius: var(--radius-md) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.el-button--default {
+  --el-button-bg-color: var(--color-surface);
+  --el-button-border-color: var(--color-border);
+  --el-button-text-color: var(--color-text-primary);
+  --el-button-hover-bg-color: var(--color-surface-raised);
+  --el-button-hover-border-color: var(--color-primary);
+  --el-button-hover-text-color: var(--color-primary);
+  border-radius: var(--radius-md) !important;
+  font-family: var(--font-sans) !important;
+}
+
+/* Table overrides — zebra + clean header */
+.el-table {
+  --el-table-bg-color: var(--color-surface);
+  --el-table-tr-bg-color: var(--color-surface);
+  --el-table-header-bg-color: var(--color-surface-raised);
+  --el-table-header-text-color: var(--color-text-secondary);
+  --el-table-text-color: var(--color-text-primary);
+  --el-table-border-color: var(--color-border);
+  --el-table-row-hover-bg-color: var(--color-surface-raised);
+  font-family: var(--font-sans) !important;
+}
+
+.el-table th.el-table__cell {
+  background-color: var(--color-surface-raised) !important;
+  font-weight: 600 !important;
+  text-transform: uppercase;
+  font-size: var(--text-small) !important;
+  letter-spacing: 0.5px;
+  color: var(--color-text-secondary) !important;
+}
+
+.el-table .el-table__row--striped td.el-table__cell {
+  background: var(--color-bg) !important;
+}
+
+/* Dialog overrides */
+.el-dialog {
+  --el-dialog-bg-color: var(--color-surface);
+  --el-dialog-title-font-size: 18px;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--elevation-4) !important;
+}
+
+.el-dialog__header {
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--space-5);
+}
+
+.el-dialog__title {
+  color: var(--color-text-primary) !important;
+  font-weight: 600 !important;
+  font-family: var(--font-sans) !important;
+}
+
+.el-dialog__body {
+  color: var(--color-text-primary) !important;
+  padding: var(--space-5);
+}
+
+/* Form overrides */
+.el-form-item__label {
+  color: var(--color-text-secondary) !important;
+  font-family: var(--font-sans) !important;
+}
+
+/* Dropdown overrides */
+.el-dropdown-menu {
+  background-color: var(--color-surface) !important;
+  border: 1px solid var(--color-border) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--elevation-3) !important;
+}
+
+.el-dropdown-menu__item {
+  color: var(--color-text-primary) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.el-dropdown-menu__item:hover {
+  background-color: var(--color-surface-raised) !important;
+  color: var(--color-primary) !important;
+}
+
+/* Tag overrides — pill shape */
+.el-tag {
+  border-radius: var(--radius-xl) !important;
+  font-family: var(--font-sans) !important;
+  font-size: var(--text-small) !important;
+}
+
+/* Card overrides */
+.el-card {
+  --el-card-bg-color: var(--color-surface);
+  --el-card-border-color: var(--color-border);
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--elevation-1) !important;
+}
+
+/* Pagination overrides */
+.el-pagination {
+  --el-pagination-bg-color: transparent;
+  --el-pagination-text-color: var(--color-text-secondary);
+  --el-pagination-button-bg-color: var(--color-surface);
+  --el-pagination-hover-color: var(--color-primary);
+  font-family: var(--font-sans) !important;
+}
+
+/* Message overrides */
+.el-message {
+  border-radius: var(--radius-md) !important;
+}
+
+/* Loading overrides */
+.el-loading-mask {
+  background-color: rgba(248, 250, 252, 0.8) !important;
+}
+
+.el-loading-spinner .circular {
+  stroke: var(--color-primary) !important;
+}
+
+/* Skeleton overrides */
+.el-skeleton__item {
+  background: var(--color-surface-raised) !important;
+}
+
+/* Badge overrides */
+.el-badge__content {
+  background-color: var(--color-danger) !important;
+  border-radius: var(--radius-full) !important;
+}
+
+/* Tooltip overrides */
+.el-tooltip__popper {
+  background-color: var(--color-surface) !important;
+  border: 1px solid var(--color-border) !important;
+  color: var(--color-text-primary) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--elevation-2) !important;
+}
+
+/* Checkbox overrides */
+.el-checkbox__label {
+  color: var(--color-text-primary) !important;
+  font-family: var(--font-sans) !important;
+}
+
+/* Descriptions overrides */
+.el-descriptions__label {
+  color: var(--color-text-secondary) !important;
+  font-family: var(--font-sans) !important;
+}
+
+.el-descriptions__content {
+  color: var(--color-text-primary) !important;
+}
+
+/* Menu overrides — for sidebar */
+.el-menu {
+  border-right: none !important;
+  font-family: var(--font-sans) !important;
+}
+
+/* Breadcrumb overrides */
+.el-breadcrumb__inner {
+  color: var(--color-text-secondary) !important;
+  font-family: var(--font-sans) !important;
+}
+
+/* Switch overrides */
+.el-switch__label {
+  color: var(--color-text-secondary) !important;
+  font-family: var(--font-sans) !important;
 }

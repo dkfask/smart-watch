@@ -15,6 +15,13 @@
                 <el-form-item label="设备 IMEI">
                   <el-input v-model="device.imei" disabled placeholder="设备 IMEI" />
                 </el-form-item>
+                <el-form-item label="快捷选择">
+                  <el-button-group>
+                    <el-button size="small" @click="setQuickTime('today')">今天</el-button>
+                    <el-button size="small" @click="setQuickTime('yesterday')">昨天</el-button>
+                    <el-button size="small" @click="setQuickTime('week')">最近7天</el-button>
+                  </el-button-group>
+                </el-form-item>
                 <el-form-item label="开始时间">
                   <el-date-picker
                     v-model="filterForm.startTime"
@@ -68,13 +75,11 @@
                   >
                     <el-card shadow="hover" @click="highlightLocation(index)">
                       <div class="location-item">
-                        <div class="location-coord">
-                          {{ location.longitude }}, {{ location.latitude }}
-                        </div>
                         <div class="location-address">{{ location.address || '未知地址' }}</div>
+                        <div class="location-coord">
+                          经度: {{ location.longitude?.toFixed(6) }}, 纬度: {{ location.latitude?.toFixed(6) }}
+                        </div>
                         <div class="location-info">
-                          <span>精度: {{ location.accuracy || '-' }}m</span>
-                          <span>海拔: {{ location.altitude || '-' }}m</span>
                           <span>电量: {{ location.batteryLevel || '-' }}%</span>
                           <span>来源: {{ location.source || '-' }}</span>
                         </div>
@@ -433,7 +438,7 @@ const updateMap = () => {
   // 添加轨迹线
   if (latLngs.length > 1) {
     polyline = L.polyline(latLngs, {
-      color: '#409eff',
+      color: '#2563EB',
       weight: 3,
       opacity: 0.8,
       smoothFactor: 1
@@ -528,6 +533,34 @@ const resetFilter = () => {
   fetchHistoryLocations()
 }
 
+/**
+ * 快捷时间选择
+ */
+const setQuickTime = (type) => {
+  const now = new Date()
+  const format = (d) => {
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+  if (type === 'today') {
+    filterForm.startTime = format(now) + ' 00:00:00'
+    filterForm.endTime = format(now) + ' 23:59:59'
+  } else if (type === 'yesterday') {
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+    filterForm.startTime = format(yesterday) + ' 00:00:00'
+    filterForm.endTime = format(yesterday) + ' 23:59:59'
+  } else if (type === 'week') {
+    const weekAgo = new Date(now)
+    weekAgo.setDate(weekAgo.getDate() - 7)
+    filterForm.startTime = format(weekAgo) + ' 00:00:00'
+    filterForm.endTime = format(now) + ' 23:59:59'
+  }
+  fetchHistoryLocations()
+}
+
 // 分页大小变化
 const handleSizeChange = (size) => {
   pageSize.value = size
@@ -560,6 +593,8 @@ onBeforeUnmount(() => {
 <style scoped>
 .history-container {
   width: 100%;
+  padding: 20px;
+  background: transparent;
 }
 
 .card-header {
@@ -573,10 +608,12 @@ onBeforeUnmount(() => {
 }
 
 .filter-panel {
-  background-color: #f5f7fa;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   padding: 15px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   margin-bottom: 20px;
+  backdrop-filter: blur(10px);
 }
 
 .filter-form {
@@ -588,12 +625,18 @@ onBeforeUnmount(() => {
   height: 600px;
   display: flex;
   flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 15px;
+  backdrop-filter: blur(10px);
 }
 
 .history-map {
   flex: 1;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
+  border: 1px solid var(--border-color);
 }
 
 .map-controls {
@@ -604,9 +647,9 @@ onBeforeUnmount(() => {
 }
 
 .location-list-panel {
-  background-color: #f5f7fa;
+  background-color: var(--bg-card);
   padding: 15px;
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   height: 600px;
   display: flex;
   flex-direction: column;
@@ -616,6 +659,7 @@ onBeforeUnmount(() => {
   margin: 0 0 15px 0;
   font-size: 16px;
   font-weight: bold;
+  color: var(--text-primary);
 }
 
 .location-item {
@@ -625,10 +669,11 @@ onBeforeUnmount(() => {
 .location-coord {
   font-weight: bold;
   margin-bottom: 5px;
+  color: var(--text-primary);
 }
 
 .location-address {
-  color: #606266;
+  color: var(--text-secondary);
   margin-bottom: 5px;
   font-size: 14px;
 }
@@ -638,7 +683,7 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 10px;
   font-size: 12px;
-  color: #909399;
+  color: var(--text-muted);
 }
 
 .pagination {

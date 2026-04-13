@@ -191,6 +191,8 @@ onBeforeUnmount(() => {
 <style scoped>
 .device-detail-container {
   width: 100%;
+  padding: 20px;
+  background: transparent;
 }
 
 .card-header {
@@ -200,7 +202,11 @@ onBeforeUnmount(() => {
 }
 
 .device-detail-content {
-  padding: 20px 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  backdrop-filter: blur(10px);
 }
 
 .map-section {
@@ -211,12 +217,14 @@ onBeforeUnmount(() => {
   margin-bottom: 10px;
   font-size: 16px;
   font-weight: bold;
+  color: var(--text-primary);
 }
 
 .device-map {
   height: 400px;
-  border-radius: 4px;
+  border-radius: var(--radius-md);
   overflow: hidden;
+  border: 1px solid var(--border-color);
 }
 
 /* 自定义水滴标记样式 */
@@ -230,21 +238,21 @@ onBeforeUnmount(() => {
   position: relative;
   width: 30px;
   height: 30px;
-  background-color: #1890ff;
+  background: var(--color-primary);
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   display: flex;
   justify-content: center;
   align-items: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-sm);
 }
 
 :deep(.marker-number) {
   position: absolute;
   bottom: -12px;
   right: -12px;
-  background-color: #fff;
-  border: 2px solid #1890ff;
+  background-color: var(--bg-card);
+  border: 2px solid var(--primary-color);
   border-radius: 50%;
   width: 20px;
   height: 20px;
@@ -253,8 +261,8 @@ onBeforeUnmount(() => {
   align-items: center;
   font-size: 10px;
   font-weight: bold;
-  color: #1890ff;
+  color: var(--primary-color);
   transform: rotate(45deg);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 </style>

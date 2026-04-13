@@ -1,59 +1,49 @@
-// API响应处理工具函数
+/**
+ * API响应处理工具函数
+ */
 
 /**
  * 处理后端返回的{code, message, data}格式响应
+ * 统一解包ApiResponse外层，保留分页元数据
  * @param {Object} response - axios返回的响应对象
- * @returns {Object|Array} - 提取后的数据
+ * @returns {Object|Array} - 提取后的数据（分页响应返回完整对象含content/total等）
  */
 export const handleApiResponse = (response) => {
-  console.log('API返回结果:', response)
-  // 确保返回数组，处理不同的数据格式
   let responseData = response;
   if (response && response.data) {
     responseData = response.data;
   }
-  
-  // 处理后端返回的{code, message, data}格式
+
   if (responseData && responseData.code === 200 && responseData.data) {
     responseData = responseData.data;
   }
-  
-  // 检查请求URL，处理非数组类型的响应
+
   const url = response.config?.url || '';
-  // 下行指令API返回的是非数组类型，直接返回响应数据
   if (url.includes('/api/downlink/')) {
     return responseData || {}
   }
-  
-  // 处理各种可能的数据格式
-    if (Array.isArray(responseData)) {
-      return responseData
-    } else if (responseData && Array.isArray(responseData.list)) {
-      return responseData.list
-    } else if (responseData && Array.isArray(responseData.items)) {
-      return responseData.items
-    } else if (responseData && Array.isArray(responseData.content)) {
-      // 对于报警API，返回完整的分页对象，以便获取totalElements
-      if (response.config && response.config.url && response.config.url.includes('/api/alarms')) {
-        return responseData
+
+  if (Array.isArray(responseData)) {
+    return responseData
+  } else if (responseData && Array.isArray(responseData.content)) {
+    return responseData
+  } else if (responseData && Array.isArray(responseData.list)) {
+    return responseData
+  } else if (responseData && Array.isArray(responseData.items)) {
+    return responseData
+  } else if (responseData && Array.isArray(responseData.data)) {
+    return responseData
+  } else {
+    if (response.config && response.config.url) {
+      if (response.config.url.includes('/api/locations/device/') &&
+          (response.config.url.includes('/latest') || response.config.url.includes('/latest-with-amap') || response.config.url.includes('/latest-with-address'))) {
+        return responseData || {}
+      } else if (response.config.url.includes('/api/fences')) {
+        return []
       }
-      return responseData.content
-    } else if (responseData && Array.isArray(responseData.data)) {
-      return responseData.data
-    } else {
-      console.warn('API返回的不是预期格式:', responseData)
-      // 根据不同API返回默认值
-      if (response.config && response.config.url) {
-        // 处理获取单条位置信息的API
-        if (response.config.url.includes('/api/locations/device/') && 
-            (response.config.url.includes('/latest') || response.config.url.includes('/latest-with-amap') || response.config.url.includes('/latest-with-address'))) {
-          return responseData || {} // 返回单个位置对象
-        } else if (response.config.url.includes('/api/fences')) {
-          return []
-        }
-      }
-      return responseData || {} // 对于非数组响应，直接返回响应数据
     }
+    return responseData || {}
+  }
 }
 
 /**
@@ -64,14 +54,13 @@ export const handleApiResponse = (response) => {
  */
 export const handleApiError = (error, defaultError = '请求失败') => {
   console.error('API请求失败:', error)
-  // 根据不同API返回不同的默认值
   if (error.config && error.config.url) {
     if (error.config.url.includes('/api/fences')) {
       return { list: [], total: 0 }
     } else if (error.config.url.includes('/api/devices')) {
-      return { list: [], total: 0 }
+      return { content: [], total: 0 }
     } else if (error.config.url.includes('/api/patients')) {
-      return { data: [], total: 0 }
+      return { content: [], total: 0 }
     }
   }
   return {}

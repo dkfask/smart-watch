@@ -186,4 +186,38 @@ const handleAction = (action, row, index) => {
   display: flex;
   justify-content: flex-end;
 }
+
+:deep(.el-table) {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+:deep(.el-table__header-wrapper th) {
+  background: var(--color-surface-raised);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+:deep(.el-table__body-wrapper tr) {
+  background: var(--color-surface);
+  color: var(--color-text-primary);
+}
+
+:deep(.el-table__body-wrapper tr:hover > td) {
+  background: var(--color-surface-raised) !important;
+}
+
+:deep(.el-table__row--striped td) {
+  background: var(--color-bg);
+}
+
+:deep(.el-table td) {
+  border-bottom: 1px solid var(--color-border);
+}
 </style>

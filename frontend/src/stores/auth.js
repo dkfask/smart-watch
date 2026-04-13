@@ -13,6 +13,21 @@ export const useAuthStore = defineStore('auth', {
 
   actions: {
     async login(username, password) {
+      // 本地开发模式：跳过 API 调用
+      if (import.meta.env.DEV) {
+        console.log('开发模式：模拟登录成功')
+        const mockUser = {
+          id: 1,
+          username: username || 'admin',
+          name: username || '管理员',
+          role: 'admin'
+        }
+        this.user = mockUser
+        this.isAuthenticated = true
+        localStorage.setItem('user', JSON.stringify({ data: mockUser }))
+        return true
+      }
+
       try {
         console.log('authStore login 方法被调用，用户名:', username)
         // 去掉重复的/api前缀，因为axios已经配置了baseURL为/api
@@ -21,11 +36,11 @@ export const useAuthStore = defineStore('auth', {
           password
         })
         console.log('登录API返回结果:', response)
-        
+
         // 确保获取到正确的用户数据
         const userData = response.data?.data || response.data || {};
         console.log('提取的用户数据:', userData);
-        
+
         this.user = userData;
         console.log('设置 isAuthenticated 为 true')
         this.isAuthenticated = true

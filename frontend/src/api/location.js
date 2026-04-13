@@ -9,6 +9,13 @@ export const locationApi = {
       .catch(handleApiError)
   },
 
+  // 获取设备最新位置
+  getLatestLocation(deviceId) {
+    return api.get(`/locations/device/${deviceId}/latest`)
+      .then(handleApiResponse)
+      .catch(handleApiError)
+  },
+
   // 获取设备历史位置范围
   getLocationsByRange(deviceId, start, end, limit = 200, offset = 0) {
     return api.get(`/locations/device/${deviceId}/range`, {

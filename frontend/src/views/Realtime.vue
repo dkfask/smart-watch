@@ -13,7 +13,7 @@
               <h3>设备列表</h3>
               <el-input
                 v-model="searchQuery"
-                placeholder="搜索设备 IMEI"
+                placeholder="搜索病人姓名或设备IMEI"
                 prefix-icon="Search"
                 class="search-input"
                 clearable
@@ -31,7 +31,8 @@
                     class="device-radio"
                   >
                     <div class="device-info">
-                      <div class="device-imei">{{ device.imei }}</div>
+                      <div class="device-patient-name">{{ device.patient?.name || device.imei }}</div>
+                      <div class="device-imei-sub" v-if="device.patient">{{ device.imei }}</div>
                       <div class="device-status">
                         <el-tag :type="getDeviceStatus(device.id) ? 'success' : 'danger'" size="small">
                           {{ getDeviceStatus(device.id) ? '在线' : '离线' }}
@@ -87,8 +88,10 @@ let refreshTimer = null
 // 计算过滤后的设备列表
 const filteredDevices = computed(() => {
   if (!searchQuery.value) return devices.value
+  const query = searchQuery.value.toLowerCase()
   return devices.value.filter(device => 
-    device.imei.includes(searchQuery.value)
+    device.imei?.toLowerCase().includes(query) ||
+    device.patient?.name?.toLowerCase().includes(query)
   )
 })
 
@@ -415,22 +418,23 @@ const updateMarker = (deviceId, location) => {
   const device = devices.value.find(d => d.id === deviceId)
   if (!device) return
 
-  // 创建自定义水滴图标
+  const displayName = device.patient?.name || device.imei
   const customIcon = L.divIcon({
     className: 'custom-marker',
     html: `
       <div class="marker-drop">
-        <div class="marker-number">${device.id}</div>
+        <div class="marker-number">${displayName.charAt(0)}</div>
       </div>
     `,
     iconSize: [30, 30],
     iconAnchor: [15, 30]
   });
 
-  // 创建标记
   const marker = L.marker([location.latitude, location.longitude], { icon: customIcon })
     .bindPopup(`
-      <b>设备: ${device.imei}</b><br>
+      <b>${displayName}</b><br>
+      ${device.patient?.ward ? '病房: ' + device.patient.ward + '<br>' : ''}
+      设备: ${device.imei}<br>
       位置: ${location.address || '未知'}<br>
       时间: ${formatDate(location.time)}<br>
       电池: ${location.batteryLevel || '-'}%
@@ -508,39 +512,55 @@ onBeforeUnmount(() => {
 <style scoped>
 .realtime-container {
   width: 100%;
+  padding: 0;
+  background: transparent;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.card-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .realtime-content {
-  padding: 20px 0;
+  padding: 0;
 }
 
 .device-list-panel {
-  background-color: #f5f7fa;
-  padding: 15px;
-  border-radius: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 16px;
+  border-radius: var(--radius-lg);
   height: 100%;
+  box-shadow: var(--shadow-md);
 }
 
 .device-list-panel h3 {
-  margin: 0 0 15px 0;
-  font-size: 16px;
-  font-weight: bold;
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .search-input {
-  margin-bottom: 15px;
+  margin-bottom: 12px;
 }
 
 .device-radio-group {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .device-radio {
@@ -553,34 +573,51 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   align-items: center;
   width: 100%;
+  padding: 8px 0;
 }
 
 .device-imei {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: monospace;
+}
+
+.device-patient-name {
   font-size: 14px;
   font-weight: 500;
+  color: var(--text-primary);
+}
+
+.device-imei-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: monospace;
 }
 
 .device-status {
-  margin-left: 10px;
+  margin-left: 8px;
 }
 
 .map-panel {
-  height: 650px;
+  height: 600px;
   display: flex;
   flex-direction: column;
 }
 
 .realtime-map {
   flex: 1;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
+  border: 1px solid var(--border-color);
 }
 
 .map-controls {
-  margin-top: 15px;
+  margin-top: 16px;
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 /* 自定义水滴标记样式 */
@@ -592,23 +629,23 @@ onBeforeUnmount(() => {
 
 :deep(.marker-drop) {
   position: relative;
-  width: 30px;
-  height: 30px;
-  background-color: #1890ff;
+  width: 32px;
+  height: 32px;
+  background: var(--color-primary);
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   display: flex;
   justify-content: center;
   align-items: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--elevation-2);
 }
 
 :deep(.marker-number) {
   position: absolute;
-  bottom: -12px;
-  right: -12px;
-  background-color: #fff;
-  border: 2px solid #1890ff;
+  bottom: -10px;
+  right: -10px;
+  background-color: var(--bg-card);
+  border: 2px solid var(--primary-color);
   border-radius: 50%;
   width: 20px;
   height: 20px;
@@ -617,8 +654,8 @@ onBeforeUnmount(() => {
   align-items: center;
   font-size: 10px;
   font-weight: bold;
-  color: #1890ff;
+  color: var(--primary-color);
   transform: rotate(45deg);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-sm);
 }
 </style>

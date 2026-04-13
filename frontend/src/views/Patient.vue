@@ -15,7 +15,10 @@
           class="search-input"
           clearable
         />
-        <el-table :data="patients" style="width: 100%" v-loading="loading">
+        <el-select v-model="filterWard" placeholder="筛选病房" clearable class="ward-filter" @change="fetchPatients">
+          <el-option v-for="ward in wardOptions" :key="ward" :label="ward" :value="ward" />
+        </el-select>
+        <el-table :data="patients" style="width: 100%" v-loading="loading" @row-click="goToPatientDetail">
           <el-table-column prop="id" label="ID" width="80" />
           <el-table-column prop="name" label="姓名" width="120" />
           <el-table-column prop="age" label="年龄" width="80" />
@@ -26,6 +29,12 @@
           </el-table-column>
           <el-table-column prop="ward" label="病房" width="120" />
           <el-table-column prop="bed" label="床位" width="80" />
+          <el-table-column label="监控状态" width="100">
+            <template #default="scope">
+              <el-tag v-if="scope.row.deviceId" type="success" size="small">已监控</el-tag>
+              <el-tag v-else type="info" size="small">未监控</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column prop="idCard" label="身份证号" width="180">
             <template #default="scope">
               {{ scope.row.idCard || '-' }}
@@ -37,15 +46,18 @@
             </template>
           </el-table-column>
           <el-table-column prop="createdAt" label="创建时间" width="180" :formatter="formatDate" />
-          <el-table-column label="操作" width="180" fixed="right">
+          <el-table-column label="操作" width="240" fixed="right">
             <template #default="scope">
-              <el-button type="primary" size="small" @click="handleEditPatient(scope.row)">
+              <el-button type="primary" size="small" @click.stop="goToPatientDetail(scope.row)">
+                详情
+              </el-button>
+              <el-button type="default" size="small" @click.stop="handleEditPatient(scope.row)">
                 编辑
               </el-button>
-              <el-button type="warning" size="small" @click="handleViewHealthData(scope.row)">
-                健康数据
+              <el-button type="warning" size="small" @click.stop="handleViewHealthData(scope.row)">
+                健康
               </el-button>
-              <el-button type="danger" size="small" @click="handleDeletePatient(scope.row.id)">
+              <el-button type="danger" size="small" @click.stop="handleDeletePatient(scope.row.id)">
                 删除
               </el-button>
             </template>
@@ -259,11 +271,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { patientApi } from '../api/patient'
 import { deviceApi } from '../api/device'
 import { healthApi } from '../api/health'
 import { ElMessage, ElMessageBox } from 'element-plus'
+
+const router = useRouter()
 
 const patients = ref([])
 const loading = ref(false)
@@ -271,6 +286,22 @@ const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const searchQuery = ref('')
+const filterWard = ref('')
+
+/**
+ * 病房选项列表
+ */
+const wardOptions = computed(() => {
+  const wards = new Set(patients.value.map(p => p.ward).filter(Boolean))
+  return Array.from(wards).sort()
+})
+
+/**
+ * 跳转到病人详情页
+ */
+const goToPatientDetail = (row) => {
+  router.push(`/patients/${row.id}`)
+}
 
 // 对话框相关
 const dialogVisible = ref(false)
@@ -369,8 +400,27 @@ const fetchPatients = async () => {
     }
     
     const response = await patientApi.getPatients(params)
-    patients.value = response.data || response
-    total.value = response.total || patients.value.length // 从后端获取总数，如果没有则使用数据长度
+    let allPatients = []
+    if (response && Array.isArray(response.content)) {
+      allPatients = response.content
+      total.value = response.total || 0
+    } else if (response && Array.isArray(response.data)) {
+      allPatients = response.data
+      total.value = response.total || 0
+    } else if (Array.isArray(response)) {
+      allPatients = response
+      total.value = response.length
+    } else {
+      allPatients = []
+      total.value = 0
+    }
+
+    // 前端病房筛选
+    if (filterWard.value) {
+      patients.value = allPatients.filter(p => p.ward === filterWard.value)
+    } else {
+      patients.value = allPatients
+    }
   } catch (error) {
     ElMessage.error('获取病人列表失败')
     console.error('Failed to fetch patients:', error)
@@ -550,21 +600,34 @@ onMounted(() => {
 <style scoped>
 .patient-container {
   width: 100%;
+  padding: 20px;
+  background: transparent;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 20px;
 }
 
 .patient-content {
-  padding: 20px 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  backdrop-filter: blur(10px);
 }
 
 .search-input {
   margin-bottom: 20px;
   width: 300px;
+}
+
+.ward-filter {
+  margin-bottom: 20px;
+  margin-left: 12px;
+  width: 160px;
 }
 
 .pagination {

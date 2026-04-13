@@ -30,11 +30,12 @@
               {{ scope.row.patient?.name || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="mcc" label="MCC" width="80" />
-          <el-table-column prop="mnc" label="MNC" width="80" />
-          <el-table-column prop="apn" label="APN" width="120" />
-          <el-table-column prop="iccid" label="ICCID" width="180" />
-          <el-table-column prop="imsi" label="IMSI" width="180" />
+          <el-table-column prop="batteryLevel" label="电量" width="100">
+            <template #default="scope">
+              <span v-if="scope.row.batteryLevel">{{ scope.row.batteryLevel }}%</span>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
           <el-table-column prop="createdAt" label="创建时间" width="180" :formatter="formatDate" />
           <el-table-column label="操作" width="200" fixed="right">
             <template #default="scope">
@@ -55,7 +56,7 @@
                   <el-icon class="el-icon--right"><ArrowDown /></el-icon>
                 </el-button>
                 <template #dropdown>
-                  <el-menu class="custom-dropdown-menu" mode="vertical" background-color="#1a202c" text-color="#e2e8f0" active-text-color="#409eff">
+                  <el-menu class="custom-dropdown-menu" mode="vertical" background-color="#FFFFFF" text-color="#1E293B" active-text-color="#2563EB">
                     <!-- 设备控制组 -->
                     <el-sub-menu index="device-control">
                       <template #title>
@@ -505,8 +506,10 @@ const fetchDevices = async () => {
     console.log('Fetching devices with limit:', pageSize.value, 'offset:', offset)
     const data = await deviceApi.getDevices(pageSize.value, offset)
     console.log('Devices API response:', data)
-    // 检查返回数据结构，后端返回格式为 { list: [], total: 0 }
-    if (data && Array.isArray(data.list)) {
+    if (data && Array.isArray(data.content)) {
+      devices.value = data.content
+      total.value = data.total || 0
+    } else if (data && Array.isArray(data.list)) {
       devices.value = data.list
       total.value = data.total || 0
     } else if (data && Array.isArray(data.items)) {
@@ -921,21 +924,42 @@ onMounted(() => {
 <style scoped>
 .devices-container {
   width: 100%;
+  background: transparent;
+  padding: 20px;
 }
 
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-bottom: 20px;
 }
 
 .devices-content {
-  padding: 20px 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  backdrop-filter: blur(10px);
 }
 
 .search-input {
   margin-bottom: 20px;
   width: 300px;
+}
+
+.search-input :deep(.el-input__wrapper) {
+  background: var(--bg-input);
+  box-shadow: none;
+  border: 1px solid var(--border-color);
+}
+
+.search-input :deep(.el-input__inner) {
+  color: var(--text-primary);
+}
+
+.search-input :deep(.el-input__inner::placeholder) {
+  color: var(--text-muted);
 }
 
 .pagination {
@@ -947,21 +971,21 @@ onMounted(() => {
 /* 自定义下拉菜单样式 - 深色主题 */
 :deep(.custom-dropdown-menu) {
   min-width: 220px;
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-  border: 1px solid #2d3748;
-  background-color: #1a202c;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
   overflow: hidden;
 }
 
 /* 分组标题样式 */
 :deep(.dropdown-group-title) {
   padding: 8px 16px;
-  background-color: #2d3748;
-  color: #cbd5e0;
+  background-color: var(--bg-card-hover);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
-  border-bottom: 1px solid #4a5568;
+  border-bottom: 1px solid var(--border-color);
   letter-spacing: 0.5px;
 }
 
@@ -971,7 +995,7 @@ onMounted(() => {
   height: auto;
   line-height: 20px;
   font-size: 14px;
-  color: #e2e8f0;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   transition: all 0.2s ease;
@@ -980,8 +1004,8 @@ onMounted(() => {
 }
 
 :deep(.el-dropdown-menu__item:hover) {
-  background-color: #2d3748;
-  color: #409eff;
+  background-color: var(--bg-card-hover);
+  color: var(--primary-color);
 }
 
 /* 图标样式 */
@@ -990,12 +1014,12 @@ onMounted(() => {
   margin-right: 8px;
   width: 18px;
   text-align: center;
-  color: #a0aec0;
+  color: var(--text-secondary);
   transition: color 0.2s ease;
 }
 
 :deep(.el-dropdown-menu__item:hover .menu-icon) {
-  color: #409eff;
+  color: var(--primary-color);
 }
 
 /* 修复分组标题与菜单项间距 */
@@ -1016,9 +1040,9 @@ onMounted(() => {
 .raw-log-content {
   max-height: 500px;
   overflow-y: auto;
-  background-color: #f5f7fa;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   padding: 10px;
 }
 
@@ -1028,13 +1052,13 @@ onMounted(() => {
   font-family: 'Courier New', Courier, monospace;
   font-size: 14px;
   line-height: 1.5;
-  color: #303133;
+  color: var(--color-primary);
   margin: 0;
 }
 
 .empty-logs {
   text-align: center;
-  color: #909399;
+  color: var(--text-muted);
   padding: 20px;
 }
 
@@ -1053,16 +1077,16 @@ onMounted(() => {
 }
 
 .raw-log-content::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
+  background: transparent;
+  border-radius: var(--radius-sm);
 }
 
 .raw-log-content::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
+  background: var(--text-muted);
+  border-radius: var(--radius-sm);
 }
 
 .raw-log-content::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+  background: var(--text-secondary);
 }
 </style>
