@@ -4,16 +4,20 @@ import com.example.demo.model.DeviceLocation;
 import com.example.demo.model.DeviceStatus;
 import com.example.demo.model.GeoFence;
 import com.example.demo.model.PatientDevice;
+import com.example.demo.model.Alert;
+import com.example.demo.model.dto.FenceCreateRequest;
+import com.example.demo.model.dto.FenceDto;
+import com.example.demo.model.dto.FenceUpdateRequest;
 import com.example.demo.repository.*;
+import com.example.demo.util.GeoUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class FenceService {
@@ -28,6 +32,8 @@ public class FenceService {
     private final JdbcTemplate jdbc;
     private final AlarmRepository alarmRepo;
     private final DeviceStatusRepository statusRepo;
+    private final FencePatientRepository fencePatientRepo;
+    private final AlertRepository alertRepository;
 
     public FenceService(GeoFenceRepository fenceRepo,
                        FenceAlertRepository alertRepo,
@@ -37,7 +43,9 @@ public class FenceService {
                        AlarmService alarmService,
                        JdbcTemplate jdbc,
                        AlarmRepository alarmRepo,
-                       DeviceStatusRepository statusRepo) {
+                       DeviceStatusRepository statusRepo,
+                       FencePatientRepository fencePatientRepo,
+                       AlertRepository alertRepository) {
         this.fenceRepo = fenceRepo;
         this.alertRepo = alertRepo;
         this.simpleAlertRepo = simpleAlertRepo;
@@ -47,6 +55,67 @@ public class FenceService {
         this.jdbc = jdbc;
         this.alarmRepo = alarmRepo;
         this.statusRepo = statusRepo;
+        this.fencePatientRepo = fencePatientRepo;
+        this.alertRepository = alertRepository;
+    }
+
+    /**
+     * 创建围栏（含病人关联）
+     * @param request 围栏创建请求DTO
+     * @return 新围栏ID
+     */
+    @Transactional
+    public long createFence(FenceCreateRequest request) {
+        GeoFence f = mapRequestToFence(request);
+        long id = fenceRepo.create(f);
+        bindPatients(id, request.getPatientIds());
+        return id;
+    }
+
+    /**
+     * 更新围栏（含病人关联）
+     * @param id 围栏ID
+     * @param request 围栏更新请求DTO
+     * @return 是否更新成功
+     */
+    @Transactional
+    public boolean updateFence(long id, FenceUpdateRequest request) {
+        GeoFence f = mapRequestToFence(request);
+        f.setId(id);
+        int n = fenceRepo.update(f);
+        if (n <= 0) return false;
+        fencePatientRepo.clearFencePatients(id);
+        bindPatients(id, request.getPatientIds());
+        return true;
+    }
+
+    /**
+     * 获取围栏详情（含关联病人ID）
+     * @param id 围栏ID
+     * @return 围栏DTO
+     */
+    public FenceDto getFenceDetail(long id) {
+        Optional<GeoFence> fenceOpt = fenceRepo.findById(id);
+        if (fenceOpt.isEmpty()) return null;
+        return buildFenceDto(fenceOpt.get());
+    }
+
+    /**
+     * 获取围栏列表（含关联病人ID）
+     * @param fences 围栏实体列表
+     * @return 围栏DTO列表
+     */
+    public List<FenceDto> listFencesWithPatients(List<GeoFence> fences) {
+        return fences.stream().map(this::buildFenceDto).collect(Collectors.toList());
+    }
+
+    /**
+     * 删除围栏
+     * @param id 围栏ID
+     * @return 是否删除成功
+     */
+    public boolean deleteFence(long id) {
+        return fenceRepo.delete(id) > 0;
     }
 
     /**
@@ -56,129 +125,86 @@ public class FenceService {
      * @param prevLng 上一次的经度
      */
     public void checkFencesAndAlert(DeviceLocation curr, Double prevLat, Double prevLng) {
-        log.info("checkFencesAndAlert called for device: {}, IMEI: {}, currLat: {}, currLng: {}, prevLat: {}, prevLng: {}", 
-                curr.getDeviceId(), curr.getImei(), curr.getLatitude(), curr.getLongitude(), prevLat, prevLng);
-        
-        // 1. 获取设备关联的病人列表
+        log.debug("checkFencesAndAlert: device={}, imei={}, lat={}, lng={}",
+                curr.getDeviceId(), curr.getImei(), curr.getLatitude(), curr.getLongitude());
+
         List<PatientDevice> patientDevices = patientDeviceRepo.findByDeviceId(curr.getDeviceId());
-        log.info("Found {} patients associated with device: {}", patientDevices.size(), curr.getDeviceId());
-        
-        // 调试设备关联的病人列表
-        for (PatientDevice pd : patientDevices) {
-            log.info("Device: {} associated with patient: {}", curr.getDeviceId(), pd.getPatientId());
-        }
-        
-        if (patientDevices.isEmpty()) {
-            log.info("No patients associated with device: {}", curr.getDeviceId());
-            return;
-        }
-        
-        // 2. 获取设备实体，用于创建报警
+        if (patientDevices.isEmpty()) return;
+
         var device = deviceRepo.findById(curr.getDeviceId()).orElse(null);
-        if (device == null) {
-            log.warn("Device not found for ID: {}", curr.getDeviceId());
-            return;
-        }
-        log.info("Device found: {}, IMEI: {}", device.getId(), device.getImei());
-        
-        // 3. 遍历每个关联的病人
+        if (device == null) return;
+
         for (PatientDevice pd : patientDevices) {
             Long patientId = pd.getPatientId();
-            log.info("Processing patient: {} for device: {}", patientId, curr.getDeviceId());
-            
-            // 4. 获取该病人关联的围栏列表
             List<GeoFence> fences = getPatientFences(patientId);
-            log.info("Total unique fences for patient: {} is {}", patientId, fences.size());
-            
-            // 5. 遍历每个围栏进行判断
             for (GeoFence fence : fences) {
-                log.info("Checking fence: {} (type: {}, status: {}) for patient: {}", 
-                        fence.getId(), fence.getType(), fence.getStatus(), patientId);
-                
-                // 检查围栏状态是否为active
-                if (!"active".equalsIgnoreCase(fence.getStatus())) {
-                    log.info("Skipping inactive fence: {}, status: {}", fence.getId(), fence.getStatus());
-                    continue;
-                }
-                
-                // 只处理圆形围栏
-                if (!"circle".equalsIgnoreCase(fence.getType())) {
-                    log.info("Skipping non-circle fence: {}", fence.getId());
-                    continue;
-                }
-                
-                // 计算设备到围栏中心的距离
-                double distance = distanceMeters(
-                        curr.getLatitude().doubleValue(), 
-                        curr.getLongitude().doubleValue(), 
-                        fence.getCenterLat(), 
-                        fence.getCenterLng());
-                
-                boolean wasInside = inside(prevLat, prevLng, fence);
-                boolean nowInside = inside(curr.getLatitude(), curr.getLongitude(), fence);
-                
-                log.info("Fence: {}, wasInside: {}, nowInside: {}, distance: {}/{}, prevLat: {}, prevLng: {}, fence center: {}, {}, radius: {}",
-                        fence.getId(), wasInside, nowInside, distance, fence.getRadius(),
-                        prevLat, prevLng, fence.getCenterLat(), fence.getCenterLng(), fence.getRadius());
-                
-                // 6. 获取病人信息
-                var patient = pd.getPatient();
-                
-                            // 7. 当设备不在围栏中时，生成报警
-                // 条件：设备现在不在围栏中
-                boolean shouldAlarm = !nowInside;
-                log.info("Should alarm: {} for device: {}, fence: {}, wasInside: {}, nowInside: {}, prevLat: {}, prevLng: {}",
-                        shouldAlarm, curr.getDeviceId(), fence.getId(), wasInside, nowInside, prevLat, prevLng);
-                
-                if (shouldAlarm) {
-                    // 检查报警间隔：同一病人同一类型的报警，默认5分钟间隔
-                    boolean canCreateAlarm = checkAlarmInterval(patientId, "fence_breach");
-                    log.info("Can create alarm: {} for patient: {}, alarmType: fence_breach", canCreateAlarm, patientId);
-                    
-                    if (canCreateAlarm) {
-                        // 创建SimpleFenceAlert记录（简化版，仅包含数据库表中实际存在的字段）
-                        var alert = new com.example.demo.model.SimpleFenceAlert();
-                        alert.setDevice(device);
-                        alert.setPatient(patient);
-                        alert.setFence(fence);
-                        alert.setImei(curr.getImei());
-                        alert.setAlertType("fence_breach");
-                        alert.setLatitude(curr.getLatitude().doubleValue());
-                        alert.setLongitude(curr.getLongitude().doubleValue());
-                        alert.setStatus("pending");
-                        alert.setAlertTime(new Date());
-                        alert.setTriggeredTime(new Date());
-                        alert.setCreatedAt(new Date());
-                        alert.setUpdatedAt(new Date());
-                        alert.setIsRead(0);
-                        simpleAlertRepo.save(alert);
-                        log.info("Simple fence breach alert created: device={}, patient={}, fence={}, alertType={}", 
-                                curr.getDeviceId(), patientId, fence.getId(), alert.getAlertType());
-                        
-                        // 创建系统报警记录
-                        var alarm = new com.example.demo.model.Alarm();
-                        alarm.setDevice(device);
-                        alarm.setPatient(patient);
-                        alarm.setAlarmType("fence_breach");
-                        alarm.setAlarmLevel("warning");
-                        alarm.setLatitude(curr.getLatitude().doubleValue());
-                        alarm.setLongitude(curr.getLongitude().doubleValue());
-                        alarm.setTriggeredTime(new Date());
-                        alarm.setStatus("pending");
-                        alarm.setIsRead(false);
-                        alarm.setCreatedAt(new Date());
-                        alarm.setUpdatedAt(new Date());
-                        
-                        // 调用报警服务创建报警
-                        alarmService.createAlarm(alarm);
-                        log.info("Created fence breach alarm: device={}, patient={}, alarmType={}, status={}", 
-                                curr.getDeviceId(), patientId, alarm.getAlarmType(), alarm.getStatus());
-                    } else {
-                        log.info("Alarm skipped due to interval constraint: patient={}, alarmType: fence_breach", patientId);
-                    }
-                }
+                checkSingleFence(fence, curr, prevLat, prevLng, pd, device, patientId);
             }
         }
+    }
+
+    /**
+     * 检查单个围栏
+     */
+    private void checkSingleFence(GeoFence fence, DeviceLocation curr, Double prevLat, Double prevLng,
+                                   PatientDevice pd, com.example.demo.model.Device device, Long patientId) {
+        if (!"active".equalsIgnoreCase(fence.getStatus())) return;
+        if (!"circle".equalsIgnoreCase(fence.getType())) return;
+
+        boolean nowInside = GeoUtils.inside(curr.getLatitude(), curr.getLongitude(), fence);
+        if (nowInside) return;
+
+        if (shouldCreateAlarm(patientId, "fence_breach")) {
+            createFenceBreachAlert(device, pd.getPatient(), fence, curr);
+        }
+    }
+
+    /**
+     * 创建围栏越界报警（使用 AlarmService.createAlarm 统一处理双写）
+     * @param device 设备对象
+     * @param patient 病人对象
+     * @param fence 围栏对象
+     * @param curr 当前位置
+     */
+    private void createFenceBreachAlert(com.example.demo.model.Device device, com.example.demo.model.Patient patient,
+                                         GeoFence fence, DeviceLocation curr) {
+        // 保存 SimpleFenceAlert（旧表兼容）
+        var alert = new com.example.demo.model.SimpleFenceAlert();
+        alert.setDevice(device);
+        alert.setPatient(patient);
+        alert.setFence(fence);
+        alert.setImei(curr.getImei());
+        alert.setAlertType("fence_breach");
+        alert.setLatitude(curr.getLatitude().doubleValue());
+        alert.setLongitude(curr.getLongitude().doubleValue());
+        simpleAlertRepo.save(alert);
+
+        // 使用 AlarmService.createAlarm 统一处理 Alarm + Alert 双写（包含事务和 WebSocket 推送）
+        var alarm = new com.example.demo.model.Alarm();
+        alarm.setDevice(device);
+        alarm.setPatient(patient);
+        alarm.setAlarmType("fence_breach");
+        alarm.setAlarmLevel("warning");
+        alarm.setLatitude(curr.getLatitude().doubleValue());
+        alarm.setLongitude(curr.getLongitude().doubleValue());
+        alarmService.createAlarm(alarm);
+
+        log.info("Fence breach alert: device={}, patient={}, fence={}", device.getId(), patient.getId(), fence.getId());
+    }
+
+    /**
+     * 检查同一病人同一类型的报警间隔
+     * @param patientId 病人ID
+     * @param alarmType 报警类型
+     * @return 是否可以创建新报警
+     */
+    private boolean shouldCreateAlarm(Long patientId, String alarmType) {
+        long alarmIntervalMillis = 5 * 60 * 1000;
+        Optional<com.example.demo.model.Alarm> lastAlarmOpt =
+                alarmRepo.findTopByPatientIdAndAlarmTypeOrderByTriggeredTimeDesc(patientId, alarmType);
+        if (lastAlarmOpt.isEmpty()) return true;
+        long timeDiff = new Date().getTime() - lastAlarmOpt.get().getTriggeredTime().getTime();
+        return timeDiff > alarmIntervalMillis;
     }
 
     /**
@@ -187,12 +213,7 @@ public class FenceService {
      * @return 围栏列表
      */
     private List<GeoFence> getPatientFences(Long patientId) {
-        // 4.1 先获取旧格式的围栏（通过patient_id字段关联的围栏）
         List<GeoFence> patientFences = fenceRepo.listByPatient(patientId);
-        log.info("Found {} old-format fences for patient: {}", patientFences.size(), patientId);
-        
-        // 4.2 再获取通过fence_patients表关联的围栏
-        // 这里使用JdbcTemplate直接查询，因为FencePatientRepository没有提供相应的方法
         List<GeoFence> fencePatientsFences = jdbc.query(
             "SELECT gf.* FROM geo_fences gf INNER JOIN fence_patients fp ON gf.id = fp.fence_id WHERE fp.patient_id = ? AND gf.status = 'active' ORDER BY gf.id DESC",
             (rs, n) -> {
@@ -208,103 +229,93 @@ public class FenceService {
                 f.setDescription(rs.getString("description"));
                 f.setCreatedBy(rs.getObject("created_by", Long.class));
                 f.setPatientId(rs.getObject("patient_id", Long.class));
+                f.setIsMultiPatient(rs.getObject("is_multi_patient", Boolean.class));
                 f.setCreatedAt(rs.getTimestamp("created_at") != null ? new Date(rs.getTimestamp("created_at").getTime()) : null);
                 f.setUpdatedAt(rs.getTimestamp("updated_at") != null ? new Date(rs.getTimestamp("updated_at").getTime()) : null);
                 return f;
             },
             patientId
         );
-        log.info("Found {} new-format fences for patient: {}", fencePatientsFences.size(), patientId);
-        
-        // 4.3 合并围栏列表，避免重复
+
+        Set<Long> seen = new HashSet<>();
         List<GeoFence> uniqueFences = new ArrayList<>();
         for (GeoFence fence : patientFences) {
-            if (!uniqueFences.contains(fence)) {
-                uniqueFences.add(fence);
-            }
+            if (seen.add(fence.getId())) uniqueFences.add(fence);
         }
         for (GeoFence fence : fencePatientsFences) {
-            if (!uniqueFences.contains(fence)) {
-                uniqueFences.add(fence);
-            }
+            if (seen.add(fence.getId())) uniqueFences.add(fence);
         }
         return uniqueFences;
     }
 
     /**
-     * 检查位置是否在围栏内
-     * @param lat 纬度
-     * @param lng 经度
-     * @param f 围栏
-     * @return 是否在围栏内
+     * 将请求DTO映射为GeoFence实体
      */
-    public boolean inside(java.math.BigDecimal lat, java.math.BigDecimal lng, GeoFence f) {
-        if (lat == null || lng == null || f.getCenterLat() == null || f.getCenterLng() == null || f.getRadius() == null) return false;
-        double d = distanceMeters(lat.doubleValue(), lng.doubleValue(), f.getCenterLat(), f.getCenterLng());
-        return d <= f.getRadius();
+    private GeoFence mapRequestToFence(FenceCreateRequest request) {
+        GeoFence f = new GeoFence();
+        f.setName(request.getName());
+        f.setType(request.getType() != null ? request.getType() : "circle");
+        f.setRadius(request.getRadius());
+        f.setCoordinates(request.getCoordinates());
+        f.setStatus(request.getStatus() != null ? request.getStatus() : "active");
+        f.setDescription(request.getDescription());
+        f.setCreatedBy(request.getCreatedBy());
+        f.setPatientId(request.getPatientId());
+        // 如果未指定 isMultiPatient，根据 patientIds 列表自动判断
+        f.setIsMultiPatient(request.getIsMultiPatient() != null
+                ? request.getIsMultiPatient()
+                : (request.getPatientIds() != null && request.getPatientIds().size() > 1));
+        f.setCenterLat(request.getCenterLat());
+        f.setCenterLng(request.getCenterLng());
+        return f;
     }
 
     /**
-     * 检查位置是否在围栏内
-     * @param lat 纬度
-     * @param lng 经度
-     * @param f 围栏
-     * @return 是否在围栏内
+     * 将更新请求DTO映射为GeoFence实体
      */
-    public boolean inside(Double lat, Double lng, GeoFence f) {
-        if (lat == null || lng == null || f.getCenterLat() == null || f.getCenterLng() == null || f.getRadius() == null) return false;
-        double d = distanceMeters(lat, lng, f.getCenterLat(), f.getCenterLng());
-        return d <= f.getRadius();
+    private GeoFence mapRequestToFence(FenceUpdateRequest request) {
+        GeoFence f = new GeoFence();
+        f.setName(request.getName());
+        f.setType(request.getType() != null ? request.getType() : "circle");
+        f.setRadius(request.getRadius());
+        f.setCoordinates(request.getCoordinates());
+        f.setStatus(request.getStatus() != null ? request.getStatus() : "active");
+        f.setDescription(request.getDescription());
+        f.setCreatedBy(request.getCreatedBy());
+        f.setPatientId(request.getPatientId());
+        f.setIsMultiPatient(request.getIsMultiPatient() != null
+                ? request.getIsMultiPatient()
+                : (request.getPatientIds() != null && request.getPatientIds().size() > 1));
+        f.setCenterLat(request.getCenterLat());
+        f.setCenterLng(request.getCenterLng());
+        return f;
     }
 
     /**
-     * 检查同一病人同一类型的报警间隔
-     * @param patientId 病人ID
-     * @param alarmType 报警类型
-     * @return 是否可以创建新报警
+     * 绑定病人到围栏
      */
-    private boolean checkAlarmInterval(Long patientId, String alarmType) {
-        // 默认报警间隔：5分钟
-        long alarmIntervalMinutes = 5;
-        long alarmIntervalMillis = alarmIntervalMinutes * 60 * 1000;
-        
-        // 获取最近的一条同一病人同一类型的报警
-        Optional<com.example.demo.model.Alarm> lastAlarmOpt = alarmRepo.findTopByPatientIdAndAlarmTypeOrderByTriggeredTimeDesc(patientId, alarmType);
-        
-        if (lastAlarmOpt.isPresent()) {
-            com.example.demo.model.Alarm lastAlarm = lastAlarmOpt.get();
-            Date lastTriggeredTime = lastAlarm.getTriggeredTime();
-            Date now = new Date();
-            
-            // 计算时间差
-            long timeDiff = now.getTime() - lastTriggeredTime.getTime();
-            log.info("Last alarm time: {}, now: {}, diff: {}ms, interval: {}ms", 
-                    lastTriggeredTime, now, timeDiff, alarmIntervalMillis);
-            
-            // 如果时间差大于间隔，允许创建新报警
-            return timeDiff > alarmIntervalMillis;
-        } else {
-            // 没有最近报警，允许创建新报警
-            return true;
+    private void bindPatients(long fenceId, List<Long> patientIds) {
+        if (patientIds != null && !patientIds.isEmpty()) {
+            fencePatientRepo.bindPatientsToFence(fenceId, patientIds);
         }
     }
-    
+
     /**
-     * 计算两点之间的距离（米）
-     * @param lat1 第一个点的纬度
-     * @param lon1 第一个点的经度
-     * @param lat2 第二个点的纬度
-     * @param lon2 第二个点的经度
-     * @return 距离（米）
+     * 构建围栏DTO（含关联病人ID）
      */
-    public static double distanceMeters(double lat1, double lon1, double lat2, double lon2) {
-        double R = 6371000.0; // Earth radius meters
-        double dLat = Math.toRadians(lat2 - lat1);
-        double dLon = Math.toRadians(lon2 - lon1);
-        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
-                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
-                * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
+    private FenceDto buildFenceDto(GeoFence fence) {
+        FenceDto dto = FenceDto.fromFence(fence);
+        List<Long> patientIds = new ArrayList<>();
+        if (fence.getPatientId() != null) {
+            patientIds.add(fence.getPatientId());
+        }
+        List<com.example.demo.model.FencePatient> fencePatients = fencePatientRepo.findByFenceId(fence.getId());
+        for (com.example.demo.model.FencePatient fp : fencePatients) {
+            if (fp.getPatient() != null && fp.getPatient().getId() != null && !patientIds.contains(fp.getPatient().getId())) {
+                patientIds.add(fp.getPatient().getId());
+            }
+        }
+        dto.setPatientIds(patientIds);
+        return dto;
     }
 }

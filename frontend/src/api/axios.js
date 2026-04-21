@@ -4,7 +4,8 @@ import { ElMessage } from 'element-plus'
 // 创建axios实例
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || '/api',
-  timeout: 10000
+  timeout: 10000,
+  withCredentials: true
 })
 
 // 请求拦截器

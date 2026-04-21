@@ -80,4 +80,27 @@ public class DeviceLocationRepository {
         return jdbc.query("SELECT * FROM location_records WHERE device_id=? AND recv_time BETWEEN ? AND ? ORDER BY recv_time DESC LIMIT ? OFFSET ?",
                 MAPPER, deviceId, Timestamp.valueOf(start), Timestamp.valueOf(end), limit, offset);
     }
+
+    /**
+     * 统计指定设备的位置记录总数
+     * @param deviceId 设备ID
+     * @return 记录总数
+     */
+    public long countByDeviceId(long deviceId) {
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM location_records WHERE device_id=?", Long.class, deviceId);
+        return count != null ? count : 0;
+    }
+
+    /**
+     * 统计指定设备在时间范围内的位置记录总数
+     * @param deviceId 设备ID
+     * @param start 开始时间
+     * @param end 结束时间
+     * @return 记录总数
+     */
+    public long countByDeviceIdAndRange(long deviceId, LocalDateTime start, LocalDateTime end) {
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM location_records WHERE device_id=? AND recv_time BETWEEN ? AND ?",
+                Long.class, deviceId, Timestamp.valueOf(start), Timestamp.valueOf(end));
+        return count != null ? count : 0;
+    }
 }

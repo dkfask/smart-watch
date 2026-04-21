@@ -116,4 +116,7 @@ public interface AlarmRepository extends JpaRepository<Alarm, Long> {
     
     // 根据病人ID和报警类型获取最近的一条报警记录
     Optional<Alarm> findTopByPatientIdAndAlarmTypeOrderByTriggeredTimeDesc(Long patientId, String alarmType);
+
+    // 按状态统计报警数量
+    long countByStatus(String status);
 }

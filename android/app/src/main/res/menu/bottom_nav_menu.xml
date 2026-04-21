@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/dashboardFragment"
+        android:icon="@drawable/ic_nav_dashboard"
+        android:title="@string/nav_dashboard" />
+    <item
+        android:id="@+id/patientListFragment"
+        android:icon="@drawable/ic_nav_patient"
+        android:title="@string/nav_patients" />
+    <item
+        android:id="@+id/deviceListFragment"
+        android:icon="@drawable/ic_nav_device"
+        android:title="@string/nav_devices" />
+    <item
+        android:id="@+id/fenceFragment"
+        android:icon="@drawable/ic_nav_fence"
+        android:title="@string/nav_fences" />
+    <item
+        android:id="@+id/alarmListFragment"
+        android:icon="@drawable/ic_nav_alarm"
+        android:title="@string/nav_alarms" />
+</menu>

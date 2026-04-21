@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="4dp"
+    app:cardCornerRadius="10dp"
+    app:cardElevation="1dp"
+    app:cardForegroundColor="?attr/selectableItemBackground">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="12dp">
+
+        <!-- 在线状态圆点 -->
+        <View
+            android:id="@+id/view_status_dot"
+            android:layout_width="@dimen/status_dot_size"
+            android:layout_height="@dimen/status_dot_size"
+            android:background="@drawable/bg_status_dot"
+            app:layout_constraintTop_toTopOf="@id/tv_device_imei"
+            app:layout_constraintBottom_toBottomOf="@id/tv_device_imei"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <!-- IMEI号 -->
+        <TextView
+            android:id="@+id/tv_device_imei"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary"
+            android:layout_marginStart="10dp"
+            android:layout_marginEnd="8dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toEndOf="@id/view_status_dot"
+            app:layout_constraintEnd_toStartOf="@id/tv_device_status" />
+
+        <!-- 状态标签 -->
+        <TextView
+            android:id="@+id/tv_device_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- 设备型号 -->
+        <TextView
+            android:id="@+id/tv_device_model"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textColor="@color/text_secondary"
+            android:layout_marginTop="4dp"
+            android:layout_marginStart="22dp"
+            app:layout_constraintTop_toBottomOf="@id/tv_device_imei"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <!-- 绑定病人 -->
+        <TextView
+            android:id="@+id/tv_device_patient"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="13sp"
+            android:textColor="@color/text_secondary"
+            android:layout_marginStart="16dp"
+            app:layout_constraintTop_toTopOf="@id/tv_device_model"
+            app:layout_constraintStart_toEndOf="@id/tv_device_model" />
+
+        <!-- 电量指示 -->
+        <com.smartwatch.monitor.ui.widget.BatteryIndicatorView
+            android:id="@+id/battery_indicator"
+            android:layout_width="24dp"
+            android:layout_height="12dp"
+            android:layout_marginTop="4dp"
+            app:layout_constraintTop_toBottomOf="@id/tv_device_imei"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- 电量文字 -->
+        <TextView
+            android:id="@+id/tv_device_battery"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/text_hint"
+            android:layout_marginEnd="4dp"
+            app:layout_constraintTop_toTopOf="@id/battery_indicator"
+            app:layout_constraintBottom_toBottomOf="@id/battery_indicator"
+            app:layout_constraintEnd_toStartOf="@id/battery_indicator" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</com.google.android.material.card.MaterialCardView>

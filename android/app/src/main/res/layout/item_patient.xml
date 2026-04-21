@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_margin="4dp"
+    app:cardCornerRadius="10dp"
+    app:cardElevation="1dp"
+    app:cardForegroundColor="?attr/selectableItemBackground">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <!-- 左侧色条 -->
+        <View
+            android:id="@+id/view_status_stripe"
+            android:layout_width="4dp"
+            android:layout_height="match_parent"
+            android:background="@color/primary_blue" />
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="12dp">
+
+            <!-- 头像 -->
+            <ImageView
+                android:id="@+id/iv_patient_avatar"
+                android:layout_width="@dimen/avatar_size_medium"
+                android:layout_height="@dimen/avatar_size_medium"
+                android:src="@drawable/ic_person_avatar"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent" />
+
+            <!-- 病人姓名 -->
+            <TextView
+                android:id="@+id/tv_patient_name"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="8dp"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintStart_toEndOf="@id/iv_patient_avatar"
+                app:layout_constraintEnd_toStartOf="@id/tv_patient_status" />
+
+            <!-- 病房-床位 -->
+            <TextView
+                android:id="@+id/tv_patient_ward"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:textColor="@color/text_secondary"
+                android:layout_marginTop="2dp"
+                android:layout_marginStart="12dp"
+                app:layout_constraintTop_toBottomOf="@id/tv_patient_name"
+                app:layout_constraintStart_toEndOf="@id/iv_patient_avatar"
+                app:layout_constraintEnd_toStartOf="@id/tv_patient_status" />
+
+            <!-- 诊断简述 -->
+            <TextView
+                android:id="@+id/tv_patient_diagnosis"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="@color/text_hint"
+                android:layout_marginTop="2dp"
+                android:layout_marginStart="12dp"
+                android:maxLines="1"
+                android:ellipsize="end"
+                app:layout_constraintTop_toBottomOf="@id/tv_patient_ward"
+                app:layout_constraintStart_toEndOf="@id/iv_patient_avatar"
+                app:layout_constraintEnd_toStartOf="@id/tv_patient_status" />
+
+            <!-- 状态标签 -->
+            <TextView
+                android:id="@+id/tv_patient_status"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:background="@drawable/bg_status_chip"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="2dp"
+                android:paddingBottom="2dp"
+                android:textColor="@color/white"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintEnd_toEndOf="parent" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

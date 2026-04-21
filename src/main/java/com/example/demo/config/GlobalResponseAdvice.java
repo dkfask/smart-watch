@@ -32,7 +32,7 @@ public class GlobalResponseAdvice implements ResponseBodyAdvice<Object> {
         }
         
         // 如果是分页响应类型，直接返回（PatientController中的PageResponse）
-        if (body != null && body.getClass().getSimpleName().equals("PageResponse")) {
+        if (body instanceof com.example.demo.model.dto.PageResponse) {
             return ApiResponse.success(body);
         }
         

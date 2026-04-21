@@ -158,8 +158,6 @@ onMounted(() => {
    ============================================ */
 #app {
   min-height: 100vh;
-  display: flex;
-  flex-direction: row;
   background: var(--color-bg);
 }
 
@@ -323,7 +321,6 @@ onMounted(() => {
 
 /* Main content */
 .main-wrapper {
-  flex: 1;
   margin-left: 240px;
   display: flex;
   flex-direction: column;
@@ -402,9 +399,6 @@ onMounted(() => {
 .main-content {
   flex: 1;
   padding: var(--space-6);
-  max-width: 1440px;
-  width: 100%;
-  margin: 0 auto;
 }
 
 /* ============================================

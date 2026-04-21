@@ -1,6 +1,7 @@
 package com.example.demo.service;
 
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 public interface CacheService {
 
@@ -61,4 +62,25 @@ public interface CacheService {
      * 清除所有缓存
      */
     void clear();
+
+    /**
+     * 缓存穿透模式：先查缓存，未命中则通过loader加载并写入缓存
+     * @param key 缓存键
+     * @param clazz 缓存值类型
+     * @param loader 数据加载器（缓存未命中时调用）
+     * @param timeout 过期时间
+     * @param unit 时间单位
+     * @return 缓存或加载的数据
+     */
+    default <T> T getOrSet(String key, Class<T> clazz, Supplier<T> loader, long timeout, TimeUnit unit) {
+        T cached = get(key, clazz);
+        if (cached != null) {
+            return cached;
+        }
+        T value = loader.get();
+        if (value != null) {
+            set(key, value, timeout, unit);
+        }
+        return value;
+    }
 }

@@ -1,8 +1,9 @@
 package com.example.demo.controller.api;
 
-import com.example.demo.model.ApiResponse;
 import com.example.demo.model.DeviceLocation;
+import com.example.demo.model.dto.PageResponse;
 import com.example.demo.repository.DeviceLocationRepository;
+import com.example.demo.service.AmapLocationService;
 import com.example.demo.service.TrackingService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
@@ -11,11 +12,8 @@ import org.springframework.web.bind.annotation.*;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import com.example.demo.service.AmapLocationService;
 
 @RestController
 @RequestMapping("/api/locations")
@@ -32,17 +30,19 @@ public class LocationController {
 
     public static class ReportReq {
         public Long deviceId;
-        public LocalDateTime time; // 可选，默认当前时间
+        public LocalDateTime time;
         public BigDecimal latitude;
         public BigDecimal longitude;
         public Integer accuracy;
         public BigDecimal altitude;
         public Integer batteryLevel;
-        public String source; // gps/wifi/cell/bluetooth
-        // 新增：imei 字段，客户端或设备连接时应传入设备 IMEI
+        public String source;
         public String imei;
     }
 
+    /**
+     * 上报设备位置
+     */
     @PostMapping("/report")
     public ResponseEntity<?> report(@RequestBody ReportReq req) {
         DeviceLocation dl = new DeviceLocation();
@@ -54,46 +54,40 @@ public class LocationController {
         dl.setAltitude(req.altitude);
         dl.setBatteryLevel(req.batteryLevel);
         dl.setSource(req.source);
-        // 将 imei 一并保存到定位记录，便于按 imei 或 device_id 查询
         dl.setImei(req.imei);
         long id = trackingService.reportLocation(dl);
         return ResponseEntity.created(URI.create("/api/locations/" + id)).body(id);
     }
 
+    /**
+     * 获取设备最近位置记录（分页）
+     */
     @GetMapping("/device/{deviceId}")
-    public Map<String, Object> recent(@PathVariable long deviceId,
-                                       @RequestParam(defaultValue = "50") int limit,
-                                       @RequestParam(defaultValue = "0") int offset) {
+    public PageResponse<DeviceLocation> recent(@PathVariable long deviceId,
+                                                @RequestParam(defaultValue = "50") int limit,
+                                                @RequestParam(defaultValue = "0") int offset) {
         List<DeviceLocation> locations = locationRepo.listRecent(deviceId, limit, offset);
-        
-        // 封装分页响应
-        Map<String, Object> result = new HashMap<>();
-        result.put("list", locations);
-        result.put("total", locations.size());
-        result.put("page", offset / limit);
-        result.put("size", limit);
-        
-        return result;
+        long total = locationRepo.countByDeviceId(deviceId);
+        return new PageResponse<>(locations, total, offset / Math.max(limit, 1), limit);
     }
 
+    /**
+     * 获取设备历史位置记录（分页）
+     */
     @GetMapping("/device/{deviceId}/history")
-    public Map<String, Object> history(@PathVariable long deviceId,
-                                      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-                                      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
-                                      @RequestParam(defaultValue = "50") int limit,
-                                      @RequestParam(defaultValue = "0") int offset) {
+    public PageResponse<DeviceLocation> history(@PathVariable long deviceId,
+                                                 @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+                                                 @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+                                                 @RequestParam(defaultValue = "50") int limit,
+                                                 @RequestParam(defaultValue = "0") int offset) {
         List<DeviceLocation> locations = locationRepo.listByRange(deviceId, start, end, limit, offset);
-        
-        // 封装分页响应
-        Map<String, Object> result = new HashMap<>();
-        result.put("list", locations);
-        result.put("total", locations.size());
-        result.put("page", offset / limit);
-        result.put("size", limit);
-        
-        return result;
+        long total = locationRepo.countByDeviceIdAndRange(deviceId, start, end);
+        return new PageResponse<>(locations, total, offset / Math.max(limit, 1), limit);
     }
 
+    /**
+     * 获取设备最新位置
+     */
     @GetMapping("/device/{deviceId}/latest")
     public ResponseEntity<?> getLatestLocation(@PathVariable long deviceId) {
         List<DeviceLocation> list = locationRepo.listRecent(deviceId, 1, 0);
@@ -103,6 +97,9 @@ public class LocationController {
         return ResponseEntity.ok(list.get(0));
     }
 
+    /**
+     * 获取设备最新位置（含地址）
+     */
     @GetMapping("/device/{deviceId}/latest-with-address")
     public ResponseEntity<DeviceLocationDto> getLatestLocationWithAddress(@PathVariable long deviceId) {
         List<DeviceLocation> list = locationRepo.listRecent(deviceId, 1, 0);
@@ -131,7 +128,9 @@ public class LocationController {
         return ResponseEntity.ok(dto);
     }
 
-    // 保留原有range接口，确保向后兼容
+    /**
+     * 获取设备位置范围（兼容旧接口）
+     */
     @GetMapping("/device/{deviceId}/range")
     public List<DeviceLocation> range(@PathVariable long deviceId,
                                       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
@@ -141,37 +140,30 @@ public class LocationController {
         return locationRepo.listByRange(deviceId, start, end, limit, offset);
     }
 
-    // 保留原有latest-with-amap接口，确保向后兼容
+    /**
+     * 获取设备最新位置含高德地址（兼容旧接口）
+     */
     @GetMapping("/device/{deviceId}/latest-with-amap")
     public ResponseEntity<DeviceLocationDto> latestWithAmap(@PathVariable long deviceId) {
         return getLatestLocationWithAddress(deviceId);
     }
-    
+
     /**
      * 根据地址搜索位置（地理编码）
-     * @param address 地址字符串
-     * @return 包含经纬度的位置信息
      */
     @GetMapping("/search")
     public ResponseEntity<?> searchLocation(@RequestParam String address) {
         Map<String, Double> location = amapLocationService.addressToLocation(address);
         if (location != null) {
-            Map<String, Object> result = new HashMap<>();
-            result.put("address", address);
-            result.put("location", location);
+            Map<String, Object> result = Map.of("address", address, "location", location);
             return ResponseEntity.ok(result);
         } else {
             return ResponseEntity.notFound().build();
         }
     }
-    
+
     /**
-     * 根据关键词搜索POI（兴趣点）
-     * @param keyword 搜索关键词
-     * @param city 城市，可选
-     * @param pageSize 每页结果数，默认20
-     * @param page 当前页码，默认1
-     * @return POI搜索结果列表
+     * 根据关键词搜索POI
      */
     @GetMapping("/search/poi")
     public ResponseEntity<?> searchPoi(@RequestParam String keyword,

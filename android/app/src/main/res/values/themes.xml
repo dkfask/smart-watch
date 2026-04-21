@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.SmartWatchMonitor" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primary_blue</item>
+        <item name="colorPrimaryDark">@color/primary_blue_dark</item>
+        <item name="colorAccent">@color/primary_blue_light</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSurface">@color/surface_color</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <item name="colorSecondary">@color/medical_teal</item>
+        <item name="colorOnSecondary">@color/white</item>
+        <item name="android:statusBarColor">@color/gradient_start</item>
+        <item name="android:windowBackground">@color/background_light</item>
+    </style>
+
+    <!-- 渐变头部样式 -->
+    <style name="Widget.SmartWatchMonitor.GradientToolbar" parent="Widget.Material3.Toolbar">
+        <item name="android:background">@drawable/bg_gradient_header</item>
+        <item name="titleTextColor">@color/white</item>
+        <item name="subtitleTextColor">@color/white</item>
+    </style>
+
+    <!-- 搜索栏样式 -->
+    <style name="Widget.SmartWatchMonitor.SearchBar" parent="Widget.Material3.TextInputLayout.OutlinedBox">
+        <item name="boxCornerRadiusTopStart">28dp</item>
+        <item name="boxCornerRadiusTopEnd">28dp</item>
+        <item name="boxCornerRadiusBottomStart">28dp</item>
+        <item name="boxCornerRadiusBottomEnd">28dp</item>
+        <item name="boxBackgroundColor">@color/surface_variant</item>
+        <item name="boxStrokeWidth">0dp</item>
+        <item name="boxStrokeWidthFocused">0dp</item>
+    </style>
+
+    <!-- 统计卡片文字样式 -->
+    <style name="TextAppearance.SmartWatchMonitor.StatValue" parent="TextAppearance.Material3.HeadlineMedium">
+        <item name="android:textSize">28sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/white</item>
+    </style>
+
+    <style name="TextAppearance.SmartWatchMonitor.StatLabel" parent="TextAppearance.Material3.BodySmall">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/white</item>
+        <item name="android:alpha">0.85</item>
+    </style>
+
+    <!-- 筛选Chip样式 -->
+    <style name="Widget.SmartWatchMonitor.FilterChip" parent="Widget.Material3.Chip.Filter">
+        <item name="chipBackgroundColor">@color/surface_variant</item>
+        <item name="android:textColor">@color/text_secondary</item>
+    </style>
+</resources>

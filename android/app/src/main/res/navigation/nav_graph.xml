@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/dashboardFragment">
+
+    <fragment
+        android:id="@+id/dashboardFragment"
+        android:name="com.smartwatch.monitor.ui.dashboard.DashboardFragment"
+        android:label="概览" />
+
+    <fragment
+        android:id="@+id/patientListFragment"
+        android:name="com.smartwatch.monitor.ui.patient.PatientListFragment"
+        android:label="病人列表">
+        <action
+            android:id="@+id/action_patientList_to_patientDetail"
+            app:destination="@id/patientDetailFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/patientDetailFragment"
+        android:name="com.smartwatch.monitor.ui.patient.PatientDetailFragment"
+        android:label="病人详情">
+        <argument
+            android:name="patientId"
+            app:argType="long" />
+        <action
+            android:id="@+id/action_patientDetail_to_healthData"
+            app:destination="@id/healthDataFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/healthDataFragment"
+        android:name="com.smartwatch.monitor.ui.patient.HealthDataFragment"
+        android:label="健康数据">
+        <argument
+            android:name="patientId"
+            app:argType="long" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/deviceListFragment"
+        android:name="com.smartwatch.monitor.ui.device.DeviceListFragment"
+        android:label="设备列表">
+        <action
+            android:id="@+id/action_deviceList_to_deviceDetail"
+            app:destination="@id/deviceDetailFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/deviceDetailFragment"
+        android:name="com.smartwatch.monitor.ui.device.DeviceDetailFragment"
+        android:label="设备详情">
+        <argument
+            android:name="deviceId"
+            app:argType="long" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/fenceFragment"
+        android:name="com.smartwatch.monitor.ui.fence.FenceFragment"
+        android:label="电子围栏" />
+
+    <fragment
+        android:id="@+id/alarmListFragment"
+        android:name="com.smartwatch.monitor.ui.alarm.AlarmListFragment"
+        android:label="报警列表">
+        <action
+            android:id="@+id/action_alarmList_to_alarmDetail"
+            app:destination="@id/alarmDetailFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/alarmDetailFragment"
+        android:name="com.smartwatch.monitor.ui.alarm.AlarmDetailFragment"
+        android:label="报警详情">
+        <argument
+            android:name="alarmId"
+            app:argType="long" />
+    </fragment>
+
+</navigation>

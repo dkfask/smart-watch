@@ -25,6 +25,13 @@ target/
 # Gradle
 .gradle/
 gradle.properties
+**/build/
+
+# Android
+android/local.properties
+android/.cxx/
+*.keystore
+*.jks
 
 # Maven
 pom.xml.tag
@@ -87,3 +94,9 @@ ehthumbs.db
 *.swo
 *~
 .cache/
+.claude/
+.env
+CODE_REVIEW_REPORT.md
+FEATURE_REVIEW_REPORT.md
+TEST-PLAN.md
+docs/HOOKS.md
