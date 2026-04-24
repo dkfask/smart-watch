@@ -69,12 +69,21 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
+let isAuthChecked = false
+
+router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
   const requiresAuth = to.meta.requiresAuth
   
-  // 每次路由跳转前重新从localStorage加载并验证用户数据
-  authStore.loadUserFromStorage()
+  // 首次访问时验证后端会话
+  if (!isAuthChecked) {
+    isAuthChecked = true
+    const isValid = await authStore.checkAuth()
+    if (!isValid && requiresAuth) {
+      next('/login')
+      return
+    }
+  }
   
   const isAuthenticated = authStore.isAuthenticated
 
