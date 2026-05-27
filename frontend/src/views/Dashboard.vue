@@ -433,7 +433,7 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
+<style>
 /* ==========================================
    Dashboard — Light Professional Theme
    Aligned with DESIGN.md design system
@@ -468,14 +468,12 @@ onUnmounted(() => {
 }
 
 .dashboard-container {
-  width: 100%;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 24px;
-  background-color: var(--color-bg);
+  width: 100% !important;
+  padding: var(--space-6);
   font-family: var(--font-sans);
   font-size: 14px;
   color: var(--color-text-primary);
+  /* 背景色由 App.vue 的 #app 容器统一设置，避免双层背景 */
 }
 
 /* ============================
@@ -665,7 +663,7 @@ onUnmounted(() => {
    ============================ */
 .content-section {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(480px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 20px;
 }
 
@@ -675,6 +673,7 @@ onUnmounted(() => {
   border-radius: 16px;
   padding: 24px;
   box-shadow: var(--elevation-1);
+  min-height: 400px;
   transition: box-shadow 0.2s ease;
 }
 
@@ -988,7 +987,7 @@ onUnmounted(() => {
 /* ============================
    Responsive
    ============================ */
-@media (max-width: 1200px) {
+@media (max-width: 1024px) {
   .content-section { grid-template-columns: 1fr; }
 }
 
@@ -1001,5 +1000,12 @@ onUnmounted(() => {
   .content-card { padding: 20px; }
   .map-container { height: 300px; }
   .content-section { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .stats-values { flex-direction: column; gap: 16px; }
+  .stats-number { font-size: 24px; }
+  .welcome-title { font-size: 18px; }
+  .map-container { height: 250px; }
 }
 </style>

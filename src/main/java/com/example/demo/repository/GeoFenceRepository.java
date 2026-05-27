@@ -25,18 +25,15 @@ public class GeoFenceRepository {
         f.setId(rs.getLong("id"));
         f.setName(rs.getString("name"));
         f.setType(rs.getString("type"));
-        // 使用getObject处理可能为null的double值
         f.setCenterLat(rs.getObject("center_lat", Double.class));
         f.setCenterLng(rs.getObject("center_lng", Double.class));
-        // 使用getObject处理可能为null的int值
         f.setRadius(rs.getObject("radius", Integer.class));
         f.setCoordinates(rs.getString("coordinates"));
         f.setStatus(rs.getString("status"));
         f.setDescription(rs.getString("description"));
-        // 使用getObject处理可能为null的Long值
         f.setCreatedBy(rs.getObject("created_by", Long.class));
-        // 设置patientId字段
         f.setPatientId(rs.getObject("patient_id", Long.class));
+        f.setIsMultiPatient(rs.getObject("is_multi_patient", Boolean.class));
         Timestamp c = rs.getTimestamp("created_at");
         f.setCreatedAt(c != null ? new Date(c.getTime()) : null);
         Timestamp u = rs.getTimestamp("updated_at");
@@ -45,7 +42,7 @@ public class GeoFenceRepository {
     };
 
     public long create(GeoFence f) {
-        String sql = "INSERT INTO geo_fences(name, type, center_lat, center_lng, radius, coordinates, status, description, created_by, patient_id) VALUES(?,?,?,?,?,?,?,?,?,?)";
+        String sql = "INSERT INTO geo_fences(name, type, center_lat, center_lng, radius, coordinates, status, description, created_by, patient_id, is_multi_patient) VALUES(?,?,?,?,?,?,?,?,?,?,?)";
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
@@ -59,14 +56,15 @@ public class GeoFenceRepository {
             ps.setString(8, f.getDescription());
             ps.setObject(9, f.getCreatedBy());
             ps.setObject(10, f.getPatientId());
+            ps.setObject(11, f.getIsMultiPatient());
             return ps;
         }, kh);
         return kh.getKey() == null ? 0L : kh.getKey().longValue();
     }
 
     public int update(GeoFence f) {
-        return jdbc.update("UPDATE geo_fences SET name=?, type=?, center_lat=?, center_lng=?, radius=?, coordinates=?, status=?, description=?, created_by=?, patient_id=? WHERE id=?",
-                f.getName(), f.getType(), f.getCenterLat(), f.getCenterLng(), f.getRadius(), f.getCoordinates(), f.getStatus(), f.getDescription(), f.getCreatedBy(), f.getPatientId(), f.getId());
+        return jdbc.update("UPDATE geo_fences SET name=?, type=?, center_lat=?, center_lng=?, radius=?, coordinates=?, status=?, description=?, created_by=?, patient_id=?, is_multi_patient=? WHERE id=?",
+                f.getName(), f.getType(), f.getCenterLat(), f.getCenterLng(), f.getRadius(), f.getCoordinates(), f.getStatus(), f.getDescription(), f.getCreatedBy(), f.getPatientId(), f.getIsMultiPatient(), f.getId());
     }
 
     public Optional<GeoFence> findById(long id) {

@@ -1,5 +1,7 @@
 package com.example.demo.controller;
 
+import com.example.demo.model.User;
+import com.example.demo.repository.UserRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
@@ -33,9 +35,16 @@ import java.util.Map;
 public class AuthApiController {
 
     private final AuthenticationManager authenticationManager;
+    private final UserRepository userRepository;
 
-    public AuthApiController(AuthenticationManager authenticationManager) {
+    /**
+     * 构造器注入依赖
+     * @param authenticationManager 认证管理器
+     * @param userRepository 用户仓库，用于查询mustChangePassword字段
+     */
+    public AuthApiController(AuthenticationManager authenticationManager, UserRepository userRepository) {
         this.authenticationManager = authenticationManager;
+        this.userRepository = userRepository;
     }
 
     // DTO 简单内部类：接收前端发送的登录 JSON
@@ -71,6 +80,12 @@ public class AuthApiController {
 
             Map<String, Object> resp = new HashMap<>();
             resp.put("username", auth.getName());
+
+            userRepository.findByUsername(auth.getName()).ifPresent(user -> {
+                resp.put("mustChangePassword", Boolean.TRUE.equals(user.getMustChangePassword()));
+                resp.put("role", user.getRole());
+            });
+
             return ResponseEntity.ok(resp);
         } catch (Exception ex) {
             Map<String, Object> err = new HashMap<>();

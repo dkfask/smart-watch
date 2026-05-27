@@ -1,5 +1,6 @@
 package com.example.demo.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.util.Date;
 
@@ -10,6 +11,7 @@ public class PatientDevice {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "patient_id", nullable = false, insertable = false, updatable = false)
     private Patient patient;
@@ -17,6 +19,7 @@ public class PatientDevice {
     @Column(name = "patient_id", nullable = false)
     private Long patientId;
     
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "device_id", nullable = false, insertable = false, updatable = false)
     private Device device;

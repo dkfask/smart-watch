@@ -2,7 +2,6 @@ package com.example.demo.service;
 
 import com.example.demo.model.User;
 import com.example.demo.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -12,24 +11,27 @@ import java.util.Optional;
 @Service
 public class AuthService {
 
-    private UserRepository userRepository;
+    private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
 
-    // 默认构造函数，用于Spring创建实例
-    public AuthService(PasswordEncoder passwordEncoder) {
+    /**
+     * 构造函数注入，确保所有依赖在构造时可用
+     * @param userRepository 用户仓库
+     * @param passwordEncoder 密码编码器
+     */
+    public AuthService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
-    // Setter注入，允许userRepository为null
-    @Autowired(required = false)
-    public void setUserRepository(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
-
+    /**
+     * 注册新用户
+     * @param username 用户名
+     * @param rawPassword 原始密码
+     * @param email 邮箱
+     * @return 新用户ID
+     */
     public long registerNewUser(String username, String rawPassword, String email) {
-        if (userRepository == null) {
-            throw new IllegalStateException("用户仓库未初始化，无法注册新用户");
-        }
         if (!StringUtils.hasText(username) || !StringUtils.hasText(rawPassword)) {
             throw new IllegalArgumentException("用户名和密码不能为空");
         }

@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.service.MySqlService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -19,6 +20,7 @@ public class DbTestController {
     }
 
     @GetMapping("/test")
+    @PreAuthorize("hasRole('ADMIN')")
     public Map<String, Object> test() {
         Map<String, Object> result = new HashMap<>();
         try {

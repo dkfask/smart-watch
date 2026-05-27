@@ -31,6 +31,9 @@ public class User {
     @Column(nullable = false, length = 20, columnDefinition = "varchar(20) default 'active'")
     private String status;
     
+    @Column(name = "must_change_password", nullable = false, columnDefinition = "tinyint default 0")
+    private Boolean mustChangePassword;
+    
     @Temporal(TemporalType.TIMESTAMP)
     @Column(name = "created_at", nullable = false, updatable = false, columnDefinition = "datetime default current_timestamp")
     private Date createdAt;
@@ -69,6 +72,9 @@ public class User {
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+
+    public Boolean getMustChangePassword() { return mustChangePassword; }
+    public void setMustChangePassword(Boolean mustChangePassword) { this.mustChangePassword = mustChangePassword; }
 
     public Date getCreatedAt() { return createdAt; }
     public void setCreatedAt(Date createdAt) { this.createdAt = createdAt; }

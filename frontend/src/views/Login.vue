@@ -152,20 +152,20 @@ const handleLogin = async () => {
   display: grid;
   grid-template-columns: 1fr 1fr;
   min-height: 100vh;
-  background-color: #F8FAFC;
-  font-family: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  background-color: var(--color-bg);
+  font-family: var(--font-sans);
   overflow: hidden;
 }
 
 /* 左侧登录表单区域 */
 .left-section {
   position: relative;
-  background: #FFFFFF;
+  background: var(--color-surface);
   display: flex;
   justify-content: center;
   align-items: center;
   overflow: hidden;
-  border-right: 1px solid #E2E8F0;
+  border-right: 1px solid var(--color-border);
   box-shadow: 1px 0 4px rgba(0, 0, 0, 0.04);
 }
 
@@ -189,14 +189,14 @@ const handleLogin = async () => {
 .brand-name {
   font-size: 18px;
   font-weight: 600;
-  color: #2563EB;
+  color: var(--color-primary);
   letter-spacing: 0.5px;
 }
 
 .page-title {
   font-size: 32px;
   font-weight: 700;
-  color: #1E293B;
+  color: var(--color-text-primary);
   line-height: 1.2;
 }
 
@@ -205,48 +205,48 @@ const handleLogin = async () => {
   height: 48px;
   border-radius: 12px;
   font-size: 14px;
-  border: 1px solid #E2E8F0;
+  border: 1px solid var(--color-border);
   transition: all 0.2s ease;
-  background-color: #FFFFFF;
-  color: #1E293B;
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
 }
 
 .login-input:hover {
-  border-color: #CBD5E1;
+  border-color: var(--color-border-strong);
 }
 
 .login-input:focus {
-  border-color: #2563EB;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 /* Element Plus 深度选择器覆盖 */
 :deep(.el-input__wrapper) {
   border-radius: 12px;
-  border: 1px solid #E2E8F0;
-  background-color: #FFFFFF;
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface);
   box-shadow: none;
   transition: all 0.2s ease;
   padding: 4px 12px;
 }
 
 :deep(.el-input__wrapper:hover) {
-  border-color: #CBD5E1;
+  border-color: var(--color-border-strong);
   box-shadow: none;
 }
 
 :deep(.el-input__wrapper.is-focus) {
-  border-color: #2563EB;
+  border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 :deep(.el-input__inner) {
-  color: #1E293B;
-  font-family: "Inter", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
 }
 
 :deep(.el-input__inner::placeholder) {
-  color: #94A3B8;
+  color: var(--color-text-muted);
 }
 
 /* 表单操作区域 */
@@ -259,24 +259,24 @@ const handleLogin = async () => {
 
 .remember-checkbox {
   font-size: 14px;
-  color: #1E293B;
+  color: var(--color-text-primary);
   cursor: pointer;
 }
 
 :deep(.remember-checkbox .el-checkbox__label) {
-  color: #1E293B;
+  color: var(--color-text-primary);
   font-size: 14px;
 }
 
 .forgot-password {
   font-size: 14px;
-  color: #2563EB;
+  color: var(--color-primary);
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
 .forgot-password:hover {
-  color: #1D4ED8;
+  color: var(--color-primary-dark);
 }
 
 /* 登录按钮 */
@@ -285,17 +285,17 @@ const handleLogin = async () => {
   height: 48px;
   font-size: 16px;
   font-weight: 600;
-  background: #FF6B6B;
+  background: var(--color-accent);
   border: none;
   border-radius: 12px;
-  color: #FFFFFF;
+  color: var(--color-text-inverse);
   letter-spacing: 0.5px;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--elevation-1);
 }
 
 .login-btn:hover {
-  background: #E85555;
+  background: var(--color-accent-dark);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(255, 107, 107, 0.25);
 }
@@ -303,32 +303,32 @@ const handleLogin = async () => {
 .login-btn:active {
   transform: translateY(0);
   background: #D94444;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--elevation-1);
 }
 
 /* 注册引导 */
 .register-guide {
   text-align: center;
   font-size: 14px;
-  color: #64748B;
+  color: var(--color-text-secondary);
   margin-top: 8px;
 }
 
 .register-link {
-  color: #2563EB;
+  color: var(--color-primary);
   text-decoration: none;
   font-weight: 600;
   transition: color 0.2s ease;
 }
 
 .register-link:hover {
-  color: #1D4ED8;
+  color: var(--color-primary-dark);
 }
 
 /* 右侧业务配图区域 */
 .right-section {
   position: relative;
-  background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -356,7 +356,7 @@ const handleLogin = async () => {
 .illustration-title {
   font-size: 28px;
   font-weight: 700;
-  color: #FFFFFF;
+  color: var(--color-text-inverse);
   letter-spacing: 0.5px;
 }
 
@@ -399,7 +399,7 @@ const handleLogin = async () => {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  color: #FFFFFF;
+  color: var(--color-text-inverse);
 }
 
 .feature-icon {
@@ -421,7 +421,7 @@ const handleLogin = async () => {
 .custom-icon {
   width: 18px;
   height: 18px;
-  color: #94A3B8;
+  color: var(--color-text-muted);
   vertical-align: middle;
   fill: currentColor;
 }
