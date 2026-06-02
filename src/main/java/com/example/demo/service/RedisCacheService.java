@@ -2,13 +2,27 @@ package com.example.demo.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
+/**
+ * Redis 缓存实现。
+ *
+ * <p>启用条件：<code>app.cache.redis.enabled=true</code>（默认 false）。</p>
+ *
+ * <p>当前服务器未安装 Redis，默认使用 {@link DefaultCacheService}（NoOp）。
+ * 未来要启用 Redis：</p>
+ * <ol>
+ *   <li>在服务器上 <code>apt install -y redis-server</code></li>
+ *   <li>设置环境变量 <code>APP_CACHE_REDIS_ENABLED=true</code> 即可启用</li>
+ * </ol>
+ */
 @Service
+@ConditionalOnProperty(name = "app.cache.redis.enabled", havingValue = "true")
 public class RedisCacheService implements CacheService {
 
     private static final Logger log = LoggerFactory.getLogger(RedisCacheService.class);

@@ -296,4 +296,90 @@ class AlarmServiceTest {
         assertEquals(1, result.size());
         verify(deviceRepository).findById(1L);
     }
+
+    // ========================================================================
+    // Bug B 修复测试：清空 @Transient 关联字段以避免 WebSocket 序列化时
+    // 触发 HibernateProxy 懒加载（Could not initialize proxy - no session）
+    // ========================================================================
+
+    @Test
+    void clearTransientAssociations_nullifiesPatientAndDevice_keepsIds() {
+        // Arrange - 模拟 Hibernate 加载后的 Alarm（含 patient/device 关联）
+        Alarm alarm = new Alarm();
+        alarm.setId(95L);
+        alarm.setDeviceId(15L);
+        alarm.setPatientId(7L);
+        // 关键：@Transient 字段可能装着 HibernateProxy（未初始化状态）
+        // 测试时不实际触发懒加载，只验证清空逻辑
+        Patient patient = new Patient();
+        patient.setId(7L);
+        patient.setName("张三");
+        Device device = new Device();
+        device.setId(15L);
+        device.setImei("355932600124999");
+        alarm.setDevice(device);
+        alarm.setPatient(patient);
+
+        // 确认前置条件
+        assertNotNull(alarm.getPatient(), "前置条件：patient 应被设置");
+        assertNotNull(alarm.getDevice(), "前置条件：device 应被设置");
+
+        // Act
+        AlarmService.clearTransientAssociations(alarm);
+
+        // Assert - @Transient 字段被清空
+        assertNull(alarm.getPatient(), "patient @Transient 字段应被清空");
+        assertNull(alarm.getDevice(), "device @Transient 字段应被清空");
+        // ID 字段保留（Jackson 序列化时仍能输出）
+        assertEquals(7L, alarm.getPatientId(), "patientId 必须保留");
+        assertEquals(15L, alarm.getDeviceId(), "deviceId 必须保留");
+        assertEquals(95L, alarm.getId(), "id 必须保留");
+    }
+
+    @Test
+    void clearTransientAssociations_handlesNullGracefully() {
+        // Arrange - Alarm 没有关联字段（@Transient 字段为 null）
+        Alarm alarm = new Alarm();
+        alarm.setId(1L);
+        alarm.setDeviceId(15L);
+
+        // Act & Assert - 不应抛 NullPointerException
+        assertDoesNotThrow(() -> AlarmService.clearTransientAssociations(alarm));
+        assertNull(alarm.getPatient());
+        assertNull(alarm.getDevice());
+        assertEquals(15L, alarm.getDeviceId());
+    }
+
+    @Test
+    void clearTransientAssociations_simulationOfHibernateProxy() {
+        // Arrange - 模拟 HibernateProxy 场景：传入的对象可能在序列化时
+        // 才被访问字段（懒加载触发）。此测试不实际触发懒加载，
+        // 只验证修复方法的逻辑正确性。
+        //
+        // 真实场景：FenceService.createFenceBreachAlert 调用
+        //   createFenceBreachAlert(device, pd.getPatient(), fence, curr)
+        // pd.getPatient() 返回 PatientDevice 中的 LAZY 关联（可能是 HibernateProxy）
+        // 然后 alarm.setPatient(patient) - Proxy 装进 alarm
+        // 事务提交后 WebSocketHandler.pushAlarm(savedAlarm) 异步序列化
+        // → Jackson 访问 alarm.getPatient().getName() → 懒加载失败
+
+        Alarm alarm = new Alarm();
+        alarm.setDeviceId(15L);
+        alarm.setPatientId(7L);
+
+        // 模拟 HibernateProxy 状态：对象非空，但实际访问字段时会失败
+        // 这里用普通对象代替（测试不依赖 Hibernate 容器）
+        Patient proxyLikePatient = new Patient();
+        proxyLikePatient.setId(7L);
+        proxyLikePatient.setName("张三");
+        alarm.setPatient(proxyLikePatient);
+
+        // Act
+        AlarmService.clearTransientAssociations(alarm);
+
+        // Assert - 即使是 Proxy，清空后 Jackson 不会再访问其字段
+        assertNull(alarm.getPatient());
+        // ID 仍可用
+        assertEquals(7L, alarm.getPatientId());
+    }
 }

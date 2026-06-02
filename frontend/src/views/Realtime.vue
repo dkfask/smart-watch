@@ -27,7 +27,7 @@
                     v-else
                     v-for="device in devices"
                     :key="device.id"
-                    :label="device.id"
+                    :value="device.id"
                     class="device-radio"
                   >
                     <div class="device-info">

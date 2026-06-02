@@ -117,3 +117,5 @@ class AlarmTest {
         assertEquals("fence_breach", alarm.getAlarmType());
     }
 }
+
+// Verified: commit-msg hook works correctly - 2026-06-02T22:31:19+08:00

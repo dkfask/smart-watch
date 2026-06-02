@@ -157,8 +157,8 @@
       <el-form :model="handleForm" ref="handleFormRef" label-width="80px">
         <el-form-item label="处理结果">
           <el-radio-group v-model="handleForm.result">
-            <el-radio-button label="已处理">已处理</el-radio-button>
-            <el-radio-button label="误报">误报</el-radio-button>
+            <el-radio-button value="已处理">已处理</el-radio-button>
+            <el-radio-button value="误报">误报</el-radio-button>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="处理备注">

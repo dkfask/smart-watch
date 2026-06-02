@@ -99,6 +99,23 @@ public class Alarm {
         // 自动同步 patientId
         this.patientId = (patient != null) ? patient.getId() : null;
     }
+
+    /**
+     * 仅清空 @Transient 关联字段（device, patient），不动 deviceId/patientId。
+     *
+     * <p>用途：WebSocket 异步推送前调用，避免 Jackson 序列化时访问 HibernateProxy
+     * 触发懒加载（事务已结束 → session 已关闭 → "no session" 错误）。</p>
+     *
+     * <p>为什么不用 setPatient(null)/setDevice(null)：那俩会同步清空 patientId/
+     * deviceId，而我们想保留 ID 字段供前端使用（前端可单独调患者/设备接口查详情）。</p>
+     *
+     * <p>调用时机：必须在事务结束之后（detached 状态）调用，否则 Hibernate
+     * 可能同步修改持久化上下文中的实体（不影响 DB，但 dirty checking 会有问题）。</p>
+     */
+    public void clearTransientFields() {
+        this.device = null;
+        this.patient = null;
+    }
     public String getAlarmType() { return alarmType; }
     public void setAlarmType(String alarmType) { this.alarmType = alarmType; }
     public String getAlarmLevel() { return alarmLevel; }

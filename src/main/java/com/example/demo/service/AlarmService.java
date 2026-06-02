@@ -290,6 +290,8 @@ public class AlarmService {
                     @Override
                     public void afterCommit() {
                         // 事务提交后才推送 WebSocket，确保数据已持久化
+                        // 清空 @Transient 关联字段（防止 Jackson 触发 HibernateProxy 懒加载）
+                        clearTransientAssociations(savedAlarm);
                         WebSocketHandler.pushAlarm(savedAlarm);
                         WebSocketHandler.pushAlarm(toWebSocketPayload(savedAlert));
                     }
@@ -297,8 +299,37 @@ public class AlarmService {
             );
         } else {
             // 事务未激活（如测试环境），直接推送
+            clearTransientAssociations(savedAlarm);
             WebSocketHandler.pushAlarm(savedAlarm);
             WebSocketHandler.pushAlarm(toWebSocketPayload(savedAlert));
         }
+    }
+
+    /**
+     * 清空 Alarm 的 @Transient 关联字段（device, patient）。
+     *
+     * <p>背景：v3.0.0 重构时给 Alarm 加了 {@code @Transient Device device} 和
+     * {@code @Transient Patient patient} 用于前端展示。{@link WebSocketHandler} 在
+     * 事务结束后异步推送 Alarm（Jackson 序列化），如果这两个字段装的是
+     * HibernateProxy（{@code PatientDevice.patient} 是 LAZY 关联 → FenceService
+     * 调 pd.getPatient() → 返回 Proxy），序列化时访问字段会触发懒加载，session
+     * 已关闭 → {@code "Could not initialize proxy ... - no session"} 错误。</p>
+     *
+     * <p>解决：在推送 WebSocket 前清空 @Transient 关联字段。patientId/deviceId
+     * 是数据库字段，已持久化，detached 状态下修改对象不影响数据库；前端拿
+     * patientId 仍能通过单独接口查病人详情。</p>
+     *
+     * <p>注意：此方法修改传入对象的 @Transient 字段，不应回写到数据库
+     * （savedAlarm 在 afterCommit 回调里是 detached 状态，修改仅影响内存）。</p>
+     *
+     * @param alarm Alarm 实体（必须在事务结束后或 detached 状态调用）
+     */
+    static void clearTransientAssociations(Alarm alarm) {
+        if (alarm == null) {
+            return;
+        }
+        // 使用 Alarm.clearTransientFields()：只清空 @Transient 字段，保留 ID
+        // 不能用 setPatient(null)/setDevice(null)，那俩会同步清空 patientId/deviceId
+        alarm.clearTransientFields();
     }
 }
