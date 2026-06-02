@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="monitor_background">#F4F7FB</color>
+    <color name="monitor_surface">#FFFFFF</color>
+    <color name="monitor_text_primary">#0F172A</color>
+    <color name="monitor_text_secondary">#475569</color>
+
+    <color name="status_critical">#D92D20</color>
+    <color name="status_warning">#F79009</color>
+    <color name="status_info">#1570EF</color>
+
+    <dimen name="monitor_radius_small">8dp</dimen>
+    <dimen name="monitor_radius_medium">12dp</dimen>
+    <dimen name="monitor_radius_large">16dp</dimen>
+</resources>

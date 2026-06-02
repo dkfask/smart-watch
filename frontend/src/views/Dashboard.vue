@@ -202,7 +202,7 @@ const ALARM_TYPE_MAP = {
  * 跳转到报警页面
  */
 const goToAlarms = () => {
-  router.push('/alarm')
+  router.push('/alarms')
 }
 
 /**
@@ -249,7 +249,12 @@ const fetchDashboardData = async () => {
     } else if (Array.isArray(response)) {
       allPatients = response
     }
-    const monitoredCount = allPatients.filter(p => p.deviceId).length
+    const monitoredPatientIds = new Set(
+      allDevices
+        .map(device => device.patient?.id)
+        .filter(Boolean)
+    )
+    const monitoredCount = allPatients.filter(p => p.deviceId || monitoredPatientIds.has(p.id)).length
     patientStats.value = {
       total: allPatients.length,
       monitored: monitoredCount,

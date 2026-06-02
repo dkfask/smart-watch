@@ -13,6 +13,7 @@ public class DeviceLocation {
     private BigDecimal altitude;
     private Integer batteryLevel;
     private String source; // gps, wifi, cell, bluetooth
+    private String address;
     // 新增字段：imei（设备硬件唯一标识），用于在接收定位数据时同时记录设备号与 imei，便于按 imei 或 device_id 查询
     private String imei;
 
@@ -34,6 +35,8 @@ public class DeviceLocation {
     public void setBatteryLevel(Integer batteryLevel) { this.batteryLevel = batteryLevel; }
     public String getSource() { return source; }
     public void setSource(String source) { this.source = source; }
+    public String getAddress() { return address; }
+    public void setAddress(String address) { this.address = address; }
 
     // imei getter/setter
     public String getImei() { return imei; }

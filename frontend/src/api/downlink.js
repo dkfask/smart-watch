@@ -10,8 +10,8 @@ export const downlinkApi = {
   },
 
   // 2. 下发BP12指令（设置SOS码）
-  sendBP12(imei, sosNumbers) {
-    return api.post(`/downlink/bp12?imei=${imei}`, { sosNumbers })
+  sendBP12(imei, sosNumbers, seq = "1") {
+    return api.post('/downlink/bp12', { imei, sos: sosNumbers, seq })
       .then(handleApiResponse)
       .catch(handleApiError)
   },
@@ -214,7 +214,14 @@ export const downlinkApi = {
 
   // 下发短命令
   sendShortCommand(imei, command) {
-    return api.post(`/downlink/short-command?imei=${imei}`, { command })
+    return api.post(`/downlink/bpsm?imei=${imei}`, { content: command, seq: "1" })
+      .then(handleApiResponse)
+      .catch(handleApiError)
+  },
+
+  // 下发自定义原始指令
+  sendCommand(imei, command) {
+    return api.post('/downlink/custom', { imei, payload: command })
       .then(handleApiResponse)
       .catch(handleApiError)
   },
@@ -255,16 +262,12 @@ export const downlinkApi = {
 
   // 实时追踪
   startRealTimeTracking(imei, interval = 5) {
-    return api.post(`/downlink/real-time-tracking?imei=${imei}&interval=${interval}`)
-      .then(handleApiResponse)
-      .catch(handleApiError)
+    return this.sendBP15(imei, interval)
   },
 
   // 停止实时追踪
   stopRealTimeTracking(imei) {
-    return api.post(`/downlink/stop-real-time-tracking?imei=${imei}`)
-      .then(handleApiResponse)
-      .catch(handleApiError)
+    return this.sendBP15(imei, 0)
   },
 
   // 获取历史轨迹

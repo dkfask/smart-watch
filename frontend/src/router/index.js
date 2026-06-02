@@ -15,6 +15,10 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/alarm',
+    redirect: '/alarms'
+  },
+  {
     path: '/devices',
     name: 'Devices',
     component: () => import('../views/Devices.vue'),
@@ -75,11 +79,11 @@ router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
   const requiresAuth = to.meta.requiresAuth
   
-  // 首次访问时验证后端会话
-  if (!isAuthChecked) {
+  // ?????????????????????? 401 ???????
+  if (requiresAuth && !isAuthChecked) {
     isAuthChecked = true
     const isValid = await authStore.checkAuth()
-    if (!isValid && requiresAuth) {
+    if (!isValid) {
       next('/login')
       return
     }

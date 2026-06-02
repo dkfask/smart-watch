@@ -20,7 +20,6 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.github.mikephil.charting.charts.PieChart;
-import com.github.mikephil.charting.components.Description;
 import com.github.mikephil.charting.data.PieData;
 import com.github.mikephil.charting.data.PieDataSet;
 import com.github.mikephil.charting.data.PieEntry;
@@ -33,9 +32,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/**
- * 仪表盘Fragment，显示系统概览统计信息和最近报警列表
- */
 public class DashboardFragment extends Fragment {
 
     private DashboardViewModel viewModel;
@@ -95,59 +91,40 @@ public class DashboardFragment extends Fragment {
         alarmAdapter = new RecentAlarmAdapter();
         recyclerRecentAlarms.setAdapter(alarmAdapter);
 
-        // 设置问候语
         updateGreeting();
-
-        // 初始化饼图
         setupPieChart();
 
-        // 下拉刷新
         swipeRefresh.setOnRefreshListener(() -> {
             viewModel.loadDashboardData();
             swipeRefresh.setRefreshing(false);
         });
 
-        // 查看全部报警
-        tvViewAllAlarms.setOnClickListener(v -> {
-            Navigation.findNavController(v).navigate(R.id.alarmListFragment);
-        });
-
-        // 通知铃铛
-        btnNotification.setOnClickListener(v -> {
-            Navigation.findNavController(v).navigate(R.id.alarmListFragment);
-        });
-
-        // 头像点击跳转设置
-        ivUserAvatar.setOnClickListener(v -> {
-            // 跳转设置页
-        });
+        tvViewAllAlarms.setOnClickListener(v ->
+                Navigation.findNavController(v).navigate(R.id.alarmListFragment));
+        btnNotification.setOnClickListener(v ->
+                Navigation.findNavController(v).navigate(R.id.alarmListFragment));
+        ivUserAvatar.setOnClickListener(v ->
+                Navigation.findNavController(v).navigate(R.id.settingsFragment));
     }
 
-    /**
-     * 根据时间设置问候语
-     */
     private void updateGreeting() {
         Calendar calendar = Calendar.getInstance();
         int hour = calendar.get(Calendar.HOUR_OF_DAY);
-
-        String greeting;
         if (hour < 12) {
-            greeting = getString(R.string.greeting_morning);
+            tvGreeting.setText("早上好");
         } else if (hour < 18) {
-            greeting = getString(R.string.greeting_afternoon);
+            tvGreeting.setText("下午好");
         } else {
-            greeting = getString(R.string.greeting_evening);
+            tvGreeting.setText("晚上好");
         }
-
-        tvGreeting.setText(greeting);
-
-        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy年M月d日 EEEE", Locale.CHINESE);
-        tvDate.setText(dateFormat.format(calendar.getTime()));
+        try {
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy年M月d日 EEEE", Locale.CHINESE);
+            tvDate.setText(dateFormat.format(calendar.getTime()));
+        } catch (Exception ex) {
+            tvDate.setText("");
+        }
     }
 
-    /**
-     * 初始化报警统计饼图
-     */
     private void setupPieChart() {
         chartAlarmStats.setUsePercentValues(true);
         chartAlarmStats.getDescription().setEnabled(false);
@@ -159,22 +136,18 @@ public class DashboardFragment extends Fragment {
         chartAlarmStats.getLegend().setEnabled(false);
     }
 
-    /**
-     * 更新饼图数据
-     */
     private void updatePieChart(AlarmStatsDto stats) {
         if (stats == null || chartAlarmStats == null) return;
 
         List<PieEntry> entries = new ArrayList<>();
         int[] colors = new int[]{
-            Color.parseColor("#EF4444"),  // 紧急
-            Color.parseColor("#F59E0B"),  // 警告
-            Color.parseColor("#3B82F6")   // 信息
+                Color.parseColor("#EF4444"),
+                Color.parseColor("#F59E0B"),
+                Color.parseColor("#3B82F6")
         };
 
         long total = stats.getTotal();
         if (total > 0) {
-            // 使用已处理/未处理/误报分类
             if (stats.getPending() > 0) entries.add(new PieEntry(stats.getPending(), "待处理"));
             if (stats.getHandled() > 0) entries.add(new PieEntry(stats.getHandled(), "已处理"));
             if (stats.getFalseAlarm() > 0) entries.add(new PieEntry(stats.getFalseAlarm(), "误报"));
@@ -188,9 +161,7 @@ public class DashboardFragment extends Fragment {
         PieDataSet dataSet = new PieDataSet(entries, "");
         dataSet.setColors(colors);
         dataSet.setDrawValues(false);
-
-        PieData data = new PieData(dataSet);
-        chartAlarmStats.setData(data);
+        chartAlarmStats.setData(new PieData(dataSet));
         chartAlarmStats.setCenterText(String.valueOf(total));
         chartAlarmStats.invalidate();
     }
@@ -199,37 +170,21 @@ public class DashboardFragment extends Fragment {
         viewModel = new ViewModelProvider(this).get(DashboardViewModel.class);
 
         viewModel.getPatientCount().observe(getViewLifecycleOwner(), count -> {
-            if (count != null) {
-                tvPatientCount.setText(String.valueOf(count));
-            }
+            if (count != null) tvPatientCount.setText(String.valueOf(count));
         });
-
         viewModel.getDeviceCount().observe(getViewLifecycleOwner(), count -> {
-            if (count != null) {
-                tvDeviceCount.setText(String.valueOf(count));
-            }
+            if (count != null) tvDeviceCount.setText(String.valueOf(count));
         });
-
         viewModel.getFenceCount().observe(getViewLifecycleOwner(), count -> {
-            if (count != null) {
-                tvFenceCount.setText(String.valueOf(count));
-            }
+            if (count != null) tvFenceCount.setText(String.valueOf(count));
         });
-
         viewModel.getAlarmStats().observe(getViewLifecycleOwner(), stats -> {
             if (stats != null) {
                 tvPendingAlarms.setText(String.valueOf(stats.getPending()));
                 updatePieChart(stats);
-
-                // 显示/隐藏未读徽章
-                if (stats.getUnread() > 0) {
-                    viewUnreadBadge.setVisibility(View.VISIBLE);
-                } else {
-                    viewUnreadBadge.setVisibility(View.GONE);
-                }
+                viewUnreadBadge.setVisibility(stats.getUnread() > 0 ? View.VISIBLE : View.GONE);
             }
         });
-
         viewModel.getRecentAlarms().observe(getViewLifecycleOwner(), alarms -> {
             if (alarms != null && !alarms.isEmpty()) {
                 alarmAdapter.setAlarms(alarms);
@@ -240,17 +195,11 @@ public class DashboardFragment extends Fragment {
                 layoutEmptyAlarms.setVisibility(View.VISIBLE);
             }
         });
-
         viewModel.getIsLoading().observe(getViewLifecycleOwner(), loading -> {
-            if (loading != null) {
-                progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
-            }
+            if (loading != null) progressBar.setVisibility(loading ? View.VISIBLE : View.GONE);
         });
-
         viewModel.getErrorMessage().observe(getViewLifecycleOwner(), msg -> {
-            if (msg != null && !msg.isEmpty()) {
-                Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show();
-            }
+            if (msg != null && !msg.isEmpty()) Toast.makeText(getContext(), msg, Toast.LENGTH_SHORT).show();
         });
     }
 
@@ -258,11 +207,7 @@ public class DashboardFragment extends Fragment {
         viewModel.loadDashboardData();
     }
 
-    /**
-     * 最近报警列表适配器
-     */
     private class RecentAlarmAdapter extends RecyclerView.Adapter<RecentAlarmAdapter.AlarmViewHolder> {
-
         private List<Map<String, Object>> alarms = new ArrayList<>();
 
         public void setAlarms(List<Map<String, Object>> alarms) {
@@ -273,80 +218,49 @@ public class DashboardFragment extends Fragment {
         @NonNull
         @Override
         public AlarmViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View view = LayoutInflater.from(parent.getContext())
-                    .inflate(R.layout.item_alarm, parent, false);
+            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_alarm, parent, false);
             return new AlarmViewHolder(view);
         }
 
         @Override
         public void onBindViewHolder(@NonNull AlarmViewHolder holder, int position) {
             Map<String, Object> alarm = alarms.get(position);
+            String type = String.valueOf(alarm.getOrDefault("alarmType", "未知报警"));
+            String level = String.valueOf(alarm.getOrDefault("alarmLevel", ""));
+            String status = String.valueOf(alarm.getOrDefault("status", ""));
+            String time = String.valueOf(alarm.getOrDefault("triggeredTime", ""));
+            holder.tvAlarmType.setText(type);
+            holder.tvAlarmLevel.setText(level);
+            holder.tvAlarmStatus.setText(status);
+            holder.tvAlarmTime.setText(time);
 
-            Object alarmType = alarm.get("alarmType");
-            holder.tvAlarmType.setText(alarmType != null ? alarmType.toString() : "未知报警");
-
-            Object alarmLevel = alarm.get("alarmLevel");
-            String levelText = alarmLevel != null ? alarmLevel.toString() : "";
-            holder.tvAlarmLevel.setText(formatAlarmLevel(levelText));
-
-            // 设置报警级别颜色
             int levelColor;
-            switch (levelText) {
-                case "critical": levelColor = getResources().getColor(R.color.alarm_critical, null); break;
-                case "warning": levelColor = getResources().getColor(R.color.alarm_warning, null); break;
-                case "info": levelColor = getResources().getColor(R.color.alarm_info, null); break;
-                default: levelColor = getResources().getColor(R.color.text_secondary, null); break;
+            if ("critical".equals(level)) {
+                levelColor = getResources().getColor(R.color.alarm_critical, null);
+            } else if ("warning".equals(level)) {
+                levelColor = getResources().getColor(R.color.alarm_warning, null);
+            } else {
+                levelColor = getResources().getColor(R.color.alarm_info, null);
             }
             holder.viewLevelStripe.setBackgroundColor(levelColor);
             holder.tvAlarmLevel.setTextColor(levelColor);
 
-            Object status = alarm.get("status");
-            holder.tvAlarmStatus.setText(formatAlarmStatus(status != null ? status.toString() : ""));
-
-            Object triggeredTime = alarm.get("triggeredTime");
-            holder.tvAlarmTime.setText(triggeredTime != null ? triggeredTime.toString() : "");
-
-            // 未读指示
-            Object unread = alarm.get("unread");
-            boolean isUnread = unread != null && Boolean.TRUE.equals(unread);
+            boolean isUnread = Boolean.TRUE.equals(alarm.get("unread"));
             holder.viewUnreadBadge.setVisibility(isUnread ? View.VISIBLE : View.GONE);
 
             holder.itemView.setOnClickListener(v -> {
                 Object id = alarm.get("id");
-                if (id != null) {
-                    try {
-                        long alarmId = ((Number) id).longValue();
-                        Bundle args = new Bundle();
-                        args.putLong("alarmId", alarmId);
-                        Navigation.findNavController(v)
-                                .navigate(R.id.action_alarmList_to_alarmDetail, args);
-                    } catch (Exception ignored) {
-                    }
+                if (id instanceof Number) {
+                    Bundle args = new Bundle();
+                    args.putLong("alarmId", ((Number) id).longValue());
+                    Navigation.findNavController(v).navigate(R.id.action_alarmList_to_alarmDetail, args);
                 }
             });
         }
 
         @Override
-        public int getItemCount() { return alarms.size(); }
-
-        private String formatAlarmLevel(String level) {
-            if (level == null) return "";
-            switch (level) {
-                case "critical": return "紧急";
-                case "warning": return "警告";
-                case "info": return "信息";
-                default: return level;
-            }
-        }
-
-        private String formatAlarmStatus(String status) {
-            if (status == null) return "";
-            switch (status) {
-                case "pending": return "待处理";
-                case "handled": return "已处理";
-                case "false_alarm": return "误报";
-                default: return status;
-            }
+        public int getItemCount() {
+            return alarms.size();
         }
 
         class AlarmViewHolder extends RecyclerView.ViewHolder {

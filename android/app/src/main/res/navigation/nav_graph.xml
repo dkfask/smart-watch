@@ -7,12 +7,35 @@
     <fragment
         android:id="@+id/dashboardFragment"
         android:name="com.smartwatch.monitor.ui.dashboard.DashboardFragment"
-        android:label="概览" />
+        android:label="监护总览" />
+
+    <fragment
+        android:id="@+id/alarmListFragment"
+        android:name="com.smartwatch.monitor.ui.alarm.AlarmListFragment"
+        android:label="告警处置">
+        <action
+            android:id="@+id/action_alarmList_to_alarmDetail"
+            app:destination="@id/alarmDetailFragment"
+            app:enterAnim="@anim/slide_in_right"
+            app:exitAnim="@anim/slide_out_left"
+            app:popEnterAnim="@anim/slide_in_left"
+            app:popExitAnim="@anim/slide_out_right" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/careHubFragment"
+        android:name="com.smartwatch.monitor.ui.care.CareHubFragment"
+        android:label="患者与设备" />
+
+    <fragment
+        android:id="@+id/settingsFragment"
+        android:name="com.smartwatch.monitor.ui.settings.SettingsFragment"
+        android:label="设置" />
 
     <fragment
         android:id="@+id/patientListFragment"
         android:name="com.smartwatch.monitor.ui.patient.PatientListFragment"
-        android:label="病人列表">
+        android:label="患者列表">
         <action
             android:id="@+id/action_patientList_to_patientDetail"
             app:destination="@id/patientDetailFragment"
@@ -25,7 +48,7 @@
     <fragment
         android:id="@+id/patientDetailFragment"
         android:name="com.smartwatch.monitor.ui.patient.PatientDetailFragment"
-        android:label="病人详情">
+        android:label="患者详情">
         <argument
             android:name="patientId"
             app:argType="long" />
@@ -75,19 +98,6 @@
         android:label="电子围栏" />
 
     <fragment
-        android:id="@+id/alarmListFragment"
-        android:name="com.smartwatch.monitor.ui.alarm.AlarmListFragment"
-        android:label="报警列表">
-        <action
-            android:id="@+id/action_alarmList_to_alarmDetail"
-            app:destination="@id/alarmDetailFragment"
-            app:enterAnim="@anim/slide_in_right"
-            app:exitAnim="@anim/slide_out_left"
-            app:popEnterAnim="@anim/slide_in_left"
-            app:popExitAnim="@anim/slide_out_right" />
-    </fragment>
-
-    <fragment
         android:id="@+id/alarmDetailFragment"
         android:name="com.smartwatch.monitor.ui.alarm.AlarmDetailFragment"
         android:label="报警详情">
@@ -95,5 +105,4 @@
             android:name="alarmId"
             app:argType="long" />
     </fragment>
-
 </navigation>

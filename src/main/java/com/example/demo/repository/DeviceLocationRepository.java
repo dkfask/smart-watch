@@ -39,6 +39,7 @@ public class DeviceLocationRepository {
         dl.setAltitude(null);
         dl.setBatteryLevel(null);
         dl.setSource(rs.getString("source"));
+        dl.setAddress(rs.getString("address"));
         return dl;
     };
 

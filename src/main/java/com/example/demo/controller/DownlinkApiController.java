@@ -37,6 +37,21 @@ public class DownlinkApiController {
         return ResponseEntity.ok(online);
     }
 
+    @GetMapping("/battery-report")
+    public ResponseEntity<?> batteryReport(@RequestParam String imei) {
+        if (imei == null || imei.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "imei required"));
+        }
+
+        Map<String, Object> report = new LinkedHashMap<>();
+        report.put("imei", imei);
+        report.put("online", downlinkManager.getOnlineImeis().contains(imei));
+        report.put("batteryLevel", null);
+        report.put("message", "当前设备未上报电量数据，已返回设备在线状态。");
+        report.put("generatedAt", Instant.now().toString());
+        return ResponseEntity.ok(report);
+    }
+
     /**
      * Send BP00 time-sync command to device. Query params: imei (required), timezone (optional int hours)
      */
@@ -780,5 +795,4 @@ public class DownlinkApiController {
         }
     }
 }
-
 

@@ -3,6 +3,7 @@ package com.smartwatch.monitor.repository;
 import android.app.Application;
 import androidx.lifecycle.LiveData;
 import androidx.lifecycle.MutableLiveData;
+import com.smartwatch.monitor.common.ApiResult;
 import com.smartwatch.monitor.api.ApiClient;
 import com.smartwatch.monitor.api.AlarmService;
 import com.smartwatch.monitor.data.AlertDao;
@@ -66,6 +67,30 @@ public class AlarmRepository {
                     @Override
                     public void onFailure(Call<PageResponse<Map<String, Object>>> call, Throwable t) {
                         result.setValue(null);
+                    }
+                });
+        return result;
+    }
+
+    public LiveData<ApiResult<PageResponse<Map<String, Object>>>> getAlarmsResult(int page, String status) {
+        MutableLiveData<ApiResult<PageResponse<Map<String, Object>>>> result = new MutableLiveData<>();
+        alarmService.list(page, Constants.DEFAULT_PAGE_SIZE, null, null, status)
+                .enqueue(new Callback<PageResponse<Map<String, Object>>>() {
+                    @Override
+                    public void onResponse(Call<PageResponse<Map<String, Object>>> call,
+                                           Response<PageResponse<Map<String, Object>>> response) {
+                        if (response.isSuccessful() && response.body() != null) {
+                            result.setValue(ApiResult.success(response.body()));
+                            return;
+                        }
+                        result.setValue(ApiResult.error("Failed to load alarm list", false));
+                    }
+
+                    @Override
+                    public void onFailure(Call<PageResponse<Map<String, Object>>> call, Throwable t) {
+                        result.setValue(ApiResult.error(
+                                t != null && t.getMessage() != null ? t.getMessage() : "Network request failed",
+                                true));
                     }
                 });
         return result;

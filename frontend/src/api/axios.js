@@ -28,6 +28,15 @@ api.interceptors.response.use(
   error => {
     // 处理401未授权错误
     if (error.response && error.response.status === 401) {
+      const requestUrl = error.config?.url || ''
+      const isAuthProbe = requestUrl.includes('/auth/me')
+      const isLoginRequest = requestUrl.includes('/auth/login')
+      const isAlreadyOnLogin = window.location.pathname === '/login'
+
+      if (isAuthProbe || isLoginRequest || isAlreadyOnLogin) {
+        return Promise.reject(error)
+      }
+
       // 清除本地存储的认证信息
       localStorage.removeItem('user')
       // 跳转到登录页面

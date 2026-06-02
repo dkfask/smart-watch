@@ -14,178 +14,139 @@
           prefix-icon="Search"
           class="search-input"
           clearable
+          @keyup.enter="handleSearch"
+          @clear="handleSearch"
         />
-        <el-table :data="devices" style="width: 100%" v-loading="loading">
-          <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="imei" label="IMEI" width="180" />
-          <el-table-column prop="isOnline" label="在线状态" width="100">
+        <el-button class="search-button" type="primary" @click="handleSearch">搜索</el-button>
+        <el-table class="full-width-table" :data="devices" style="width: 100%" v-loading="loading">
+          <el-table-column prop="id" label="ID" min-width="80" />
+          <el-table-column prop="imei" label="IMEI" min-width="220" />
+          <el-table-column prop="isOnline" label="在线状态" min-width="120">
             <template #default="scope">
               <el-tag :type="scope.row.isOnline ? 'success' : 'danger'" size="small">
                 {{ scope.row.isOnline ? '在线' : '离线' }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="patient.name" label="关联病人" width="120">
+          <el-table-column prop="patient.name" label="关联病人" min-width="160">
             <template #default="scope">
               {{ scope.row.patient?.name || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="batteryLevel" label="电量" width="100">
+          <el-table-column prop="batteryLevel" label="电量" min-width="100">
             <template #default="scope">
               <span v-if="scope.row.batteryLevel">{{ scope.row.batteryLevel }}%</span>
               <span v-else>-</span>
             </template>
           </el-table-column>
-          <el-table-column prop="createdAt" label="创建时间" width="180" :formatter="formatDate" />
-          <el-table-column label="操作" width="200" fixed="right">
+          <el-table-column prop="createdAt" label="创建时间" min-width="220" :formatter="formatDate" />
+          <el-table-column label="操作" width="320" fixed="right">
             <template #default="scope">
-              <el-button type="primary" size="small" @click="handleEditDevice(scope.row)">
-                编辑
-              </el-button>
-              <el-button 
-                type="success" 
-                size="small" 
-                @click="handleAssignPatient(scope.row)"
-                :disabled="!!scope.row.patient"
-              >
-                {{ scope.row.patient ? '已关联' : '关联病人' }}
-              </el-button>
-              <el-dropdown trigger="click" @click.stop>
-                <el-button size="small" type="primary" plain>
-                  更多操作
-                  <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              <div class="action-row">
+                <el-button class="action-button action-edit" type="primary" size="small" @click="handleEditDevice(scope.row)">
+                  编辑
                 </el-button>
+                <el-button
+                  class="action-button action-link"
+                  type="success"
+                  size="small"
+                  @click="handleAssignPatient(scope.row)"
+                  :disabled="!!scope.row.patient"
+                >
+                  {{ scope.row.patient ? '已关联' : '关联病人' }}
+                </el-button>
+                <el-dropdown trigger="click" :hide-on-click="false" popper-class="device-action-popper">
+                  <el-button class="action-button action-more" size="small" type="primary" plain @click.stop>
+                    更多操作
+                    <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                  </el-button>
                 <template #dropdown>
-                  <el-menu class="custom-dropdown-menu" mode="vertical" background-color="#FFFFFF" text-color="#1E293B" active-text-color="#2563EB">
-                    <!-- 设备控制组 -->
-                    <el-sub-menu index="device-control">
-                      <template #title>
+                  <div class="device-action-panel" @click.stop>
+                    <button class="panel-action muted" type="button" disabled>
+                      <el-icon class="panel-icon"><Connection /></el-icon>
+                      {{ scope.row.patient ? '已关联病人' : '未关联病人' }}
+                    </button>
+                    <button
+                      v-if="scope.row.patient"
+                      class="panel-action"
+                      type="button"
+                      @click="handleUnassignPatient(scope.row)"
+                    >
+                      <el-icon class="panel-icon"><RefreshRight /></el-icon>
+                      取消关联
+                    </button>
+
+                    <div class="device-action-section">
+                      <button class="section-toggle" type="button" @click="toggleActionSection('deviceControl')">
                         <span>设备控制</span>
-                      </template>
-                      <el-menu-item index="sendCommand" @click="handleCommand(scope.row.id, 'sendCommand')">
-                        <el-icon class="menu-icon"><Operation /></el-icon>
-                        下发指令
-                      </el-menu-item>
-                      <el-menu-item index="locateNow" @click="handleCommand(scope.row.id, 'locateNow')">
-                        <el-icon class="menu-icon"><Location /></el-icon>
-                        立即定位
-                      </el-menu-item>
-                      <el-menu-item index="restart" @click="handleCommand(scope.row.id, 'restart')">
-                        <el-icon class="menu-icon"><RefreshRight /></el-icon>
-                        重启
-                      </el-menu-item>
-                      <el-menu-item index="shutdown" @click="handleCommand(scope.row.id, 'shutdown')">
-                        <el-icon class="menu-icon"><SwitchButton /></el-icon>
-                        关机
-                      </el-menu-item>
-                    </el-sub-menu>
-                    
-                    <!-- 通信组 -->
-                    <el-sub-menu index="communication">
-                      <template #title>
+                        <el-icon :class="{ expanded: isActionSectionOpen('deviceControl') }"><ArrowDown /></el-icon>
+                      </button>
+                      <div v-show="isActionSectionOpen('deviceControl')" class="section-items">
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'sendCommand')"><el-icon class="panel-icon"><Operation /></el-icon>下发指令</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'locateNow')"><el-icon class="panel-icon"><Location /></el-icon>立即定位</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'realTimeTracking')"><el-icon class="panel-icon"><Setting /></el-icon>开启实时追踪</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'stopTracking')"><el-icon class="panel-icon"><RefreshRight /></el-icon>停止实时追踪</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'restart')"><el-icon class="panel-icon"><RefreshRight /></el-icon>重启</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'shutdown')"><el-icon class="panel-icon"><SwitchButton /></el-icon>关机</button>
+                      </div>
+                    </div>
+
+                    <div class="device-action-section">
+                      <button class="section-toggle" type="button" @click="toggleActionSection('communication')">
                         <span>通信功能</span>
-                      </template>
-                      <el-menu-item index="shortCommand" @click="handleCommand(scope.row.id, 'shortCommand')">
-                        <el-icon class="menu-icon"><Message /></el-icon>
-                        短信命令
-                      </el-menu-item>
-                      <el-menu-item index="sendMessage" @click="handleCommand(scope.row.id, 'sendMessage')">
-                        <el-icon class="menu-icon"><ChatDotRound /></el-icon>
-                        发信息
-                      </el-menu-item>
-                    </el-sub-menu>
-                    
-                    <!-- 配置组 -->
-                    <el-sub-menu index="configuration">
-                      <template #title>
+                        <el-icon :class="{ expanded: isActionSectionOpen('communication') }"><ArrowDown /></el-icon>
+                      </button>
+                      <div v-show="isActionSectionOpen('communication')" class="section-items">
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'shortCommand')"><el-icon class="panel-icon"><Message /></el-icon>短信命令</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'sendMessage')"><el-icon class="panel-icon"><ChatDotRound /></el-icon>发信息</button>
+                      </div>
+                    </div>
+
+                    <div class="device-action-section">
+                      <button class="section-toggle" type="button" @click="toggleActionSection('configuration')">
                         <span>设备配置</span>
-                      </template>
-                      <el-menu-item index="initialConfig" @click="handleCommand(scope.row.id, 'initialConfig')">
-                        <el-icon class="menu-icon"><Setting /></el-icon>
-                        初始配置
-                      </el-menu-item>
-                      <el-menu-item index="timezone" @click="handleCommand(scope.row.id, 'timezone')">
-                        <el-icon class="menu-icon"><Clock /></el-icon>
-                        时区
-                      </el-menu-item>
-                      <el-menu-item index="timezoneNew" @click="handleCommand(scope.row.id, 'timezoneNew')">
-                        <el-icon class="menu-icon"><Clock /></el-icon>
-                        时区 New
-                      </el-menu-item>
-                      <el-menu-item index="setSos" @click="handleCommand(scope.row.id, 'setSos')">
-                        <el-icon class="menu-icon"><Warning /></el-icon>
-                        设置SOS码
-                      </el-menu-item>
-                      <el-menu-item index="setAlarm" @click="handleCommand(scope.row.id, 'setAlarm')">
-                        <el-icon class="menu-icon"><Bell /></el-icon>
-                        设置闹钟
-                      </el-menu-item>
-                    </el-sub-menu>
-                    
-                    <!-- 健康监测组 -->
-                    <el-sub-menu index="health-monitoring">
-                      <template #title>
+                        <el-icon :class="{ expanded: isActionSectionOpen('configuration') }"><ArrowDown /></el-icon>
+                      </button>
+                      <div v-show="isActionSectionOpen('configuration')" class="section-items">
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'timezone')"><el-icon class="panel-icon"><Clock /></el-icon>同步时区</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'timezoneNew')"><el-icon class="panel-icon"><Clock /></el-icon>自定义时区</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'setSos')"><el-icon class="panel-icon"><Warning /></el-icon>设置SOS码</button>
+                      </div>
+                    </div>
+
+                    <div class="device-action-section">
+                      <button class="section-toggle" type="button" @click="toggleActionSection('health')">
                         <span>健康监测</span>
-                      </template>
-                      <el-menu-item index="heartRate" @click="handleCommand(scope.row.id, 'heartRate')">
-                        <el-icon class="menu-icon"><Connection /></el-icon>
-                        心率
-                      </el-menu-item>
-                      <el-menu-item index="bloodPressure" @click="handleCommand(scope.row.id, 'bloodPressure')">
-                        <el-icon class="menu-icon"><Document /></el-icon>
-                        血压
-                      </el-menu-item>
-                      <el-menu-item index="bloodOxygen" @click="handleCommand(scope.row.id, 'bloodOxygen')">
-                        <el-icon class="menu-icon"><CirclePlus /></el-icon>
-                        血氧
-                      </el-menu-item>
-                      <el-menu-item index="temperature" @click="handleCommand(scope.row.id, 'temperature')">
-                        <el-icon class="menu-icon"><Monitor /></el-icon>
-                        体温
-                      </el-menu-item>
-                      <el-menu-item index="takePhoto" @click="handleCommand(scope.row.id, 'takePhoto')">
-                        <el-icon class="menu-icon"><Camera /></el-icon>
-                        拍照
-                      </el-menu-item>
-                    </el-sub-menu>
-                    
-                    <!-- 数据查询组 -->
-                    <el-sub-menu index="data-query">
-                      <template #title>
+                        <el-icon :class="{ expanded: isActionSectionOpen('health') }"><ArrowDown /></el-icon>
+                      </button>
+                      <div v-show="isActionSectionOpen('health')" class="section-items">
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'heartRate')"><el-icon class="panel-icon"><Connection /></el-icon>心率</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'bloodPressure')"><el-icon class="panel-icon"><Document /></el-icon>血压</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'bloodOxygen')"><el-icon class="panel-icon"><CirclePlus /></el-icon>血氧</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'temperature')"><el-icon class="panel-icon"><Monitor /></el-icon>体温</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'takePhoto')"><el-icon class="panel-icon"><Camera /></el-icon>拍照</button>
+                      </div>
+                    </div>
+
+                    <div class="device-action-section">
+                      <button class="section-toggle" type="button" @click="toggleActionSection('dataQuery')">
                         <span>数据查询</span>
-                      </template>
-                      <el-menu-item index="historyTrack" @click="handleViewHistory(scope.row.id)">
-                        <el-icon class="menu-icon"><MapLocation /></el-icon>
-                        历史轨迹
-                      </el-menu-item>
-                      <el-menu-item index="getLogs" @click="handleCommand(scope.row.id, 'getLogs')">
-                        <el-icon class="menu-icon"><DocumentCopy /></el-icon>
-                        获取日志
-                      </el-menu-item>
-                      <el-menu-item index="rawLogs" @click="handleCommand(scope.row.id, 'rawLogs')">
-                        <el-icon class="menu-icon"><Document /></el-icon>
-                        原始日志
-                      </el-menu-item>
-                      <el-menu-item index="alarmCalendar" @click="handleCommand(scope.row.id, 'alarmCalendar')">
-                        <el-icon class="menu-icon"><Calendar /></el-icon>
-                        报警日历
-                      </el-menu-item>
-                      <el-menu-item index="batteryReport" @click="handleCommand(scope.row.id, 'batteryReport')">
-                        <el-icon class="menu-icon"><Document /></el-icon>
-                        电池报告
-                      </el-menu-item>
-                      <el-menu-item index="realTimeTracking" @click="handleCommand(scope.row.id, 'realTimeTracking')">
-                        <el-icon class="menu-icon"><VideoPlay /></el-icon>
-                        实时追踪
-                      </el-menu-item>
-                      <el-menu-item index="exportStatusHistory" @click="handleCommand(scope.row.id, 'exportStatusHistory')">
-                        <el-icon class="menu-icon"><Download /></el-icon>
-                        导出状态历史
-                      </el-menu-item>
-                    </el-sub-menu>
-                  </el-menu>
+                        <el-icon :class="{ expanded: isActionSectionOpen('dataQuery') }"><ArrowDown /></el-icon>
+                      </button>
+                      <div v-show="isActionSectionOpen('dataQuery')" class="section-items">
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'historyTrack')"><el-icon class="panel-icon"><MapLocation /></el-icon>历史轨迹</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'getLogs')"><el-icon class="panel-icon"><Document /></el-icon>获取日志</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'rawLogs')"><el-icon class="panel-icon"><DocumentCopy /></el-icon>原始日志</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'alarmCalendar')"><el-icon class="panel-icon"><Clock /></el-icon>报警日历</button>
+                        <button class="panel-action featured" type="button" @click="handleDropdownCommand(scope.row, 'batteryReport')"><el-icon class="panel-icon"><Document /></el-icon>电池报告</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'realTimeTracking')"><el-icon class="panel-icon"><VideoPlay /></el-icon>实时追踪</button>
+                        <button class="panel-action" type="button" @click="handleDropdownCommand(scope.row, 'exportStatusHistory')"><el-icon class="panel-icon"><Download /></el-icon>导出状态历史</button>
+                      </div>
+                    </div>
+                  </div>
                 </template>
-              </el-dropdown>
+                </el-dropdown>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -338,9 +299,9 @@ import { downlinkApi } from '../api/downlink'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   ArrowDown, Operation, Location, RefreshRight, SwitchButton, 
-  Message, ChatDotRound, Setting, Clock, Warning, Bell, 
-  Connection, Document, CirclePlus, Camera, 
-  MapLocation, DocumentCopy, Calendar, VideoPlay, 
+  Message, ChatDotRound, Setting, Clock, Warning,
+  Connection, Document, CirclePlus, Camera, Monitor,
+  MapLocation, DocumentCopy, VideoPlay,
   Download
 } from '@element-plus/icons-vue'
 
@@ -351,6 +312,19 @@ const total = ref(0)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const searchQuery = ref('')
+const openActionSections = ref(new Set(['dataQuery']))
+
+const isActionSectionOpen = (section) => openActionSections.value.has(section)
+
+const toggleActionSection = (section) => {
+  const next = new Set(openActionSections.value)
+  if (next.has(section)) {
+    next.delete(section)
+  } else {
+    next.add(section)
+  }
+  openActionSections.value = next
+}
 
 // 对话框相关
 const dialogVisible = ref(false)
@@ -504,7 +478,7 @@ const fetchDevices = async () => {
   try {
     const offset = (currentPage.value - 1) * pageSize.value
     console.log('Fetching devices with limit:', pageSize.value, 'offset:', offset)
-    const data = await deviceApi.getDevices(pageSize.value, offset)
+    const data = await deviceApi.getDevices(pageSize.value, offset, searchQuery.value.trim())
     console.log('Devices API response:', data)
     if (data && Array.isArray(data.content)) {
       devices.value = data.content
@@ -540,7 +514,7 @@ const fetchDevices = async () => {
 
 // 搜索设备
 const handleSearch = () => {
-  // 这里可以添加搜索逻辑
+  currentPage.value = 1
   fetchDevices()
 }
 
@@ -581,6 +555,62 @@ const handleViewHistory = (deviceId) => {
   router.push(`/history/${deviceId}`)
 }
 
+const handleDropdownCommand = (device, command) => {
+  if (!device) return
+
+  switch (command) {
+    case 'viewDetail':
+      handleViewDevice(device.id)
+      return
+    case 'historyTrack':
+      handleViewHistory(device.id)
+      return
+    case 'openRealtime':
+      router.push({ path: '/realtime', query: { deviceId: device.id } })
+      return
+    case 'deleteDevice':
+      handleDeleteDevice(device.id)
+      return
+    case 'exportCurrentStatus':
+      exportCurrentStatus(device)
+      return
+    default:
+      handleCommand(device.id, command)
+  }
+}
+
+const exportCurrentStatus = (device) => {
+  const rows = [
+    ['ID', 'IMEI', '在线状态', '关联病人', '电量', '最后定位时间', '纬度', '经度', 'ICCID', 'IMSI'],
+    [
+      device.id,
+      device.imei,
+      device.isOnline ? '在线' : '离线',
+      device.patient?.name || '',
+      device.batteryLevel ?? '',
+      device.lastLocationTime || '',
+      device.lastLatitude ?? '',
+      device.lastLongitude ?? '',
+      device.iccid || '',
+      device.imsi || ''
+    ]
+  ]
+  const csv = rows.map(row => row.map(formatCsvValue).join(',')).join('\n')
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' })
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `device_${device.imei || device.id}_current_status.csv`
+  link.click()
+  window.URL.revokeObjectURL(url)
+  ElMessage.success('当前设备状态已导出')
+}
+
+const formatCsvValue = (value) => {
+  const text = String(value ?? '')
+  return `"${text.replace(/"/g, '""')}"`
+}
+
 // 设备控制方法
 const handleCommand = async (deviceId, commandType) => {
   const device = devices.value.find(d => d.id === deviceId)
@@ -613,10 +643,6 @@ const handleCommand = async (deviceId, commandType) => {
         })
         response = await downlinkApi.sendShortCommand(imei, shortCmd.value)
         break
-      case 'initialConfig':
-        // 初始配置
-        response = await downlinkApi.sendInitialConfig(imei, {})
-        break
       case 'timezone':
         // 时区设置
         response = await downlinkApi.sendBP00(imei)
@@ -628,13 +654,6 @@ const handleCommand = async (deviceId, commandType) => {
         })
         response = await downlinkApi.sendBP00(imei, parseInt(timezone.value))
         break
-      case 'getLogs':
-        // 获取日志
-        response = await downlinkApi.getLogs(imei)
-        // 处理日志数据
-        console.log('Device logs:', response)
-        ElMessage.success('获取日志成功')
-        return
       case 'locateNow':
         // 立即定位
         response = await downlinkApi.sendBP16(imei)
@@ -691,51 +710,53 @@ const handleCommand = async (deviceId, commandType) => {
         })
         response = await downlinkApi.sendBP12(imei, sosNumbers.value.split(','))
         break
-      case 'setAlarm':
-        // 设置闹钟
-        const alarmConfig = await ElMessageBox.prompt('请输入闹钟配置（JSON格式）', '设置闹钟', {
-          inputType: 'textarea'
-        })
-        response = await downlinkApi.setAlarm(imei, JSON.parse(alarmConfig.value))
-        break
       case 'realTimeTracking':
         // 实时追踪
         const interval = await ElMessageBox.prompt('请输入追踪间隔（秒）', '实时追踪', {
           inputType: 'number',
-          default: 5
+          inputValue: 5
         })
         response = await downlinkApi.startRealTimeTracking(imei, parseInt(interval.value))
         break
+      case 'stopTracking':
+        await ElMessageBox.confirm('确定要停止该设备的实时追踪吗？', '停止实时追踪', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          type: 'warning'
+        })
+        response = await downlinkApi.stopRealTimeTracking(imei)
+        break
+      case 'getLogs':
+        response = await downlinkApi.getLogs(imei)
+        console.log('Device logs:', response)
+        ElMessage.success('获取日志成功')
+        return
+      case 'rawLogs':
+        handleOpenRawLogs(device)
+        return
       case 'alarmCalendar':
-        // 报警日历
         const now = new Date()
         response = await downlinkApi.getAlarmCalendar(imei, now.getFullYear(), now.getMonth() + 1)
-        // 处理报警日历数据
         console.log('Alarm calendar:', response)
         ElMessage.success('获取报警日历成功')
         return
-      case 'rawLogs':
-        // 原始日志
-        // 打开原始日志对话框
-        handleOpenRawLogs(device)
-        return
       case 'batteryReport':
-        // 电池报告
         response = await downlinkApi.getBatteryReport(imei)
-        // 处理电池报告数据
         console.log('Battery report:', response)
         ElMessage.success('获取电池报告成功')
         return
       case 'exportStatusHistory':
-        // 导出状态历史
-        response = await downlinkApi.exportStatusHistory(imei, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), new Date().toISOString())
-        // 处理导出文件
-        const blob = new Blob([response], { type: 'application/vnd.ms-excel' })
+        const endTime = new Date().toISOString()
+        const startTime = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        response = await downlinkApi.exportStatusHistory(imei, startTime, endTime)
+        const blob = response instanceof Blob
+          ? response
+          : new Blob([response], { type: 'application/vnd.ms-excel' })
         const url = window.URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `device_${imei}_status_history.xlsx`
-        a.click()
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `device_${imei}_status_history.xlsx`
+        link.click()
         window.URL.revokeObjectURL(url)
         ElMessage.success('导出状态历史成功')
         return
@@ -838,6 +859,25 @@ const handleAssignPatient = (device) => {
   assignForm.patientId = null
   fetchAvailablePatients()
   assignDialogVisible.value = true
+}
+
+const handleUnassignPatient = async (device) => {
+  if (!device?.patient?.id) return
+
+  try {
+    await ElMessageBox.confirm('确定要取消该设备与病人的关联吗？', '取消关联', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await patientApi.unassignDevice(device.patient.id, device.id)
+    ElMessage.success('设备关联已取消')
+    fetchDevices()
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') return
+    ElMessage.error('取消关联失败')
+    console.error('Failed to unassign device:', error)
+  }
 }
 
 // 保存关联关系
@@ -948,6 +988,11 @@ onMounted(() => {
   width: 300px;
 }
 
+.search-button {
+  margin-left: 12px;
+  margin-bottom: 20px;
+}
+
 .search-input :deep(.el-input__wrapper) {
   background: var(--bg-input);
   box-shadow: none;
@@ -968,68 +1013,118 @@ onMounted(() => {
   justify-content: flex-end;
 }
 
-/* 自定义下拉菜单样式 - 深色主题 */
-:deep(.custom-dropdown-menu) {
-  min-width: 220px;
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-card);
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.action-row .el-button + .el-button {
+  margin-left: 0;
+}
+
+.action-button {
+  height: 28px;
+  border-radius: 999px;
+  padding: 0 12px;
+  flex: 0 0 auto;
+}
+
+.action-more {
+  padding: 0 10px;
+}
+
+:global(.device-action-popper) {
+  padding: 0 !important;
+  border: 1px solid #e6edf6 !important;
+  border-radius: 0 !important;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.14) !important;
   overflow: hidden;
 }
 
-/* 分组标题样式 */
-:deep(.dropdown-group-title) {
-  padding: 8px 16px;
-  background-color: var(--bg-card-hover);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  border-bottom: 1px solid var(--border-color);
-  letter-spacing: 0.5px;
+:global(.device-action-popper .device-action-panel) {
+  width: 180px;
+  max-height: 720px;
+  overflow-y: auto;
+  background: #ffffff;
+  color: #0f1f3a;
+  padding: 8px 0;
+  font-size: 14px;
 }
 
-/* 菜单项样式 */
-:deep(.el-dropdown-menu__item) {
-  padding: 10px 16px;
-  height: auto;
-  line-height: 20px;
-  font-size: 14px;
-  color: var(--text-primary);
+:global(.device-action-popper .panel-action),
+:global(.device-action-popper .section-toggle) {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 18px;
+  border: 0;
+  background: transparent;
+  color: #0f1f3a;
   display: flex;
   align-items: center;
-  transition: all 0.2s ease;
-  border-radius: 0;
-  background-color: transparent;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
 }
 
-:deep(.el-dropdown-menu__item:hover) {
-  background-color: var(--bg-card-hover);
-  color: var(--primary-color);
+:global(.device-action-popper .panel-action:hover),
+:global(.device-action-popper .section-toggle:hover) {
+  background: #f5f8fc;
+  color: #0f62fe;
 }
 
-/* 图标样式 */
-:deep(.menu-icon) {
-  font-size: 16px;
-  margin-right: 8px;
+:global(.device-action-popper .panel-action.muted) {
+  color: #a7b0bf;
+  cursor: not-allowed;
+}
+
+:global(.device-action-popper .panel-action.muted:hover) {
+  background: transparent;
+  color: #a7b0bf;
+}
+
+:global(.device-action-popper .panel-action.featured) {
+  color: #0f62fe;
+}
+
+:global(.device-action-popper .panel-icon) {
   width: 18px;
-  text-align: center;
-  color: var(--text-secondary);
-  transition: color 0.2s ease;
+  font-size: 15px;
+  color: #66758f;
+  flex: 0 0 auto;
 }
 
-:deep(.el-dropdown-menu__item:hover .menu-icon) {
-  color: var(--primary-color);
+:global(.device-action-popper .featured .panel-icon) {
+  color: #0f62fe;
 }
 
-/* 修复分组标题与菜单项间距 */
-:deep(.el-dropdown-menu__item) {
-  margin: 0;
+:global(.device-action-popper .device-action-section) {
+  border-top: 1px solid #edf2f7;
 }
 
-/* 调整第一个菜单项的上间距 */
-:deep(.el-dropdown-menu > .el-dropdown-item:first-child) {
-  margin-top: 0;
+:global(.device-action-popper .section-toggle) {
+  justify-content: space-between;
+  font-weight: 500;
+}
+
+:global(.device-action-popper .section-toggle .el-icon) {
+  transition: transform 0.16s ease;
+}
+
+:global(.device-action-popper .section-toggle .el-icon.expanded) {
+  transform: rotate(180deg);
+}
+
+:global(.device-action-popper .section-items) {
+  padding: 2px 0 8px;
+}
+
+:global(.device-action-popper .section-items .panel-action) {
+  min-height: 40px;
+  padding-left: 28px;
 }
 
 /* 原始日志对话框样式 */

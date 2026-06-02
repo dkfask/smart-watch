@@ -18,48 +18,50 @@
         <el-select v-model="filterWard" placeholder="筛选病房" clearable class="ward-filter" @change="fetchPatients">
           <el-option v-for="ward in wardOptions" :key="ward" :label="ward" :value="ward" />
         </el-select>
-        <el-table :data="patients" style="width: 100%" v-loading="loading" @row-click="goToPatientDetail">
-          <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="name" label="姓名" width="120" />
-          <el-table-column prop="age" label="年龄" width="80" />
-          <el-table-column prop="gender" label="性别" width="80">
+        <el-table class="full-width-table" :data="patients" style="width: 100%" v-loading="loading" @row-click="goToPatientDetail">
+          <el-table-column prop="id" label="ID" min-width="80" />
+          <el-table-column prop="name" label="姓名" min-width="120" />
+          <el-table-column prop="age" label="年龄" min-width="80" />
+          <el-table-column prop="gender" label="性别" min-width="80">
             <template #default="scope">
               {{ scope.row.gender === 'male' ? '男' : '女' }}
             </template>
           </el-table-column>
-          <el-table-column prop="ward" label="病房" width="120" />
-          <el-table-column prop="bed" label="床位" width="80" />
-          <el-table-column label="监控状态" width="100">
+          <el-table-column prop="ward" label="病房" min-width="120" />
+          <el-table-column prop="bed" label="床位" min-width="80" />
+          <el-table-column label="监控状态" min-width="120">
             <template #default="scope">
-              <el-tag v-if="scope.row.deviceId" type="success" size="small">已监控</el-tag>
+              <el-tag v-if="isPatientMonitored(scope.row)" type="success" size="small">正在监控</el-tag>
               <el-tag v-else type="info" size="small">未监控</el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="idCard" label="身份证号" width="180">
+          <el-table-column prop="idCard" label="身份证号" min-width="180">
             <template #default="scope">
               {{ scope.row.idCard || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="phone" label="联系电话" width="120">
+          <el-table-column prop="phone" label="联系电话" min-width="120">
             <template #default="scope">
               {{ scope.row.phone || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="createdAt" label="创建时间" width="180" :formatter="formatDate" />
-          <el-table-column label="操作" width="240" fixed="right">
+          <el-table-column prop="createdAt" label="创建时间" min-width="180" :formatter="formatDate" />
+          <el-table-column label="操作" width="320" fixed="right">
             <template #default="scope">
-              <el-button type="primary" size="small" @click.stop="goToPatientDetail(scope.row)">
-                详情
-              </el-button>
-              <el-button type="default" size="small" @click.stop="handleEditPatient(scope.row)">
-                编辑
-              </el-button>
-              <el-button type="warning" size="small" @click.stop="handleViewHealthData(scope.row)">
-                健康
-              </el-button>
-              <el-button type="danger" size="small" @click.stop="handleDeletePatient(scope.row.id)">
-                删除
-              </el-button>
+              <div class="patient-action-row">
+                <el-button class="patient-action-button" type="primary" size="small" @click.stop="goToPatientDetail(scope.row)">
+                  详情
+                </el-button>
+                <el-button class="patient-action-button" type="default" size="small" @click.stop="handleEditPatient(scope.row)">
+                  编辑
+                </el-button>
+                <el-button class="patient-action-button" type="warning" size="small" @click.stop="handleViewHealthData(scope.row)">
+                  健康
+                </el-button>
+                <el-button class="patient-action-button" type="danger" size="small" @click.stop="handleDeletePatient(scope.row.id)">
+                  删除
+                </el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -276,6 +278,7 @@ import { useRouter } from 'vue-router'
 import { patientApi } from '../api/patient'
 import { deviceApi } from '../api/device'
 import { healthApi } from '../api/health'
+import { isPatientMonitored } from '../utils/monitoring.mjs'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const router = useRouter()
@@ -295,6 +298,28 @@ const wardOptions = computed(() => {
   const wards = new Set(patients.value.map(p => p.ward).filter(Boolean))
   return Array.from(wards).sort()
 })
+
+const withMonitoringBindings = async (patientList) => {
+  const enriched = await Promise.all(patientList.map(async (patient) => {
+    if (isPatientMonitored(patient)) return patient
+
+    try {
+      const bindings = await patientApi.getPatientDevices(patient.id)
+      const patientDevices = Array.isArray(bindings)
+        ? bindings
+        : Array.isArray(bindings?.data)
+          ? bindings.data
+          : []
+
+      return { ...patient, patientDevices }
+    } catch (error) {
+      console.warn('Failed to load patient device bindings:', patient.id, error)
+      return patient
+    }
+  }))
+
+  return enriched
+}
 
 /**
  * 跳转到病人详情页
@@ -416,11 +441,11 @@ const fetchPatients = async () => {
     }
 
     // 前端病房筛选
-    if (filterWard.value) {
-      patients.value = allPatients.filter(p => p.ward === filterWard.value)
-    } else {
-      patients.value = allPatients
-    }
+    const visiblePatients = filterWard.value
+      ? allPatients.filter(p => p.ward === filterWard.value)
+      : allPatients
+
+    patients.value = await withMonitoringBindings(visiblePatients)
   } catch (error) {
     ElMessage.error('获取病人列表失败')
     console.error('Failed to fetch patients:', error)
@@ -634,6 +659,25 @@ onMounted(() => {
   margin-top: 20px;
   display: flex;
   justify-content: flex-end;
+}
+
+.patient-action-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.patient-action-row .el-button + .el-button {
+  margin-left: 0;
+}
+
+.patient-action-button {
+  height: 28px;
+  border-radius: 999px;
+  padding: 0 12px;
+  flex: 0 0 auto;
 }
 
 /* 图表容器样式 */

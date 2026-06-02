@@ -112,7 +112,10 @@ public class LocationController {
         }
         double lat = dl.getLatitude().doubleValue();
         double lng = dl.getLongitude().doubleValue();
-        String address = amapLocationService.regeoAddress(lat, lng);
+        String address = dl.getAddress();
+        if (address == null || address.isBlank()) {
+            address = amapLocationService.regeoAddress(lat, lng);
+        }
 
         DeviceLocationDto dto = new DeviceLocationDto();
         dto.setDeviceId(dl.getDeviceId());

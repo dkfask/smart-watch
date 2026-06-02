@@ -19,7 +19,7 @@ export const handleApiResponse = (response) => {
   }
 
   const url = response.config?.url || '';
-  if (url.includes('/api/downlink/')) {
+  if (isApiPath(url, '/downlink')) {
     return responseData || {}
   }
 
@@ -35,10 +35,9 @@ export const handleApiResponse = (response) => {
     return responseData
   } else {
     if (response.config && response.config.url) {
-      if (response.config.url.includes('/api/locations/device/') &&
-          (response.config.url.includes('/latest') || response.config.url.includes('/latest-with-amap') || response.config.url.includes('/latest-with-address'))) {
+      if (isLatestLocationUrl(response.config.url)) {
         return responseData || {}
-      } else if (response.config.url.includes('/api/fences')) {
+      } else if (isApiPath(response.config.url, '/fences')) {
         return []
       }
     }
@@ -53,15 +52,38 @@ export const handleApiResponse = (response) => {
  * @returns {Object|Array} - 错误情况下的默认返回值
  */
 export const handleApiError = (error, defaultError = '请求失败') => {
+  const url = error.config?.url || ''
+
+  if (isLatestLocationUrl(url) && error.response?.status === 404) {
+    return null
+  }
+
+  if (isApiPath(url, '/downlink')) {
+    throw error
+  }
+
   console.error('API请求失败:', error)
   if (error.config && error.config.url) {
-    if (error.config.url.includes('/api/fences')) {
+    if (isApiPath(error.config.url, '/fences')) {
       return { list: [], total: 0 }
-    } else if (error.config.url.includes('/api/devices')) {
+    } else if (isApiPath(error.config.url, '/devices')) {
       return { content: [], total: 0 }
-    } else if (error.config.url.includes('/api/patients')) {
+    } else if (isApiPath(error.config.url, '/patients')) {
       return { content: [], total: 0 }
     }
   }
   return {}
+}
+
+const isApiPath = (url, path) => {
+  const normalized = url.startsWith('/api') ? url.slice(4) : url
+  return normalized === path || normalized.startsWith(`${path}/`)
+}
+
+const isLatestLocationUrl = (url) => {
+  const normalized = url.startsWith('/api') ? url.slice(4) : url
+  return normalized.includes('/locations/device/') &&
+    (normalized.includes('/latest') ||
+      normalized.includes('/latest-with-amap') ||
+      normalized.includes('/latest-with-address'))
 }

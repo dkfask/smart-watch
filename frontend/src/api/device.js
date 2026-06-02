@@ -3,8 +3,8 @@ import { handleApiResponse, handleApiError } from './utils'
 
 export const deviceApi = {
   // 获取设备列表
-  getDevices(limit = 20, offset = 0) {
-    return api.get('/devices', { params: { limit, offset } })
+  getDevices(limit = 20, offset = 0, search = '') {
+    return api.get('/devices', { params: { limit, offset, search: search || undefined } })
       .then(handleApiResponse)
       .catch(handleApiError)
   },

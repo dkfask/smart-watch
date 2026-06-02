@@ -63,6 +63,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { deviceApi } from '../api/device'
 import { locationApi } from '../api/location'
 import { fenceApi } from '../api/fence'
@@ -70,6 +71,7 @@ import { ElMessage } from 'element-plus'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
+const route = useRoute()
 const devices = ref([])
 const loading = ref(false)
 const searchQuery = ref('')
@@ -108,16 +110,24 @@ const fetchDevices = async () => {
   try {
     const data = await deviceApi.getDevices(100, 0) // 获取所有设备
     console.log('设备列表API返回数据:', data)
-    // 提取list字段作为设备数组
+    // 提取分页字段作为设备数组
     let deviceList = data
-    if (data && data.list) {
+    if (data && Array.isArray(data.content)) {
+      deviceList = data.content
+    } else if (data && Array.isArray(data.list)) {
       deviceList = data.list
+    } else if (data && Array.isArray(data.items)) {
+      deviceList = data.items
+    } else if (!Array.isArray(data)) {
+      deviceList = []
     }
     devices.value = deviceList
     // 修复设备列表显示
     fixDeviceListDisplay()
     if (devices.value.length > 0 && !selectedDeviceId.value) {
-      selectedDeviceId.value = devices.value[0].id || 0
+      const routeDeviceId = Number(route.query.deviceId)
+      const routeDevice = devices.value.find(device => Number(device.id) === routeDeviceId)
+      selectedDeviceId.value = routeDevice?.id || devices.value[0].id || 0
     }
     // 初始化设备状态
     devices.value.forEach(device => {
@@ -306,11 +316,21 @@ const clearAllFences = () => {
 // 获取设备最新位置
 const fetchDeviceLatestLocation = async (deviceId) => {
   try {
-    const location = await locationApi.getLatestLocationWithAmap(deviceId)
-    console.log(`设备 ${deviceId} 的最新位置:`, location)
-    if (location && location.latitude && location.longitude) {
-      deviceLocations.value.set(deviceId, location)
-      updateMarker(deviceId, location)
+    const location = normalizeLocation(await locationApi.getLatestLocationWithAmap(deviceId))
+    const device = findDevice(deviceId)
+    const fallbackLocation = location || normalizeLocation({
+      latitude: device?.lastLatitude,
+      longitude: device?.lastLongitude,
+      time: device?.lastLocationTime,
+      batteryLevel: device?.batteryLevel,
+      source: 'device-status'
+    })
+
+    console.log(`设备 ${deviceId} 的最新位置:`, fallbackLocation)
+    if (isValidLocation(fallbackLocation)) {
+      const normalizedDeviceId = normalizeDeviceId(deviceId)
+      deviceLocations.value.set(normalizedDeviceId, fallbackLocation)
+      updateMarker(normalizedDeviceId, fallbackLocation)
     } else {
       console.warn(`设备 ${deviceId} 没有有效位置数据`)
     }
@@ -337,7 +357,7 @@ const fixDeviceListDisplay = () => {
 const refreshAllLocations = async () => {
   for (const device of devices.value) {
     // 使用设备ID作为标识符
-    const deviceIdentifier = device.id
+    const deviceIdentifier = normalizeDeviceId(device.id)
     await fetchDeviceLatestLocation(deviceIdentifier)
   }
   
@@ -354,7 +374,7 @@ const autoLocateToDevices = () => {
   
   // 添加所有设备位置
   deviceLocations.value.forEach((location, deviceId) => {
-    if (location && location.latitude && location.longitude) {
+    if (isValidLocation(location)) {
       allLatLngs.push([location.latitude, location.longitude])
     }
   })
@@ -411,11 +431,12 @@ const initMap = () => {
 
 // 更新标记
 const updateMarker = (deviceId, location) => {
-  if (!map || !location || !location.latitude || !location.longitude) {
+  if (!map || !isValidLocation(location)) {
     return
   }
 
-  const device = devices.value.find(d => d.id === deviceId)
+  const normalizedDeviceId = normalizeDeviceId(deviceId)
+  const device = findDevice(normalizedDeviceId)
   if (!device) return
 
   const displayName = device.patient?.name || device.imei
@@ -435,30 +456,36 @@ const updateMarker = (deviceId, location) => {
       <b>${displayName}</b><br>
       ${device.patient?.ward ? '病房: ' + device.patient.ward + '<br>' : ''}
       设备: ${device.imei}<br>
-      位置: ${location.address || '未知'}<br>
+      位置: ${formatLocationText(location)}<br>
       时间: ${formatDate(location.time)}<br>
-      电池: ${location.batteryLevel || '-'}%
+      来源: ${formatLocationSource(location.source)}<br>
+      电池: ${location.batteryLevel ?? '-'}%
     `)
 
   // 移除旧标记
-  if (markers.has(deviceId)) {
-    map.removeLayer(markers.get(deviceId))
+  if (markers.has(normalizedDeviceId)) {
+    map.removeLayer(markers.get(normalizedDeviceId))
   }
 
   // 添加新标记
   marker.addTo(map)
-  markers.set(deviceId, marker)
+  markers.set(normalizedDeviceId, marker)
+
+  if (normalizeDeviceId(selectedDeviceId.value) === normalizedDeviceId) {
+    marker.openPopup()
+  }
 }
 
 // 定位到选中设备
 const centerToSelectedDevice = () => {
   if (!selectedDeviceId.value || !map) return
   
-  const location = deviceLocations.value.get(selectedDeviceId.value)
-  if (location && location.latitude && location.longitude) {
+  const normalizedDeviceId = normalizeDeviceId(selectedDeviceId.value)
+  const location = deviceLocations.value.get(normalizedDeviceId)
+  if (isValidLocation(location)) {
     map.setView([location.latitude, location.longitude], 15)
     // 打开弹窗
-    const marker = markers.get(selectedDeviceId.value)
+    const marker = markers.get(normalizedDeviceId)
     if (marker) {
       marker.openPopup()
     }
@@ -471,6 +498,68 @@ const centerToSelectedDevice = () => {
 const formatDate = (dateString) => {
   if (!dateString) return ''
   return new Date(dateString).toLocaleString()
+}
+
+const normalizeDeviceId = (deviceId) => {
+  const numericId = Number(deviceId)
+  return Number.isFinite(numericId) ? numericId : deviceId
+}
+
+const findDevice = (deviceId) => {
+  const normalizedDeviceId = normalizeDeviceId(deviceId)
+  return devices.value.find(device => normalizeDeviceId(device.id) === normalizedDeviceId)
+}
+
+const normalizeCoordinate = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const coordinate = Number(value)
+  return Number.isFinite(coordinate) ? coordinate : null
+}
+
+const normalizeLocation = (location) => {
+  if (!location) return null
+
+  const latitude = normalizeCoordinate(location.latitude ?? location.lat ?? location.lastLatitude)
+  const longitude = normalizeCoordinate(location.longitude ?? location.lng ?? location.lon ?? location.lastLongitude)
+
+  return {
+    ...location,
+    latitude,
+    longitude,
+    time: location.time || location.createdAt || location.lastLocationTime || location.recvTime,
+    address: location.address || location.formattedAddress || location.locationAddress || '',
+    source: location.source || location.locationSource || ''
+  }
+}
+
+const isValidLocation = (location) => {
+  return location &&
+    Number.isFinite(location.latitude) &&
+    Number.isFinite(location.longitude) &&
+    location.latitude >= -90 &&
+    location.latitude <= 90 &&
+    location.longitude >= -180 &&
+    location.longitude <= 180
+}
+
+const formatLocationText = (location) => {
+  if (!location) return '未知'
+  if (location.address) return location.address
+  if (Number.isFinite(location.latitude) && Number.isFinite(location.longitude)) {
+    return `经纬度 ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`
+  }
+  return '未知'
+}
+
+const formatLocationSource = (source) => {
+  const labels = {
+    gps: 'GPS',
+    wifi: 'Wi-Fi',
+    cell: '基站',
+    bluetooth: '蓝牙',
+    'device-status': '设备状态'
+  }
+  return labels[source] || source || '-'
 }
 
 // 定时刷新

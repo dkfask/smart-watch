@@ -195,7 +195,7 @@ public class ApiClient {
             ResponseBody body = response.body();
             if (body == null) return response;
 
-            String contentType = body.contentType();
+            MediaType contentType = body.contentType();
             String bodyString = body.string();
 
             try {
