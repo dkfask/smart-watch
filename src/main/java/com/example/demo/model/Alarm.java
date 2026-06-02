@@ -87,9 +87,18 @@ public class Alarm {
     public Long getPatientId() { return patientId; }
     public void setPatientId(Long patientId) { this.patientId = patientId; }
     public Device getDevice() { return device; }
-    public void setDevice(Device device) { this.device = device; }
+    public void setDevice(Device device) {
+        this.device = device;
+        // 自动同步 deviceId，防止"漏设"导致的 not-null 约束违反
+        // 修复前：调用方只 setDevice() 会导致 deviceId 为 null，持久化失败
+        this.deviceId = (device != null) ? device.getId() : null;
+    }
     public Patient getPatient() { return patient; }
-    public void setPatient(Patient patient) { this.patient = patient; }
+    public void setPatient(Patient patient) {
+        this.patient = patient;
+        // 自动同步 patientId
+        this.patientId = (patient != null) ? patient.getId() : null;
+    }
     public String getAlarmType() { return alarmType; }
     public void setAlarmType(String alarmType) { this.alarmType = alarmType; }
     public String getAlarmLevel() { return alarmLevel; }
