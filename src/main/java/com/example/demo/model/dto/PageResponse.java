@@ -32,6 +32,17 @@ public class PageResponse<T> {
         return new PageResponse<>(page.getContent(), page.getTotalElements(), page.getNumber(), page.getSize());
     }
 
+    /**
+     * 从List和Pageable构建PageResponse（适用于需要自定义count的场景）
+     * @param content 数据列表
+     * @param total 总数
+     * @param pageable 分页参数
+     * @return 统一分页响应
+     */
+    public static <T> PageResponse<T> from(java.util.List<T> content, long total, org.springframework.data.domain.Pageable pageable) {
+        return new PageResponse<>(content, total, pageable.getPageNumber(), pageable.getPageSize());
+    }
+
     public List<T> getContent() { return content; }
     public void setContent(List<T> content) { this.content = content; }
     public long getTotal() { return total; }

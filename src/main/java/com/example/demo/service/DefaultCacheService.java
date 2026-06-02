@@ -2,7 +2,7 @@ package com.example.demo.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.annotation.Primary;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit;
  * 用于预留缓存接口，后续可替换为Redis等实际缓存实现
  */
 @Service
-@Primary
+@ConditionalOnMissingBean(RedisCacheService.class)
 public class DefaultCacheService implements CacheService {
     private static final Logger log = LoggerFactory.getLogger(DefaultCacheService.class);
 

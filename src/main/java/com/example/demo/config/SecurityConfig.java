@@ -1,5 +1,6 @@
 package com.example.demo.config;
 
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -67,8 +68,6 @@ public class SecurityConfig {
                     "/api/downlink", "/api/downlink/**",
                     "/api/locations", "/api/locations/**"
                 ).hasRole("USER")
-                // 测试API
-                .requestMatchers("/db/test").permitAll()
                 // 其他API需要认证
                 .requestMatchers("/api/**").authenticated()
                 // 对于非API的GET请求，由SpaFallbackController处理SPA路由
@@ -89,6 +88,14 @@ public class SecurityConfig {
                 .logoutUrl("/logout")
                 .logoutSuccessUrl("/login?logout=true")
                 .permitAll()
+            )
+            // API 路径未认证时返回 401，而非 302 跳转登录页
+            .exceptionHandling(ex -> ex
+                .defaultAuthenticationEntryPointFor(
+                    (request, response, authException) ->
+                        response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"),
+                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/api/**")
+                )
             );
         return http.build();
     }

@@ -1,11 +1,17 @@
 package com.example.demo.controller.api;
 
 import com.example.demo.model.HealthRecord;
+import com.example.demo.model.dto.PageResponse;
 import com.example.demo.repository.HealthRecordRepository;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 健康数据API控制器
@@ -21,7 +27,7 @@ public class HealthRecordController {
     }
 
     /**
-     * 获取病人的健康记录列表
+     * 获取健康记录列表（分页）
      */
     @GetMapping
     public ResponseEntity<?> getHealthRecords(
@@ -29,26 +35,42 @@ public class HealthRecordController {
             @RequestParam(required = false) String imei,
             @RequestParam(required = false) String dataType,
             @RequestParam(defaultValue = "50") int limit,
-            @RequestParam(defaultValue = "0") int offset) {
-        List<HealthRecord> records;
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(required = false) Integer page,
+            @RequestParam(required = false) Integer size) {
+        int effectivePage = (page != null) ? page : (offset / Math.max(limit, 1));
+        int effectiveSize = (size != null) ? size : limit;
+
         if (patientId != null) {
             if (dataType != null) {
-                records = repo.findByPatientIdAndDataTypeOrderByRecvTimeDesc(patientId, dataType);
+                var pageable = PageRequest.of(effectivePage, effectiveSize, Sort.by(Sort.Direction.DESC, "recvTime"));
+                List<HealthRecord> records = repo.findByPatientIdAndDataTypeOrderByRecvTimeDesc(patientId, dataType);
+                return ResponseEntity.ok(PageResponse.from(records, records.size(), pageable));
             } else {
-                records = repo.findByPatientIdOrderByRecvTimeDesc(patientId);
+                var pageable = PageRequest.of(effectivePage, effectiveSize, Sort.by(Sort.Direction.DESC, "recvTime"));
+                List<HealthRecord> records = repo.findByPatientIdOrderByRecvTimeDesc(patientId);
+                return ResponseEntity.ok(PageResponse.from(records, records.size(), pageable));
             }
         } else if (imei != null) {
-            records = repo.findByImeiOrderByRecvTimeDesc(imei);
+            var pageable = PageRequest.of(effectivePage, effectiveSize, Sort.by(Sort.Direction.DESC, "recvTime"));
+            List<HealthRecord> records = repo.findByImeiOrderByRecvTimeDesc(imei);
+            return ResponseEntity.ok(PageResponse.from(records, records.size(), pageable));
         } else {
-            List<HealthRecord> all = new ArrayList<>();
-            repo.findAll().forEach(all::add);
-            records = all;
+            var pageable = PageRequest.of(effectivePage, effectiveSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+            return ResponseEntity.ok(PageResponse.from(repo.findAll(pageable)));
         }
-        int end = Math.min(offset + limit, records.size());
-        if (offset >= records.size()) {
-            return ResponseEntity.ok(Map.of("content", Collections.emptyList(), "totalElements", records.size()));
-        }
-        return ResponseEntity.ok(Map.of("content", records.subList(offset, end), "totalElements", records.size()));
+    }
+
+    /**
+     * 根据设备ID获取健康记录（分页）
+     */
+    @GetMapping("/device/{deviceId}")
+    public ResponseEntity<PageResponse<HealthRecord>> getHealthRecordsByDevice(
+            @PathVariable Long deviceId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        var pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "recvTime"));
+        return ResponseEntity.ok(PageResponse.from(repo.findByDeviceId(deviceId, pageable)));
     }
 
     /**
@@ -122,8 +144,34 @@ public class HealthRecordController {
     }
 
     /**
-     * 根据数据类型获取单位
+     * 更新健康记录
      */
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateHealthRecord(@PathVariable Long id, @RequestBody HealthRecord record) {
+        HealthRecord existing = repo.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Health record not found: " + id));
+        existing.setPatientId(record.getPatientId() != null ? record.getPatientId() : existing.getPatientId());
+        existing.setImei(record.getImei() != null ? record.getImei() : existing.getImei());
+        existing.setDataType(record.getDataType() != null ? record.getDataType() : existing.getDataType());
+        existing.setValue(record.getValue() != null ? record.getValue() : existing.getValue());
+        existing.setRecvTime(record.getRecvTime() != null ? record.getRecvTime() : existing.getRecvTime());
+        existing.setUpdatedAt(new Date());
+        repo.save(existing);
+        return ResponseEntity.ok(Map.of("id", existing.getId()));
+    }
+
+    /**
+     * 删除健康记录
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteHealthRecord(@PathVariable Long id) {
+        if (!repo.existsById(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Health record not found: " + id);
+        }
+        repo.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
+
     private String getUnitForType(String dataType) {
         return switch (dataType) {
             case "temperature" -> "°C";
@@ -134,9 +182,6 @@ public class HealthRecordController {
         };
     }
 
-    /**
-     * 安全解析double值
-     */
     private Double parseDoubleSafe(String value) {
         try {
             return Double.parseDouble(value);

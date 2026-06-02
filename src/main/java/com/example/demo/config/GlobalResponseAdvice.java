@@ -26,6 +26,10 @@ public class GlobalResponseAdvice implements ResponseBodyAdvice<Object> {
                                  Class<? extends HttpMessageConverter<?>> selectedConverterType, 
                                  ServerHttpRequest request, ServerHttpResponse response) {
         
+        // 禁止浏览器缓存API响应
+        response.getHeaders().set("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.getHeaders().set("Pragma", "no-cache");
+
         // 如果已经是ApiResponse类型，直接返回
         if (body instanceof ApiResponse) {
             return body;

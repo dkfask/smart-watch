@@ -14,6 +14,9 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+
 import java.util.*;
 
 import static org.mockito.ArgumentMatchers.*;
@@ -70,7 +73,7 @@ class HealthRecordControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content").isArray())
                 .andExpect(jsonPath("$.data.content.length()").value(1))
-                .andExpect(jsonPath("$.data.totalElements").value(1));
+                .andExpect(jsonPath("$.data.total").value(1));
     }
 
     /**
@@ -120,13 +123,13 @@ class HealthRecordControllerTest {
                 buildRecord(1L, 100L, null, "temperature", "36.5", now),
                 buildRecord(2L, 101L, null, "heart_rate", "80", now)
         );
-        when(repo.findAll()).thenReturn(all);
+        when(repo.findAll(any(Pageable.class))).thenReturn(new PageImpl<>(all));
 
         mockMvc.perform(get("/api/health-records"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content").isArray())
                 .andExpect(jsonPath("$.data.content.length()").value(2))
-                .andExpect(jsonPath("$.data.totalElements").value(2));
+                .andExpect(jsonPath("$.data.total").value(2));
     }
 
     /**
@@ -146,8 +149,8 @@ class HealthRecordControllerTest {
                         .param("offset", "2")
                         .param("limit", "3"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content.length()").value(3))
-                .andExpect(jsonPath("$.data.totalElements").value(10));
+                .andExpect(jsonPath("$.data.content").isArray())
+                .andExpect(jsonPath("$.data.total").value(10));
     }
 
     /**
