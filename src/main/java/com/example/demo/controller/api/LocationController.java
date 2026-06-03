@@ -90,11 +90,11 @@ public class LocationController {
      */
     @GetMapping("/device/{deviceId}/latest")
     public ResponseEntity<?> getLatestLocation(@PathVariable long deviceId) {
-        List<DeviceLocation> list = locationRepo.listRecent(deviceId, 1, 0);
-        if (list == null || list.isEmpty()) {
+        DeviceLocation dl = latestValidLocation(deviceId);
+        if (dl == null) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(list.get(0));
+        return ResponseEntity.ok(dl);
     }
 
     /**
@@ -102,19 +102,17 @@ public class LocationController {
      */
     @GetMapping("/device/{deviceId}/latest-with-address")
     public ResponseEntity<DeviceLocationDto> getLatestLocationWithAddress(@PathVariable long deviceId) {
-        List<DeviceLocation> list = locationRepo.listRecent(deviceId, 1, 0);
-        if (list == null || list.isEmpty()) {
+        DeviceLocation dl = latestValidLocation(deviceId);
+        if (dl == null) {
             return ResponseEntity.notFound().build();
         }
-        DeviceLocation dl = list.get(0);
-        if (dl.getLatitude() == null || dl.getLongitude() == null) {
-            return ResponseEntity.notFound().build();
-        }
+
         double lat = dl.getLatitude().doubleValue();
         double lng = dl.getLongitude().doubleValue();
-        String address = dl.getAddress();
-        if (address == null || address.isBlank()) {
+        String address = normalizeAddress(dl.getAddress());
+        if (address == null) {
             address = amapLocationService.regeoAddress(lat, lng);
+            address = normalizeAddress(address);
         }
 
         DeviceLocationDto dto = new DeviceLocationDto();
@@ -129,6 +127,39 @@ public class LocationController {
         dto.setAccuracy(dl.getAccuracy());
 
         return ResponseEntity.ok(dto);
+    }
+
+    private DeviceLocation latestValidLocation(long deviceId) {
+        List<DeviceLocation> list = locationRepo.listRecent(deviceId, 20, 0);
+        if (list == null || list.isEmpty()) {
+            return null;
+        }
+        return list.stream()
+                .filter(LocationController::hasValidCoordinate)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static boolean hasValidCoordinate(DeviceLocation dl) {
+        if (dl == null || dl.getLatitude() == null || dl.getLongitude() == null) {
+            return false;
+        }
+        double lat = dl.getLatitude().doubleValue();
+        double lng = dl.getLongitude().doubleValue();
+        return lat >= -90 && lat <= 90 &&
+                lng >= -180 && lng <= 180 &&
+                !(Double.compare(lat, 0.0) == 0 && Double.compare(lng, 0.0) == 0);
+    }
+
+    private static String normalizeAddress(String address) {
+        if (address == null) {
+            return null;
+        }
+        String trimmed = address.trim();
+        if (trimmed.isEmpty() || "[]".equals(trimmed) || "null".equalsIgnoreCase(trimmed)) {
+            return null;
+        }
+        return trimmed;
     }
 
     /**

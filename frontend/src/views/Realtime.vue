@@ -539,7 +539,8 @@ const isValidLocation = (location) => {
     location.latitude >= -90 &&
     location.latitude <= 90 &&
     location.longitude >= -180 &&
-    location.longitude <= 180
+    location.longitude <= 180 &&
+    !(location.latitude === 0 && location.longitude === 0)
 }
 
 const formatLocationText = (location) => {

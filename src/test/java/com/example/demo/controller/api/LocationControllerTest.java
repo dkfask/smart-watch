@@ -102,7 +102,7 @@ class LocationControllerTest {
         dl.setDeviceId(1L);
         dl.setLatitude(BigDecimal.valueOf(39.9));
         dl.setLongitude(BigDecimal.valueOf(116.4));
-        when(locationRepo.listRecent(1L, 1, 0)).thenReturn(List.of(dl));
+        when(locationRepo.listRecent(1L, 20, 0)).thenReturn(List.of(dl));
 
         mockMvc.perform(get("/api/locations/device/1/latest"))
                 .andExpect(status().isOk());
@@ -113,7 +113,7 @@ class LocationControllerTest {
      */
     @Test
     void latest_notFound_returns404() throws Exception {
-        when(locationRepo.listRecent(1L, 1, 0)).thenReturn(Collections.emptyList());
+        when(locationRepo.listRecent(1L, 20, 0)).thenReturn(Collections.emptyList());
 
         mockMvc.perform(get("/api/locations/device/1/latest"))
                 .andExpect(status().isNotFound());
@@ -129,11 +129,38 @@ class LocationControllerTest {
         dl.setImei("IMEI001");
         dl.setLatitude(BigDecimal.valueOf(39.9));
         dl.setLongitude(BigDecimal.valueOf(116.4));
-        when(locationRepo.listRecent(1L, 1, 0)).thenReturn(List.of(dl));
+        when(locationRepo.listRecent(1L, 20, 0)).thenReturn(List.of(dl));
         when(amapLocationService.regeoAddress(39.9, 116.4)).thenReturn("北京市东城区");
 
         mockMvc.perform(get("/api/locations/device/1/latest-with-address"))
                 .andExpect(status().isOk());
+    }
+
+    /**
+     * GET /api/locations/device/{deviceId}/latest-with-address 跳过0,0无效定位
+     */
+    @Test
+    void latestWithAddress_skipsZeroZeroLocation() throws Exception {
+        DeviceLocation invalid = new DeviceLocation();
+        invalid.setDeviceId(1L);
+        invalid.setLatitude(BigDecimal.ZERO);
+        invalid.setLongitude(BigDecimal.ZERO);
+        invalid.setAddress("[]");
+
+        DeviceLocation valid = new DeviceLocation();
+        valid.setDeviceId(1L);
+        valid.setImei("IMEI001");
+        valid.setLatitude(BigDecimal.valueOf(30.886866));
+        valid.setLongitude(BigDecimal.valueOf(103.594415));
+        valid.setAddress("四川省成都市都江堰市青城山镇成都东软学院C5座");
+
+        when(locationRepo.listRecent(1L, 20, 0)).thenReturn(List.of(invalid, valid));
+
+        mockMvc.perform(get("/api/locations/device/1/latest-with-address"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.latitude").value(30.886866))
+                .andExpect(jsonPath("$.data.longitude").value(103.594415))
+                .andExpect(jsonPath("$.data.address").value("四川省成都市都江堰市青城山镇成都东软学院C5座"));
     }
 
     /**

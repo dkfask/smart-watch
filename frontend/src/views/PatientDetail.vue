@@ -68,7 +68,7 @@
             <h3 class="card-title">最新位置</h3>
             <div v-if="latestLocation" class="location-info">
               <div class="location-detail">
-                <span class="location-address">{{ latestLocation.address || '未知地址' }}</span>
+                <span class="location-address">{{ formatLocationText(latestLocation) }}</span>
                 <span class="location-time">更新于 {{ formatDate(latestLocation.time || latestLocation.createdAt) }}</span>
               </div>
               <div id="patient-map" class="patient-map"></div>
@@ -119,7 +119,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -140,6 +140,8 @@ const patientAlarms = ref([])
 const patientFences = ref([])
 const loading = ref(true)
 let map = null
+let marker = null
+let refreshTimer = null
 
 /**
  * 未处理报警数
@@ -156,6 +158,15 @@ const goBack = () => {
 const formatDate = (dateString) => {
   if (!dateString) return ''
   return new Date(dateString).toLocaleString()
+}
+
+const formatLocationText = (location) => {
+  if (!location) return '未知地址'
+  if (location.address) return location.address
+  if (Number.isFinite(location.latitude) && Number.isFinite(location.longitude)) {
+    return `经纬度 ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)}`
+  }
+  return '未知地址'
 }
 
 const getAlarmTypeName = (alarm) => {
@@ -199,13 +210,7 @@ const fetchPatientDetail = async () => {
         device.value = deviceList.find(d => d.id === deviceId)
       } catch (e) { /* 忽略 */ }
 
-      try {
-        const loc = await locationApi.getLatestLocation(deviceId)
-        latestLocation.value = loc
-        if (loc && loc.latitude && loc.longitude) {
-          setTimeout(() => initMap(loc.latitude, loc.longitude), 100)
-        }
-      } catch (e) { /* 忽略 */ }
+      await fetchLatestLocation(deviceId)
     }
 
     try {
@@ -225,21 +230,80 @@ const fetchPatientDetail = async () => {
     ElMessage.error('获取病人信息失败')
   } finally {
     loading.value = false
+    await nextTick()
+    renderPatientMap()
   }
 }
 
 /**
- * 初始化病人位置地图
+ * 获取最新位置
  */
-const initMap = (lat, lng) => {
-  const el = document.getElementById('patient-map')
-  if (!el || map) return
+const fetchLatestLocation = async (deviceId = device.value?.id) => {
+  if (!deviceId) return
 
-  map = L.map('patient-map').setView([lat, lng], 15)
-  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
-    subdomains: ['1', '2', '3', '4'],
-    attribution: '© 高德地图'
-  }).addTo(map)
+  try {
+    const loc = await locationApi.getLatestLocationWithAmap(deviceId)
+    latestLocation.value = normalizeLocation(loc)
+    await nextTick()
+    renderPatientMap()
+  } catch (e) {
+    // 位置获取失败不影响病人详情展示。
+  }
+}
+
+const normalizeLocation = (location) => {
+  if (!location) return null
+  const latitude = normalizeCoordinate(location.latitude ?? location.lat ?? location.lastLatitude)
+  const longitude = normalizeCoordinate(location.longitude ?? location.lng ?? location.lon ?? location.lastLongitude)
+  return {
+    ...location,
+    latitude,
+    longitude,
+    time: location.time || location.createdAt || location.lastLocationTime || location.recvTime
+  }
+}
+
+const normalizeCoordinate = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const coordinate = Number(value)
+  return Number.isFinite(coordinate) ? coordinate : null
+}
+
+const hasValidLocation = (location) => {
+  return location &&
+    Number.isFinite(location.latitude) &&
+    Number.isFinite(location.longitude) &&
+    location.latitude >= -90 &&
+    location.latitude <= 90 &&
+    location.longitude >= -180 &&
+    location.longitude <= 180 &&
+    !(location.latitude === 0 && location.longitude === 0)
+}
+
+/**
+ * DOM渲染完成后初始化或更新病人位置地图
+ */
+const renderPatientMap = () => {
+  if (!hasValidLocation(latestLocation.value)) return
+
+  const el = document.getElementById('patient-map')
+  if (!el) return
+
+  const lat = latestLocation.value.latitude
+  const lng = latestLocation.value.longitude
+  const latLng = [lat, lng]
+
+  if (!map) {
+    map = L.map('patient-map').setView(latLng, 15)
+    L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
+      subdomains: ['1', '2', '3', '4'],
+      attribution: '© 高德地图'
+    }).addTo(map)
+  } else {
+    map.setView(latLng, 15)
+  }
+
+  map.invalidateSize()
 
   const customIcon = L.divIcon({
     className: 'custom-marker',
@@ -247,14 +311,31 @@ const initMap = (lat, lng) => {
     iconSize: [40, 40],
     iconAnchor: [20, 40]
   })
-  L.marker([lat, lng], { icon: customIcon })
-    .bindPopup(`<b>${patient.value?.name || '未知'}</b><br>${latestLocation.value?.address || ''}`)
-    .addTo(map)
+
+  if (marker) {
+    marker.setLatLng(latLng)
+  } else {
+    marker = L.marker(latLng, { icon: customIcon }).addTo(map)
+  }
+
+  marker
+    .bindPopup(`<b>${patient.value?.name || '未知'}</b><br>${formatLocationText(latestLocation.value)}`)
     .openPopup()
 }
 
 onMounted(() => {
   fetchPatientDetail()
+  refreshTimer = setInterval(() => fetchLatestLocation(), 30000)
+})
+
+onBeforeUnmount(() => {
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+  }
+  if (map) {
+    map.remove()
+    map = null
+  }
 })
 </script>
 

@@ -84,3 +84,20 @@ assert.match(
   /marker\.openPopup\(\)/,
   'selected realtime marker should open its location popup automatically'
 )
+
+const patientDetailSource = readSource('src/views/PatientDetail.vue')
+assert.match(
+  patientDetailSource,
+  /await nextTick\(\)[\s\S]*renderPatientMap\(\)/,
+  'patient detail map should render after the location DOM exists'
+)
+assert.match(
+  patientDetailSource,
+  /map\.invalidateSize\(\)/,
+  'patient detail map should invalidate size after rendering in a card'
+)
+assert.match(
+  patientDetailSource,
+  /setInterval\(\(\) => fetchLatestLocation\(\), 30000\)/,
+  'patient detail map should refresh the latest location periodically'
+)
