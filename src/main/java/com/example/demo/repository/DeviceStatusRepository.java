@@ -38,7 +38,7 @@ public class DeviceStatusRepository {
         // PRIMARY KEY(device_id)
         return jdbc.update("INSERT INTO device_status(device_id,last_location_time,last_latitude,last_longitude,battery_level,is_online,updated_at,imei) " +
                         "VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP,?) " +
-                        "ON DUPLICATE KEY UPDATE last_location_time=VALUES(last_location_time), last_latitude=VALUES(last_latitude), last_longitude=VALUES(last_longitude), battery_level=VALUES(battery_level), is_online=VALUES(is_online), updated_at=CURRENT_TIMESTAMP, imei=VALUES(imei)",
+                        "ON DUPLICATE KEY UPDATE last_location_time=COALESCE(VALUES(last_location_time), last_location_time), last_latitude=COALESCE(VALUES(last_latitude), last_latitude), last_longitude=COALESCE(VALUES(last_longitude), last_longitude), battery_level=COALESCE(VALUES(battery_level), battery_level), is_online=COALESCE(VALUES(is_online), is_online), updated_at=CURRENT_TIMESTAMP, imei=COALESCE(VALUES(imei), imei)",
                 s.getDeviceId(),
                 s.getLastLocationTime() == null ? null : new Timestamp(s.getLastLocationTime().getTime()),
                 s.getLastLatitude(), s.getLastLongitude(), s.getBatteryLevel(), s.getIsOnline(), s.getImei());

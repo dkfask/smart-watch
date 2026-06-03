@@ -108,11 +108,12 @@ class TrackingServiceTest {
         record.setImei("IMEI001");
         record.setLatitude(39.9087);
         record.setLongitude(116.3975);
+        record.setBatteryLevel(80);
         when(statusRepo.findById(1L)).thenReturn(Optional.empty());
 
         trackingService.processLocationRecord(record);
 
-        verify(statusRepo).upsert(any(DeviceStatus.class));
+        verify(statusRepo).upsert(argThat(status -> Integer.valueOf(80).equals(status.getBatteryLevel())));
         verify(fenceService).checkFencesAndAlert(any(DeviceLocation.class), any(), any());
     }
 }

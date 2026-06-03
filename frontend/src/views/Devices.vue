@@ -35,7 +35,7 @@
           </el-table-column>
           <el-table-column prop="batteryLevel" label="电量" min-width="100">
             <template #default="scope">
-              <span v-if="scope.row.batteryLevel">{{ scope.row.batteryLevel }}%</span>
+              <span v-if="scope.row.batteryLevel !== null && scope.row.batteryLevel !== undefined">{{ scope.row.batteryLevel }}%</span>
               <span v-else>-</span>
             </template>
           </el-table-column>

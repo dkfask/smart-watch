@@ -41,7 +41,7 @@
               <el-descriptions-item label="地址">{{ latestLocation?.address || '-' }}</el-descriptions-item>
               <el-descriptions-item label="精度">{{ latestLocation?.accuracy || '-' }} 米</el-descriptions-item>
               <el-descriptions-item label="海拔">{{ latestLocation?.altitude || '-' }} 米</el-descriptions-item>
-              <el-descriptions-item label="电池电量">{{ latestLocation?.batteryLevel || '-' }}%</el-descriptions-item>
+              <el-descriptions-item label="电池电量">{{ latestLocation?.batteryLevel ?? '-' }}%</el-descriptions-item>
               <el-descriptions-item label="定位来源">{{ latestLocation?.source || '-' }}</el-descriptions-item>
             </el-descriptions>
           </el-col>

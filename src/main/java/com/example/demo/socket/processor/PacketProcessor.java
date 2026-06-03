@@ -371,6 +371,25 @@ public class PacketProcessor {
                 }
             }
 
+            if (!hasValidCoordinate(rec.getLatitude(), rec.getLongitude())
+                    && params.containsKey("mcc")
+                    && params.containsKey("mnc")
+                    && params.containsKey("lac")
+                    && params.containsKey("cid")) {
+                Map<String, Double> lbsLocation = amapLocationService.locateByCell(
+                        imei,
+                        params.get("mcc"),
+                        params.get("mnc"),
+                        params.get("lac"),
+                        params.get("cid"),
+                        params.get("gsm"));
+                if (lbsLocation != null) {
+                    rec.setLatitude(lbsLocation.get("lat"));
+                    rec.setLongitude(lbsLocation.get("lng"));
+                    params.put("locationSource", "lbs");
+                }
+            }
+
             // 保存速度和方向
             if (params.containsKey("speed")) {
                 try { rec.setSpeed(Double.parseDouble(params.get("speed"))); } catch (Exception ignored) {}
@@ -378,6 +397,7 @@ public class PacketProcessor {
             if (params.containsKey("direction")) {
                 try { rec.setDirection(Double.parseDouble(params.get("direction"))); } catch (Exception ignored) {}
             }
+            rec.setBatteryLevel(parseIntegerParam(params, "battery_level", "batteryLevel", "battery"));
 
             // 获取地址信息
             if (rec.getLatitude() != null && rec.getLongitude() != null) {
@@ -557,6 +577,27 @@ public class PacketProcessor {
     private Double parseDoubleSafely(String s) {
         if (s == null) return null;
         try { return Double.parseDouble(s); } catch (Exception e) { return null; }
+    }
+
+    private Integer parseIntegerParam(Map<String, String> params, String... keys) {
+        if (params == null || keys == null) return null;
+        for (String key : keys) {
+            String value = params.get(key);
+            if (value == null || value.isBlank()) continue;
+            try {
+                return Integer.parseInt(value.trim());
+            } catch (NumberFormatException ignored) {
+                log.warn("Invalid integer value for {}: {}", key, value);
+            }
+        }
+        return null;
+    }
+
+    private boolean hasValidCoordinate(Double lat, Double lng) {
+        return lat != null && lng != null
+                && lat >= -90 && lat <= 90
+                && lng >= -180 && lng <= 180
+                && !(Double.compare(lat, 0.0) == 0 && Double.compare(lng, 0.0) == 0);
     }
 
     /** 查找或创建设备 */

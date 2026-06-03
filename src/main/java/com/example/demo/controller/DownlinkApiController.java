@@ -788,6 +788,7 @@ public class DownlinkApiController {
         map.put("speed", record.getSpeed());
         map.put("direction", record.getDirection());
         map.put("address", record.getAddress());
+        map.put("batteryLevel", record.getBatteryLevel());
         map.put("source", record.getSource());
         return map;
     }

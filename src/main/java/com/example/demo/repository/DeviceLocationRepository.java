@@ -9,6 +9,8 @@ import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
@@ -24,7 +26,7 @@ public class DeviceLocationRepository {
         this.amapLocationService = amapLocationService;
     }
 
-    // 使用 location_records 的列名：id, device_id, imei, recv_time, gps_raw, extra_raw, latitude, longitude, speed, direction, address, source
+    // 使用 location_records 的列名：id, device_id, imei, recv_time, gps_raw, extra_raw, latitude, longitude, speed, direction, address, source, battery_level
     private static final RowMapper<DeviceLocation> MAPPER = (rs, n) -> {
         DeviceLocation dl = new DeviceLocation();
         dl.setLocationId(rs.getLong("id"));
@@ -34,10 +36,9 @@ public class DeviceLocationRepository {
         dl.setTime(t != null ? t.toLocalDateTime() : null);
         dl.setLatitude(rs.getBigDecimal("latitude"));
         dl.setLongitude(rs.getBigDecimal("longitude"));
-        // location_records 不包含 accuracy/altitude/battery_level 字段，保持模型字段为 null
         dl.setAccuracy(null);
         dl.setAltitude(null);
-        dl.setBatteryLevel(null);
+        dl.setBatteryLevel(getNullableInt(rs, "battery_level"));
         dl.setSource(rs.getString("source"));
         dl.setAddress(rs.getString("address"));
         return dl;
@@ -52,7 +53,7 @@ public class DeviceLocationRepository {
             address = null;
         }
         
-        String sql = "INSERT INTO location_records(device_id, imei, recv_time, gps_raw, extra_raw, latitude, longitude, speed, direction, address, source) VALUES(?,?,?,?,?,?,?,?,?,?,?)";
+        String sql = "INSERT INTO location_records(device_id, imei, recv_time, gps_raw, extra_raw, latitude, longitude, speed, direction, address, source, battery_level) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)";
         KeyHolder kh = new GeneratedKeyHolder();
         jdbc.update(con -> {
             PreparedStatement ps = con.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS);
@@ -68,6 +69,7 @@ public class DeviceLocationRepository {
             ps.setObject(9, null); // direction
             ps.setString(10, address); // address
             ps.setString(11, dl.getSource());
+            ps.setObject(12, dl.getBatteryLevel());
             return ps;
         }, kh);
         return kh.getKey() == null ? 0L : kh.getKey().longValue();
@@ -103,5 +105,21 @@ public class DeviceLocationRepository {
         Long count = jdbc.queryForObject("SELECT COUNT(*) FROM location_records WHERE device_id=? AND recv_time BETWEEN ? AND ?",
                 Long.class, deviceId, Timestamp.valueOf(start), Timestamp.valueOf(end));
         return count != null ? count : 0;
+    }
+
+    private static Integer getNullableInt(ResultSet rs, String column) throws SQLException {
+        if (!hasColumn(rs, column)) return null;
+        Object value = rs.getObject(column);
+        return value == null ? null : rs.getInt(column);
+    }
+
+    private static boolean hasColumn(ResultSet rs, String column) throws SQLException {
+        var meta = rs.getMetaData();
+        for (int i = 1; i <= meta.getColumnCount(); i++) {
+            if (column.equalsIgnoreCase(meta.getColumnLabel(i))) {
+                return true;
+            }
+        }
+        return false;
     }
 }

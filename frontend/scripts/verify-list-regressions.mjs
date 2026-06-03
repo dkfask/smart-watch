@@ -172,6 +172,11 @@ assert.match(
   /formatBeijingTime/,
   'history page should render timestamps as Beijing time'
 )
+assert.match(
+  historySource,
+  /batteryLevel \?\? '-'/,
+  'history page should render a real 0% battery level instead of replacing it with a dash'
+)
 assert.doesNotMatch(
   historySource,
   /new Date\(dateString\)\.toLocaleString\(\)/,

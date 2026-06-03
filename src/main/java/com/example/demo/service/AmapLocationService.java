@@ -2,6 +2,8 @@ package com.example.demo.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -16,6 +18,7 @@ import java.util.Map;
  */
 @Service
 public class AmapLocationService {
+    private static final Logger log = LoggerFactory.getLogger(AmapLocationService.class);
 
     private final RestTemplate restTemplate;
     private final String webKey;
@@ -64,6 +67,63 @@ public class AmapLocationService {
             }
             return null;
         } catch (Exception ex) {
+            return null;
+        }
+    }
+
+    public Map<String, Double> locateByCell(String imei,
+                                            String mcc,
+                                            String mnc,
+                                            String lac,
+                                            String cid,
+                                            String signal) {
+        if (webKey == null || webKey.isEmpty()
+                || isBlank(mcc) || isBlank(mnc) || isBlank(lac) || isBlank(cid)) {
+            return null;
+        }
+
+        String bts = String.join(",",
+                mcc.trim(),
+                mnc.trim(),
+                lac.trim(),
+                cid.trim(),
+                normalizeSignal(signal));
+
+        URI uri = UriComponentsBuilder
+                .fromUriString("https://apilocate.amap.com/position")
+                .queryParam("key", webKey)
+                .queryParam("accesstype", 0)
+                .queryParam("cdma", 0)
+                .queryParam("network", "GPRS")
+                .queryParam("bts", bts)
+                .queryParam("imei", imei == null ? "" : imei)
+                .queryParam("platform", "rest")
+                .queryParam("output", "json")
+                .build()
+                .toUri();
+
+        try {
+            ResponseEntity<Map> resp = restTemplate.getForEntity(uri, Map.class);
+            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
+                return null;
+            }
+            Map<?, ?> body = resp.getBody();
+            if (!"1".equals(String.valueOf(body.get("status")))) {
+                log.debug("Amap cell locate failed: info={}, infocode={}", body.get("info"), body.get("infocode"));
+                return null;
+            }
+
+            Object location = null;
+            Object result = body.get("result");
+            if (result instanceof Map<?, ?> resultMap) {
+                location = resultMap.get("location");
+            }
+            if (location == null) {
+                location = body.get("location");
+            }
+            return parseLocation(location);
+        } catch (Exception ex) {
+            log.debug("Amap cell locate request failed: {}", ex.getMessage());
             return null;
         }
     }
@@ -127,6 +187,48 @@ public class AmapLocationService {
             ex.printStackTrace();
             return null;
         }
+    }
+
+    private static String normalizeSignal(String signal) {
+        if (isBlank(signal)) {
+            return "null";
+        }
+        String trimmed = signal.trim();
+        try {
+            int value = Integer.parseInt(trimmed);
+            if (value <= 0) {
+                return "null";
+            }
+            if (value <= 31) {
+                int dbm = (2 * value) - 113;
+                return String.valueOf(dbm);
+            }
+        } catch (NumberFormatException ignored) {
+            return "null";
+        }
+        return "null";
+    }
+
+    private static Map<String, Double> parseLocation(Object location) {
+        if (location == null) {
+            return null;
+        }
+        String[] loc = location.toString().split(",");
+        if (loc.length != 2) {
+            return null;
+        }
+        try {
+            Map<String, Double> result = new HashMap<>();
+            result.put("lng", Double.parseDouble(loc[0]));
+            result.put("lat", Double.parseDouble(loc[1]));
+            return result;
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
     
     /**

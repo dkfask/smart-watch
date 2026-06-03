@@ -160,6 +160,8 @@ public class LocationProtocolHandler extends BaseProtocolHandler {
                         packet.getParams().put("gsm", gsm);
                         packet.getParams().put("satellite", satellite);
                         packet.getParams().put("battery", battery);
+                        packet.getParams().put("batteryLevel", battery);
+                        packet.getParams().put("battery_level", battery);
                         packet.getParams().put("reserved", reserved);
                         packet.getParams().put("arm", arm);
                         packet.getParams().put("workMode", workMode);

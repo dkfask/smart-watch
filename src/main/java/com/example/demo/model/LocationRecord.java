@@ -55,6 +55,9 @@ public class LocationRecord {
     @Column(length = 255)
     private String address;
 
+    @Column(name = "battery_level")
+    private Integer batteryLevel;
+
     @Column(length = 50)
     private String source;
 
@@ -107,6 +110,9 @@ public class LocationRecord {
     public String getAddress() { return address; }
     public void setAddress(String address) { this.address = address; }
 
+    public Integer getBatteryLevel() { return batteryLevel; }
+    public void setBatteryLevel(Integer batteryLevel) { this.batteryLevel = batteryLevel; }
+
     public String getSource() { return source; }
     public void setSource(String source) { this.source = source; }
 
@@ -116,4 +122,3 @@ public class LocationRecord {
     public Date getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Date updatedAt) { this.updatedAt = updatedAt; }
 }
-

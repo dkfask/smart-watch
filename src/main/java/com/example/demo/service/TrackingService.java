@@ -63,7 +63,7 @@ public class TrackingService {
         Double[] prevLocation = getPreviousLocation(locationRecord.getDevice().getId());
         updateDeviceStatusAndCheckFence(
                 locationRecord.getDevice().getId(), currLat, currLng, locationRecord.getImei(),
-                null, null, prevLocation[0], prevLocation[1]);
+                locationRecord.getBatteryLevel(), null, prevLocation[0], prevLocation[1]);
     }
 
     /**

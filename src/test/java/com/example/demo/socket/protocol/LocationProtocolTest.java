@@ -38,6 +38,9 @@ class LocationProtocolTest {
                 
                 // 验证定位源
                 assertEquals("gps", locationPacket.getParams().get("locationSource"));
+                assertEquals("080", locationPacket.getParams().get("battery"));
+                assertEquals("080", locationPacket.getParams().get("batteryLevel"));
+                assertEquals("080", locationPacket.getParams().get("battery_level"));
                 
                 System.out.println("✅ GPS定位数据解析成功");
                 System.out.println("   经纬度: " + locationPacket.getLat() + ", " + locationPacket.getLng());

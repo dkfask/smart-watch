@@ -80,7 +80,7 @@
                           经度: {{ location.longitude?.toFixed(6) }}, 纬度: {{ location.latitude?.toFixed(6) }}
                         </div>
                         <div class="location-info">
-                          <span>电量: {{ location.batteryLevel || '-' }}%</span>
+                          <span>电量: {{ location.batteryLevel ?? '-' }}%</span>
                           <span>来源: {{ location.source || '-' }}</span>
                         </div>
                       </div>
@@ -439,7 +439,7 @@ const updateMap = () => {
           位置: ${normalizeAddress(location.address) || '未知'}<br>
           经度: ${lng}<br>
           纬度: ${lat}<br>
-          电池: ${location.batteryLevel || '-'}%<br>
+          电池: ${location.batteryLevel ?? '-'}%<br>
           状态: ${isBreached ? '<span style="color: red;">越界</span>' : '正常'}
         `)
 
