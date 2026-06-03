@@ -287,6 +287,48 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 设备日志对话框 -->
+    <el-dialog v-model="logDialogVisible" title="设备日志" width="900px">
+      <div class="report-summary">
+        <span>IMEI：{{ logMeta.imei || '-' }}</span>
+        <span>日志数：{{ logMeta.total ?? 0 }}</span>
+        <span>生成时间：{{ formatReportTime(logMeta.generatedAt) }}</span>
+      </div>
+      <div class="raw-log-content" v-loading="logLoading">
+        <pre v-if="logContent" class="raw-log-text">{{ logContent }}</pre>
+        <div v-else-if="!logLoading" class="empty-logs">暂无日志数据</div>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="logDialogVisible = false">关闭</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- 电池报告对话框 -->
+    <el-dialog v-model="batteryDialogVisible" title="电池报告" width="640px">
+      <div v-loading="batteryLoading">
+        <el-descriptions v-if="batteryReport" :column="2" border>
+          <el-descriptions-item label="IMEI">{{ batteryReport.imei || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="在线状态">{{ batteryReport.online ? '在线' : '离线' }}</el-descriptions-item>
+          <el-descriptions-item label="当前电量">{{ formatBatteryLevel(batteryReport.batteryLevel) }}</el-descriptions-item>
+          <el-descriptions-item label="定位记录">{{ batteryReport.locationRecordCount ?? 0 }}</el-descriptions-item>
+          <el-descriptions-item label="最后定位">{{ formatReportTime(batteryReport.lastLocationTime) }}</el-descriptions-item>
+          <el-descriptions-item label="状态更新">{{ formatReportTime(batteryReport.lastStatusUpdate) }}</el-descriptions-item>
+          <el-descriptions-item label="最近位置" :span="2">
+            {{ formatLatestLocation(batteryReport.latestLocation) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="说明" :span="2">{{ batteryReport.message || '-' }}</el-descriptions-item>
+        </el-descriptions>
+        <el-empty v-else-if="!batteryLoading" description="暂无电池报告" />
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="batteryDialogVisible = false">关闭</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -396,6 +438,15 @@ const rawLogForm = reactive({
   imei: ''
 })
 
+const logDialogVisible = ref(false)
+const logLoading = ref(false)
+const logContent = ref('')
+const logMeta = ref({})
+
+const batteryDialogVisible = ref(false)
+const batteryLoading = ref(false)
+const batteryReport = ref(null)
+
 // 查询原始日志
 const handleQueryRawLogs = async () => {
   if (!rawLogForm.imei) {
@@ -464,6 +515,52 @@ const handleOpenRawLogs = (device) => {
   rawLogContent.value = ''
   rawLogTotal.value = 0
   rawLogDialogVisible.value = true
+}
+
+const handleOpenDeviceLogs = async (imei) => {
+  logDialogVisible.value = true
+  logLoading.value = true
+  logContent.value = ''
+  logMeta.value = { imei }
+  try {
+    const response = await downlinkApi.getLogs(imei)
+    logMeta.value = response || { imei }
+    logContent.value = response?.logs || ''
+    if (!logContent.value) {
+      ElMessage.info('暂无日志数据')
+    }
+  } finally {
+    logLoading.value = false
+  }
+}
+
+const handleOpenBatteryReport = async (imei) => {
+  batteryDialogVisible.value = true
+  batteryLoading.value = true
+  batteryReport.value = null
+  try {
+    const response = await downlinkApi.getBatteryReport(imei)
+    batteryReport.value = response || null
+  } finally {
+    batteryLoading.value = false
+  }
+}
+
+const formatReportTime = (value) => {
+  if (!value) return '-'
+  return new Date(value).toLocaleString()
+}
+
+const formatBatteryLevel = (value) => {
+  return value === null || value === undefined || value === '' ? '-' : `${value}%`
+}
+
+const formatLatestLocation = (location) => {
+  if (!location) return '-'
+  const coordinate = location.latitude && location.longitude
+    ? `${Number(location.latitude).toFixed(6)}, ${Number(location.longitude).toFixed(6)}`
+    : '-'
+  return [location.address, coordinate, formatReportTime(location.time)].filter(Boolean).join(' / ')
 }
 
 // 格式化日期
@@ -727,9 +824,7 @@ const handleCommand = async (deviceId, commandType) => {
         response = await downlinkApi.stopRealTimeTracking(imei)
         break
       case 'getLogs':
-        response = await downlinkApi.getLogs(imei)
-        console.log('Device logs:', response)
-        ElMessage.success('获取日志成功')
+        await handleOpenDeviceLogs(imei)
         return
       case 'rawLogs':
         handleOpenRawLogs(device)
@@ -741,9 +836,7 @@ const handleCommand = async (deviceId, commandType) => {
         ElMessage.success('获取报警日历成功')
         return
       case 'batteryReport':
-        response = await downlinkApi.getBatteryReport(imei)
-        console.log('Battery report:', response)
-        ElMessage.success('获取电池报告成功')
+        await handleOpenBatteryReport(imei)
         return
       case 'exportStatusHistory':
         const endTime = new Date().toISOString()
@@ -751,11 +844,11 @@ const handleCommand = async (deviceId, commandType) => {
         response = await downlinkApi.exportStatusHistory(imei, startTime, endTime)
         const blob = response instanceof Blob
           ? response
-          : new Blob([response], { type: 'application/vnd.ms-excel' })
+          : new Blob([response], { type: 'text/csv;charset=utf-8;' })
         const url = window.URL.createObjectURL(blob)
         const link = document.createElement('a')
         link.href = url
-        link.download = `device_${imei}_status_history.xlsx`
+        link.download = `device_${imei}_status_history.csv`
         link.click()
         window.URL.revokeObjectURL(url)
         ElMessage.success('导出状态历史成功')
@@ -1130,6 +1223,15 @@ onMounted(() => {
 /* 原始日志对话框样式 */
 .raw-log-header {
   margin-bottom: 20px;
+}
+
+.report-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  margin-bottom: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .raw-log-content {

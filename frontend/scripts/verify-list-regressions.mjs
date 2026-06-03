@@ -60,6 +60,30 @@ assert.match(
   /device-action-section/,
   'device dropdown should render collapsible action sections'
 )
+assert.match(
+  devicesSource,
+  /logDialogVisible/,
+  'get logs should show a visible device log dialog instead of only logging to console'
+)
+assert.match(
+  devicesSource,
+  /batteryDialogVisible/,
+  'battery report should show a visible report dialog instead of only logging to console'
+)
+assert.match(
+  devicesSource,
+  /status_history\.csv/,
+  'status history export should download a CSV file'
+)
+
+const downlinkSource = readSource('src/api/downlink.js')
+for (const endpoint of ['logs', 'battery-report', 'history-track', 'export-status-history']) {
+  assert.match(
+    downlinkSource,
+    new RegExp(`/downlink/${endpoint}`),
+    `downlink API should expose ${endpoint}`
+  )
+}
 
 const patientSource = readSource('src/views/Patient.vue')
 assert.match(

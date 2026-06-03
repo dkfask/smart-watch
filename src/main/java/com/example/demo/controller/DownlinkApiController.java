@@ -2,23 +2,33 @@ package com.example.demo.controller;
 
 import com.example.demo.socket.downlink.DownlinkManager;
 import com.example.demo.socket.downlink.DownlinkService;
+import com.example.demo.model.Device;
+import com.example.demo.model.DeviceStatus;
+import com.example.demo.model.LocationRecord;
+import com.example.demo.repository.DeviceRepository;
+import com.example.demo.repository.DeviceStatusRepository;
+import com.example.demo.repository.LocationRecordRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/downlink")
@@ -26,9 +36,18 @@ public class DownlinkApiController {
     private static final Logger log = LoggerFactory.getLogger(DownlinkApiController.class);
 
     private final DownlinkManager downlinkManager;
+    private final DeviceRepository deviceRepository;
+    private final DeviceStatusRepository deviceStatusRepository;
+    private final LocationRecordRepository locationRecordRepository;
 
-    public DownlinkApiController(DownlinkManager downlinkManager) {
+    public DownlinkApiController(DownlinkManager downlinkManager,
+                                 DeviceRepository deviceRepository,
+                                 DeviceStatusRepository deviceStatusRepository,
+                                 LocationRecordRepository locationRecordRepository) {
         this.downlinkManager = downlinkManager;
+        this.deviceRepository = deviceRepository;
+        this.deviceStatusRepository = deviceStatusRepository;
+        this.locationRecordRepository = locationRecordRepository;
     }
 
     @GetMapping("/online")
@@ -43,13 +62,144 @@ public class DownlinkApiController {
             return ResponseEntity.badRequest().body(Map.of("error", "imei required"));
         }
 
+        Optional<Device> device = deviceRepository.findByImei(imei);
+        Optional<DeviceStatus> status = device.flatMap(d -> deviceStatusRepository.findById(d.getId()));
+        List<LocationRecord> records = locationRecordRepository.findByImeiOrderByRecvTimeDesc(imei);
+        Optional<LocationRecord> latestLocation = records.stream()
+                .filter(DownlinkApiController::hasValidCoordinate)
+                .findFirst();
+
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("imei", imei);
+        report.put("deviceId", device.map(Device::getId).orElse(null));
         report.put("online", downlinkManager.getOnlineImeis().contains(imei));
-        report.put("batteryLevel", null);
-        report.put("message", "当前设备未上报电量数据，已返回设备在线状态。");
+        report.put("batteryLevel", status.map(DeviceStatus::getBatteryLevel).orElse(null));
+        report.put("lastLocationTime", status.map(DeviceStatus::getLastLocationTime).orElse(null));
+        report.put("lastStatusUpdate", status.map(DeviceStatus::getUpdatedAt).orElse(null));
+        report.put("locationRecordCount", records.size());
+        report.put("latestLocation", latestLocation.map(this::locationRecordToMap).orElse(null));
+        report.put("message", status.map(DeviceStatus::getBatteryLevel).orElse(null) == null
+                ? "当前设备暂无电量上报，已返回在线状态和最近定位信息。"
+                : "电池报告已根据设备最新状态生成。");
         report.put("generatedAt", Instant.now().toString());
         return ResponseEntity.ok(report);
+    }
+
+    @GetMapping("/logs")
+    public ResponseEntity<?> logs(@RequestParam String imei,
+                                  @RequestParam(required = false) String startTime,
+                                  @RequestParam(required = false) String endTime,
+                                  @RequestParam(defaultValue = "200") int size) {
+        if (imei == null || imei.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "imei required"));
+        }
+
+        LocalDateTime end = endTime == null || endTime.isBlank() ? LocalDateTime.now() : parseClientTime(endTime);
+        LocalDateTime start = startTime == null || startTime.isBlank() ? end.minusDays(7) : parseClientTime(startTime);
+        int limit = Math.max(1, Math.min(size, 1000));
+
+        List<String> lines = collectLogLines(imei, start, end, null);
+        int total = lines.size();
+        List<String> latestLines = lines.stream()
+                .skip(Math.max(0, total - limit))
+                .collect(Collectors.toList());
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "success");
+        response.put("imei", imei);
+        response.put("startTime", start.toString());
+        response.put("endTime", end.toString());
+        response.put("total", total);
+        response.put("count", latestLines.size());
+        response.put("logs", String.join("\n", latestLines));
+        response.put("generatedAt", Instant.now().toString());
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/history-track")
+    public ResponseEntity<?> historyTrack(@RequestParam String imei,
+                                          @RequestParam String startTime,
+                                          @RequestParam String endTime,
+                                          @RequestParam(defaultValue = "500") int limit) {
+        if (imei == null || imei.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "imei required"));
+        }
+
+        LocalDateTime start = parseClientTime(startTime);
+        LocalDateTime end = parseClientTime(endTime);
+        int safeLimit = Math.max(1, Math.min(limit, 2000));
+        List<LocationRecord> records = filterLocationRecords(imei, start, end).stream()
+                .filter(DownlinkApiController::hasValidCoordinate)
+                .sorted(Comparator.comparing(LocationRecord::getRecvTime))
+                .limit(safeLimit)
+                .collect(Collectors.toList());
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("status", "success");
+        response.put("imei", imei);
+        response.put("startTime", start.toString());
+        response.put("endTime", end.toString());
+        response.put("total", records.size());
+        response.put("locations", records.stream().map(this::locationRecordToMap).collect(Collectors.toList()));
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/export-status-history")
+    public ResponseEntity<byte[]> exportStatusHistory(@RequestParam String imei,
+                                                      @RequestParam String startTime,
+                                                      @RequestParam String endTime) {
+        if (imei == null || imei.isEmpty()) {
+            return ResponseEntity.badRequest().body("imei required".getBytes(StandardCharsets.UTF_8));
+        }
+
+        LocalDateTime start = parseClientTime(startTime);
+        LocalDateTime end = parseClientTime(endTime);
+        Optional<Device> device = deviceRepository.findByImei(imei);
+        Optional<DeviceStatus> status = device.flatMap(d -> deviceStatusRepository.findById(d.getId()));
+        List<LocationRecord> records = filterLocationRecords(imei, start, end)
+                .stream()
+                .sorted(Comparator.comparing(LocationRecord::getRecvTime))
+                .collect(Collectors.toList());
+
+        List<List<Object>> rows = new ArrayList<>();
+        rows.add(List.of("IMEI", "设备ID", "时间", "在线状态", "电量", "纬度", "经度", "地址", "来源"));
+        if (records.isEmpty()) {
+            rows.add(Arrays.asList(
+                    imei,
+                    device.map(Device::getId).orElse(null),
+                    status.map(DeviceStatus::getUpdatedAt).orElse(null),
+                    downlinkManager.getOnlineImeis().contains(imei) ? "在线" : "离线",
+                    status.map(DeviceStatus::getBatteryLevel).orElse(null),
+                    status.map(DeviceStatus::getLastLatitude).orElse(null),
+                    status.map(DeviceStatus::getLastLongitude).orElse(null),
+                    "",
+                    "device_status"
+            ));
+        } else {
+            for (LocationRecord record : records) {
+                rows.add(Arrays.asList(
+                        imei,
+                        device.map(Device::getId).orElse(null),
+                        record.getRecvTime(),
+                        downlinkManager.getOnlineImeis().contains(imei) ? "在线" : "离线",
+                        status.map(DeviceStatus::getBatteryLevel).orElse(null),
+                        record.getLatitude(),
+                        record.getLongitude(),
+                        record.getAddress() == null ? "" : record.getAddress(),
+                        record.getSource() == null ? "" : record.getSource()
+                ));
+            }
+        }
+
+        String csv = rows.stream()
+                .map(row -> row.stream().map(DownlinkApiController::csvValue).collect(Collectors.joining(",")))
+                .collect(Collectors.joining("\n"));
+        byte[] body = ("\uFEFF" + csv).getBytes(StandardCharsets.UTF_8);
+        String filename = "device_" + imei + "_status_history.csv";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                .body(body);
     }
 
     /**
@@ -556,44 +706,9 @@ public class DownlinkApiController {
         if (size < 1 || size > 1000) size = 100;
 
         try {
-            // 解析开始和结束时间
-            DateTimeFormatter formatter = DateTimeFormatter.ISO_DATE_TIME;
-            LocalDateTime start = LocalDateTime.parse(startTime, formatter);
-            LocalDateTime end = LocalDateTime.parse(endTime, formatter);
-
-            // 生成日期范围
-            List<LocalDate> dates = new ArrayList<>();
-            LocalDate current = start.toLocalDate();
-            LocalDate endDate = end.toLocalDate();
-            while (!current.isAfter(endDate)) {
-                dates.add(current);
-                current = current.plusDays(1);
-            }
-
-            // 日志文件存储目录
-            String saveBasePath = "mpband_data";
-            Path deviceLogsPath = Paths.get(System.getProperty("user.dir"), saveBasePath, "devices");
-
-            // 收集所有符合条件的日志行
-            List<String> allLogLines = new ArrayList<>();
-            DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
-
-            for (LocalDate date : dates) {
-                // 设备日志文件名格式：{imei}_yyyyMMdd.log
-                String logFileName = String.format("%s_%s.log", imei, dateFormatter.format(date));
-                Path logFile = deviceLogsPath.resolve(logFileName);
-
-                if (Files.exists(logFile)) {
-                    // 读取文件内容并过滤
-                    List<String> lines = Files.readAllLines(logFile);
-                    for (String line : lines) {
-                        // 检查时间范围和关键词
-                        if (isLineInTimeRange(line, start, end) && (keyword == null || keyword.isEmpty() || line.contains(keyword))) {
-                            allLogLines.add(line);
-                        }
-                    }
-                }
-            }
+            LocalDateTime start = parseClientTime(startTime);
+            LocalDateTime end = parseClientTime(endTime);
+            List<String> allLogLines = collectLogLines(imei, start, end, keyword);
 
             // 计算分页
             int total = allLogLines.size();
@@ -619,6 +734,88 @@ public class DownlinkApiController {
             log.error("Failed to get raw logs for imei={}: {}", imei, e.getMessage());
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of("status", "failed", "error", e.getMessage()));
         }
+    }
+
+    private List<String> collectLogLines(String imei, LocalDateTime start, LocalDateTime end, String keyword) {
+        List<LocalDate> dates = new ArrayList<>();
+        LocalDate current = start.toLocalDate();
+        LocalDate endDate = end.toLocalDate();
+        while (!current.isAfter(endDate)) {
+            dates.add(current);
+            current = current.plusDays(1);
+        }
+
+        Path deviceLogsPath = Paths.get(System.getProperty("user.dir"), "mpband_data", "devices");
+        List<String> allLogLines = new ArrayList<>();
+        DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
+
+        for (LocalDate date : dates) {
+            Path logFile = deviceLogsPath.resolve(String.format("%s_%s.log", imei, dateFormatter.format(date)));
+            if (!Files.exists(logFile)) {
+                continue;
+            }
+            try {
+                for (String line : Files.readAllLines(logFile)) {
+                    if (isLineInTimeRange(line, start, end) &&
+                            (keyword == null || keyword.isBlank() || line.contains(keyword))) {
+                        allLogLines.add(line);
+                    }
+                }
+            } catch (IOException e) {
+                log.warn("Failed to read device log file {}: {}", logFile, e.getMessage());
+            }
+        }
+        return allLogLines;
+    }
+
+    private List<LocationRecord> filterLocationRecords(String imei, LocalDateTime start, LocalDateTime end) {
+        return locationRecordRepository.findByImeiOrderByRecvTimeDesc(imei).stream()
+                .filter(record -> record.getRecvTime() != null)
+                .filter(record -> {
+                    LocalDateTime time = LocalDateTime.ofInstant(record.getRecvTime().toInstant(), ZoneId.systemDefault());
+                    return !time.isBefore(start) && !time.isAfter(end);
+                })
+                .collect(Collectors.toList());
+    }
+
+    private Map<String, Object> locationRecordToMap(LocationRecord record) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("id", record.getId());
+        map.put("imei", record.getImei());
+        map.put("time", record.getRecvTime());
+        map.put("latitude", record.getLatitude());
+        map.put("longitude", record.getLongitude());
+        map.put("speed", record.getSpeed());
+        map.put("direction", record.getDirection());
+        map.put("address", record.getAddress());
+        map.put("source", record.getSource());
+        return map;
+    }
+
+    private static boolean hasValidCoordinate(LocationRecord record) {
+        if (record == null || record.getLatitude() == null || record.getLongitude() == null) {
+            return false;
+        }
+        double lat = record.getLatitude();
+        double lng = record.getLongitude();
+        return lat >= -90 && lat <= 90 &&
+                lng >= -180 && lng <= 180 &&
+                !(Double.compare(lat, 0.0) == 0 && Double.compare(lng, 0.0) == 0);
+    }
+
+    private static LocalDateTime parseClientTime(String value) {
+        try {
+            return OffsetDateTime.parse(value, DateTimeFormatter.ISO_DATE_TIME)
+                    .atZoneSameInstant(ZoneId.systemDefault())
+                    .toLocalDateTime();
+        } catch (Exception ignored) {
+            return LocalDateTime.parse(value, DateTimeFormatter.ISO_DATE_TIME);
+        }
+    }
+
+    private static String csvValue(Object value) {
+        String text = Objects.toString(value, "");
+        return "\"" + text.replace("\"", "\"\"") + "\"";
     }
     
     /**
@@ -795,4 +992,3 @@ public class DownlinkApiController {
         }
     }
 }
-

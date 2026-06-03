@@ -227,8 +227,15 @@ export const downlinkApi = {
   },
 
   // 获取日志
-  getLogs(imei) {
-    return api.get(`/downlink/logs?imei=${imei}`)
+  getLogs(imei, startTime = '', endTime = '', size = 200) {
+    return api.get('/downlink/logs', {
+      params: {
+        imei,
+        startTime: startTime || undefined,
+        endTime: endTime || undefined,
+        size
+      }
+    })
       .then(handleApiResponse)
       .catch(handleApiError)
   },
