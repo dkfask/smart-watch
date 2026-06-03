@@ -136,6 +136,18 @@ assert.match(
   'patient detail map should use the high-density patient marker'
 )
 
+const historySource = readSource('src/views/History.vue')
+assert.match(
+  historySource,
+  /normalizeLocationResponse/,
+  'history page should normalize paged location responses before rendering markers'
+)
+assert.doesNotMatch(
+  historySource,
+  /historyLocations\.value = data/,
+  'history page should not assign a PageResponse directly to historyLocations'
+)
+
 assert.match(
   dashboardSource,
   /care-marker/,

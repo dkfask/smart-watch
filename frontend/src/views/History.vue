@@ -139,6 +139,23 @@ const filterForm = reactive({
   endTime: ''
 })
 
+const normalizeLocationResponse = (response) => {
+  if (Array.isArray(response)) {
+    return {
+      records: response,
+      total: response.length
+    }
+  }
+
+  const payload = response?.data && !Array.isArray(response.data) ? response.data : response
+  const records = payload?.content || payload?.list || payload?.items || payload?.data || []
+
+  return {
+    records: Array.isArray(records) ? records : [],
+    total: Number(payload?.total ?? records.length ?? 0)
+  }
+}
+
 // 获取设备详情
 const fetchDeviceDetail = async () => {
   try {
@@ -330,8 +347,9 @@ const fetchHistoryLocations = async () => {
         (currentPage.value - 1) * pageSize.value
       )
     }
-    historyLocations.value = data
-    totalLocations.value = data.length // 实际应用中应该从后端获取总数
+    const { records, total } = normalizeLocationResponse(data)
+    historyLocations.value = records
+    totalLocations.value = total
     updateMap()
   } catch (error) {
     ElMessage.error('获取历史位置失败')
