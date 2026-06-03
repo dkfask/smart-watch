@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { isPatientMonitored } from '../src/utils/monitoring.mjs'
 
@@ -121,4 +121,13 @@ assert.match(
   readSource('index.html'),
   /favicon\.svg/,
   'app shell should use the branded SVG favicon instead of an inline blue square'
+)
+assert.match(
+  readSource('index.html'),
+  /favicon\.ico\?v=\d+/,
+  'app shell should version the ICO favicon so browsers do not keep the stale blue square'
+)
+assert.ok(
+  statSync(resolve(root, 'public/favicon.ico')).size > 1000,
+  'ICO favicon should be the branded multi-size icon, not the old tiny blue square'
 )
