@@ -339,6 +339,7 @@ import { deviceApi } from '../api/device'
 import { patientApi } from '../api/patient'
 import { downlinkApi } from '../api/downlink'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { formatBeijingTime } from '../utils/time'
 import { 
   ArrowDown, Operation, Location, RefreshRight, SwitchButton, 
   Message, ChatDotRound, Setting, Clock, Warning,
@@ -548,7 +549,7 @@ const handleOpenBatteryReport = async (imei) => {
 
 const formatReportTime = (value) => {
   if (!value) return '-'
-  return new Date(value).toLocaleString()
+  return formatBeijingTime(value)
 }
 
 const formatBatteryLevel = (value) => {
@@ -566,7 +567,7 @@ const formatLatestLocation = (location) => {
 // 格式化日期
 const formatDate = (row, column, cellValue) => {
   if (!cellValue) return ''
-  return new Date(cellValue).toLocaleString()
+  return formatBeijingTime(cellValue)
 }
 
 // 获取设备列表

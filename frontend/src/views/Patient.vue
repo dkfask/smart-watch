@@ -280,6 +280,7 @@ import { deviceApi } from '../api/device'
 import { healthApi } from '../api/health'
 import { isPatientMonitored } from '../utils/monitoring.mjs'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { formatBeijingTime } from '../utils/time'
 
 const router = useRouter()
 
@@ -400,7 +401,7 @@ const rules = {
 // 格式化日期
 const formatDate = (row, column, cellValue) => {
   if (!cellValue) return ''
-  return new Date(cellValue).toLocaleString()
+  return formatBeijingTime(cellValue)
 }
 
 // 监听搜索条件变化
@@ -534,7 +535,7 @@ const processHealthRecordsForChart = (records) => {
   records.forEach(record => {
     if (groupedData[record.dataType]) {
       groupedData[record.dataType].push({
-        time: new Date(record.time).toLocaleString(),
+        time: formatBeijingTime(record.time),
         value: parseFloat(record.value)
       })
     }

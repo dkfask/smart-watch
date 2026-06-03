@@ -1,3 +1,4 @@
+import { formatBeijingTime } from '../utils/time'
 /**
  * 地图服务
  * 优化地图加载和渲染性能
@@ -493,7 +494,7 @@ export class MapService {
    */
   formatDate(dateString) {
     if (!dateString) return ''
-    return new Date(dateString).toLocaleString()
+    return formatBeijingTime(dateString)
   }
 }
 

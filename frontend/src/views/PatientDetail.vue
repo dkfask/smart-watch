@@ -129,6 +129,7 @@ import { alarmApi } from '../api/alarm'
 import { locationApi } from '../api/location'
 import { fenceApi } from '../api/fence'
 import { ElMessage } from 'element-plus'
+import { formatBeijingTime } from '../utils/time'
 
 const route = useRoute()
 const router = useRouter()
@@ -157,7 +158,7 @@ const goBack = () => {
 
 const formatDate = (dateString) => {
   if (!dateString) return ''
-  return new Date(dateString).toLocaleString()
+  return formatBeijingTime(dateString)
 }
 
 const formatLocationText = (location) => {

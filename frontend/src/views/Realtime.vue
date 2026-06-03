@@ -68,6 +68,7 @@ import { deviceApi } from '../api/device'
 import { locationApi } from '../api/location'
 import { fenceApi } from '../api/fence'
 import { ElMessage } from 'element-plus'
+import { formatBeijingTime } from '../utils/time'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -501,7 +502,7 @@ const centerToSelectedDevice = () => {
 // 格式化日期
 const formatDate = (dateString) => {
   if (!dateString) return ''
-  return new Date(dateString).toLocaleString()
+  return formatBeijingTime(dateString)
 }
 
 const normalizeDeviceId = (deviceId) => {

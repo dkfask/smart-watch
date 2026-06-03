@@ -62,6 +62,7 @@ import { deviceApi } from '../api/device'
 import { locationApi } from '../api/location'
 import { patientApi } from '../api/patient'
 import { ElMessage } from 'element-plus'
+import { formatBeijingTime } from '../utils/time'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -77,7 +78,7 @@ let map = null
 // 格式化日期
 const formatDate = (dateString) => {
   if (!dateString) return ''
-  return new Date(dateString).toLocaleString()
+  return formatBeijingTime(dateString)
 }
 
 // 获取设备详情

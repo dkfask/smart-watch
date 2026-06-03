@@ -179,6 +179,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { alarmApi } from '../api/alarm'
 import { ElMessage } from 'element-plus'
+import { formatBeijingTime } from '../utils/time'
 
 const alarms = ref([])
 const loading = ref(false)
@@ -290,7 +291,7 @@ const toggleSound = () => {
 
 const formatDate = (dateString) => {
   if (!dateString) return ''
-  return new Date(dateString).toLocaleString()
+  return formatBeijingTime(dateString)
 }
 
 const getAlarmTypeName = (alarm) => {

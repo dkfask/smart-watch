@@ -157,6 +157,26 @@ assert.doesNotMatch(
   /format\([^)]+\) \+ ' 00:00:00'/,
   'history quick filters should not send space-separated datetime values'
 )
+assert.match(
+  historySource,
+  /hasValidCoordinate/,
+  'history page should filter invalid 0,0 locations before drawing the track'
+)
+assert.match(
+  historySource,
+  /fitMapToLatLngs\(latLngs\)/,
+  'history page should automatically focus the map on valid track points after query'
+)
+assert.match(
+  historySource,
+  /formatBeijingTime/,
+  'history page should render timestamps as Beijing time'
+)
+assert.doesNotMatch(
+  historySource,
+  /new Date\(dateString\)\.toLocaleString\(\)/,
+  'history page should not rely on browser-default timezone formatting'
+)
 
 assert.match(
   dashboardSource,

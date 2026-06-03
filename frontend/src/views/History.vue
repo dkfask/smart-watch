@@ -75,7 +75,7 @@
                   >
                     <el-card shadow="hover" @click="highlightLocation(index)">
                       <div class="location-item">
-                        <div class="location-address">{{ location.address || '未知地址' }}</div>
+                        <div class="location-address">{{ normalizeAddress(location.address) || '未知地址' }}</div>
                         <div class="location-coord">
                           经度: {{ location.longitude?.toFixed(6) }}, 纬度: {{ location.latitude?.toFixed(6) }}
                         </div>
@@ -114,6 +114,7 @@ import { deviceApi } from '../api/device'
 import { locationApi } from '../api/location'
 import { fenceApi } from '../api/fence'
 import { ElMessage } from 'element-plus'
+import { formatBeijingTime } from '../utils/time'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -154,6 +155,27 @@ const normalizeLocationResponse = (response) => {
     records: Array.isArray(records) ? records : [],
     total: Number(payload?.total ?? records.length ?? 0)
   }
+}
+
+const normalizeCoordinate = (value) => {
+  if (value === null || value === undefined || value === '') return null
+  const coordinate = Number(value)
+  return Number.isFinite(coordinate) ? coordinate : null
+}
+
+const hasValidCoordinate = (location) => {
+  const lat = normalizeCoordinate(location?.latitude)
+  const lng = normalizeCoordinate(location?.longitude)
+  return lat !== null && lng !== null &&
+    lat >= -90 && lat <= 90 &&
+    lng >= -180 && lng <= 180 &&
+    !(lat === 0 && lng === 0)
+}
+
+const normalizeAddress = (address) => {
+  if (!address) return ''
+  const trimmed = String(address).trim()
+  return trimmed && trimmed !== '[]' && trimmed.toLowerCase() !== 'null' ? trimmed : ''
 }
 
 // 获取设备详情
@@ -347,9 +369,10 @@ const fetchHistoryLocations = async () => {
         (currentPage.value - 1) * pageSize.value
       )
     }
-    const { records, total } = normalizeLocationResponse(data)
-    historyLocations.value = records
-    totalLocations.value = total
+    const { records } = normalizeLocationResponse(data)
+    const validRecords = records.filter(hasValidCoordinate)
+    historyLocations.value = validRecords
+    totalLocations.value = validRecords.length
     updateMap()
   } catch (error) {
     ElMessage.error('获取历史位置失败')
@@ -387,8 +410,10 @@ const updateMap = () => {
 
   // 添加标记
   historyLocations.value.forEach((location, index) => {
-    if (location.latitude && location.longitude) {
-      const latLng = [location.latitude, location.longitude]
+    const lat = normalizeCoordinate(location.latitude)
+    const lng = normalizeCoordinate(location.longitude)
+    if (hasValidCoordinate(location)) {
+      const latLng = [lat, lng]
       latLngs.push(latLng)
 
       // 检查是否越界
@@ -411,9 +436,9 @@ const updateMap = () => {
       const marker = L.marker(latLng, { icon: customIcon })
         .bindPopup(`
           <b>时间: ${formatDate(location.time)}</b><br>
-          位置: ${location.address || '未知'}<br>
-          经度: ${location.longitude}<br>
-          纬度: ${location.latitude}<br>
+          位置: ${normalizeAddress(location.address) || '未知'}<br>
+          经度: ${lng}<br>
+          纬度: ${lat}<br>
           电池: ${location.batteryLevel || '-'}%<br>
           状态: ${isBreached ? '<span style="color: red;">越界</span>' : '正常'}
         `)
@@ -462,6 +487,8 @@ const updateMap = () => {
       smoothFactor: 1
     }).addTo(map)
   }
+
+  fitMapToLatLngs(latLngs)
 }
 
 // 清除地图
@@ -484,8 +511,10 @@ const highlightLocation = (index) => {
   if (!map || !historyLocations.value[index]) return
   
   const location = historyLocations.value[index]
-  if (location.latitude && location.longitude) {
-    map.setView([location.latitude, location.longitude], 15)
+  const lat = normalizeCoordinate(location.latitude)
+  const lng = normalizeCoordinate(location.longitude)
+  if (hasValidCoordinate(location)) {
+    map.setView([lat, lng], 15)
     // 打开弹窗
     if (markers[index]) {
       markers[index].openPopup()
@@ -498,8 +527,10 @@ const centerToFirstLocation = () => {
   if (!historyLocations.value[0] || !map) return
   
   const location = historyLocations.value[0]
-  if (location.latitude && location.longitude) {
-    map.setView([location.latitude, location.longitude], 15)
+  const lat = normalizeCoordinate(location.latitude)
+  const lng = normalizeCoordinate(location.longitude)
+  if (hasValidCoordinate(location)) {
+    map.setView([lat, lng], 15)
     if (markers[0]) {
       markers[0].openPopup()
     }
@@ -511,8 +542,10 @@ const centerToLastLocation = () => {
   if (!historyLocations.value.length || !map) return
   
   const location = historyLocations.value[historyLocations.value.length - 1]
-  if (location.latitude && location.longitude) {
-    map.setView([location.latitude, location.longitude], 15)
+  const lat = normalizeCoordinate(location.latitude)
+  const lng = normalizeCoordinate(location.longitude)
+  if (hasValidCoordinate(location)) {
+    map.setView([lat, lng], 15)
     if (markers[markers.length - 1]) {
       markers[markers.length - 1].openPopup()
     }
@@ -522,21 +555,25 @@ const centerToLastLocation = () => {
 // 显示全部轨迹
 const fitAllLocations = () => {
   if (!historyLocations.value.length || !map) return
-  
+
   const latLngs = historyLocations.value
-    .filter(location => location.latitude && location.longitude)
-    .map(location => [location.latitude, location.longitude])
-  
-  if (latLngs.length > 0) {
-    map.fitBounds(latLngs)
+    .filter(hasValidCoordinate)
+    .map(location => [normalizeCoordinate(location.latitude), normalizeCoordinate(location.longitude)])
+
+  fitMapToLatLngs(latLngs)
+}
+
+const fitMapToLatLngs = (latLngs) => {
+  if (!latLngs.length || !map) return
+  if (latLngs.length === 1) {
+    map.setView(latLngs[0], 16)
+  } else {
+    map.fitBounds(latLngs, { padding: [40, 40], maxZoom: 17 })
   }
 }
 
 // 格式化日期
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  return new Date(dateString).toLocaleString()
-}
+const formatDate = (dateString) => formatBeijingTime(dateString)
 
 // 返回列表
 const goBack = () => {
