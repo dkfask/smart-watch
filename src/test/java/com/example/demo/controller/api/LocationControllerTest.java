@@ -136,6 +136,19 @@ class LocationControllerTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void range_acceptsSpaceSeparatedDateTimeFromDatePicker() throws Exception {
+        when(locationRepo.listByRange(eq(1L), any(LocalDateTime.class), any(LocalDateTime.class), anyInt(), anyInt()))
+                .thenReturn(Collections.emptyList());
+
+        mockMvc.perform(get("/api/locations/device/1/range")
+                        .param("start", "2026-06-03 00:00:00")
+                        .param("end", "2026-06-03 23:59:59")
+                        .param("limit", "20")
+                        .param("offset", "0"))
+                .andExpect(status().isOk());
+    }
+
     /**
      * GET /api/locations/device/{deviceId}/latest-with-address 跳过0,0无效定位
      */

@@ -147,6 +147,16 @@ assert.doesNotMatch(
   /historyLocations\.value = data/,
   'history page should not assign a PageResponse directly to historyLocations'
 )
+assert.match(
+  historySource,
+  /YYYY-MM-DDTHH:mm:ss/,
+  'history page should send ISO-like datetime values accepted by the backend'
+)
+assert.doesNotMatch(
+  historySource,
+  /format\([^)]+\) \+ ' 00:00:00'/,
+  'history quick filters should not send space-separated datetime values'
+)
 
 assert.match(
   dashboardSource,

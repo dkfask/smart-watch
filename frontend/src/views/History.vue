@@ -27,7 +27,7 @@
                     v-model="filterForm.startTime"
                     type="datetime"
                     placeholder="选择开始时间"
-                    value-format="YYYY-MM-DD HH:mm:ss"
+                    value-format="YYYY-MM-DDTHH:mm:ss"
                     default-time="00:00:00"
                   />
                 </el-form-item>
@@ -36,7 +36,7 @@
                     v-model="filterForm.endTime"
                     type="datetime"
                     placeholder="选择结束时间"
-                    value-format="YYYY-MM-DD HH:mm:ss"
+                    value-format="YYYY-MM-DDTHH:mm:ss"
                     default-time="23:59:59"
                   />
                 </el-form-item>
@@ -563,18 +563,18 @@ const setQuickTime = (type) => {
     return `${y}-${m}-${day}`
   }
   if (type === 'today') {
-    filterForm.startTime = format(now) + ' 00:00:00'
-    filterForm.endTime = format(now) + ' 23:59:59'
+    filterForm.startTime = format(now) + 'T00:00:00'
+    filterForm.endTime = format(now) + 'T23:59:59'
   } else if (type === 'yesterday') {
     const yesterday = new Date(now)
     yesterday.setDate(yesterday.getDate() - 1)
-    filterForm.startTime = format(yesterday) + ' 00:00:00'
-    filterForm.endTime = format(yesterday) + ' 23:59:59'
+    filterForm.startTime = format(yesterday) + 'T00:00:00'
+    filterForm.endTime = format(yesterday) + 'T23:59:59'
   } else if (type === 'week') {
     const weekAgo = new Date(now)
     weekAgo.setDate(weekAgo.getDate() - 7)
-    filterForm.startTime = format(weekAgo) + ' 00:00:00'
-    filterForm.endTime = format(now) + ' 23:59:59'
+    filterForm.startTime = format(weekAgo) + 'T00:00:00'
+    filterForm.endTime = format(now) + 'T23:59:59'
   }
   fetchHistoryLocations()
 }

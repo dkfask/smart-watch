@@ -5,13 +5,16 @@ import com.example.demo.model.dto.PageResponse;
 import com.example.demo.repository.DeviceLocationRepository;
 import com.example.demo.service.AmapLocationService;
 import com.example.demo.service.TrackingService;
-import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.net.URI;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
 
@@ -76,12 +79,14 @@ public class LocationController {
      */
     @GetMapping("/device/{deviceId}/history")
     public PageResponse<DeviceLocation> history(@PathVariable long deviceId,
-                                                 @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-                                                 @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+                                                 @RequestParam String start,
+                                                 @RequestParam String end,
                                                  @RequestParam(defaultValue = "50") int limit,
                                                  @RequestParam(defaultValue = "0") int offset) {
-        List<DeviceLocation> locations = locationRepo.listByRange(deviceId, start, end, limit, offset);
-        long total = locationRepo.countByDeviceIdAndRange(deviceId, start, end);
+        LocalDateTime startTime = parseLocationTime(start);
+        LocalDateTime endTime = parseLocationTime(end);
+        List<DeviceLocation> locations = locationRepo.listByRange(deviceId, startTime, endTime, limit, offset);
+        long total = locationRepo.countByDeviceIdAndRange(deviceId, startTime, endTime);
         return new PageResponse<>(locations, total, offset / Math.max(limit, 1), limit);
     }
 
@@ -167,11 +172,28 @@ public class LocationController {
      */
     @GetMapping("/device/{deviceId}/range")
     public List<DeviceLocation> range(@PathVariable long deviceId,
-                                      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-                                      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+                                      @RequestParam String start,
+                                      @RequestParam String end,
                                       @RequestParam(defaultValue = "200") int limit,
                                       @RequestParam(defaultValue = "0") int offset) {
-        return locationRepo.listByRange(deviceId, start, end, limit, offset);
+        return locationRepo.listByRange(deviceId, parseLocationTime(start), parseLocationTime(end), limit, offset);
+    }
+
+    private static LocalDateTime parseLocationTime(String value) {
+        if (value == null || value.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "时间参数不能为空");
+        }
+
+        String normalized = value.trim().replace(' ', 'T');
+        try {
+            return LocalDateTime.parse(normalized);
+        } catch (DateTimeParseException ignored) {
+            try {
+                return OffsetDateTime.parse(normalized).toLocalDateTime();
+            } catch (DateTimeParseException ex) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "时间格式错误，请使用 yyyy-MM-ddTHH:mm:ss");
+            }
+        }
     }
 
     /**
