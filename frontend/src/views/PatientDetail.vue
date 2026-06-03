@@ -169,6 +169,40 @@ const formatLocationText = (location) => {
   return '未知地址'
 }
 
+const markerPalette = [
+  '#2563EB',
+  '#059669',
+  '#EA580C',
+  '#7C3AED',
+  '#DC2626',
+  '#0891B2',
+  '#CA8A04',
+  '#DB2777'
+]
+
+const hashMarkerSeed = (value) => {
+  const text = String(value || '')
+  let hash = 0
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) - hash) + text.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+const getPatientMarkerVisual = () => {
+  const seed = hashMarkerSeed(patient.value?.id || device.value?.imei || device.value?.id)
+  const shortImei = String(device.value?.imei || device.value?.id || '').slice(-4)
+  const patientName = patient.value?.name || ''
+  return {
+    color: markerPalette[seed % markerPalette.length],
+    initial: (patientName || shortImei || '?').charAt(0),
+    label: patient.value?.bedNumber || patient.value?.bed || shortImei || '设备',
+    offsetX: 0,
+    offsetY: 0
+  }
+}
+
 const getAlarmTypeName = (alarm) => {
   const type = alarm.alertType || alarm.alarmType
   const typeMap = {
@@ -305,15 +339,24 @@ const renderPatientMap = () => {
 
   map.invalidateSize()
 
+  const markerVisual = getPatientMarkerVisual()
   const customIcon = L.divIcon({
     className: 'custom-marker',
-    html: `<div class="marker-patient"><span>${patient.value?.name?.charAt(0) || '?'}</span></div>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 40]
+    html: `
+      <div class="care-marker" style="--marker-color: ${markerVisual.color}; --marker-x: ${markerVisual.offsetX}px; --marker-y: ${markerVisual.offsetY}px;">
+        <div class="care-marker-pin">
+          <span class="care-marker-initial">${markerVisual.initial}</span>
+        </div>
+        <div class="care-marker-label">${markerVisual.label}</div>
+      </div>
+    `,
+    iconSize: [96, 64],
+    iconAnchor: [48, 54]
   })
 
   if (marker) {
     marker.setLatLng(latLng)
+    marker.setIcon(customIcon)
   } else {
     marker = L.marker(latLng, { icon: customIcon }).addTo(map)
   }
@@ -431,16 +474,71 @@ onBeforeUnmount(() => {
 .location-time { font-size: 12px; color: var(--text-muted); }
 .patient-map { width: 100%; height: 250px; border-radius: 8px; border: 1px solid var(--border-color); }
 
-:deep(.marker-patient) {
-  background: var(--color-primary);
+/* High-density patient marker: color, short label, and stable identity cue. */
+:deep(.custom-marker) {
+  background: none !important;
+  border: none !important;
+}
+
+:deep(.care-marker) {
+  position: relative;
+  width: 96px;
+  height: 64px;
+  transform: translate(var(--marker-x, 0), var(--marker-y, 0));
+  pointer-events: auto;
+}
+
+:deep(.care-marker-pin) {
+  position: absolute;
+  left: 32px;
+  top: 0;
+  width: 34px;
+  height: 34px;
+  background: var(--marker-color, var(--color-primary));
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  width: 36px; height: 36px;
-  display: flex; justify-content: center; align-items: center;
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border: 3px solid #fff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.28);
 }
-:deep(.marker-patient span) {
+
+:deep(.care-marker-pin::after) {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+:deep(.care-marker-initial) {
   transform: rotate(45deg);
-  color: #fff; font-size: 11px; font-weight: bold;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  z-index: 1;
+}
+
+:deep(.care-marker-label) {
+  position: absolute;
+  left: 50%;
+  top: 36px;
+  transform: translateX(-50%);
+  max-width: 76px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid color-mix(in srgb, var(--marker-color, var(--color-primary)) 45%, #fff);
+  color: #0f172a;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

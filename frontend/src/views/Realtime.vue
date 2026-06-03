@@ -440,15 +440,19 @@ const updateMarker = (deviceId, location) => {
   if (!device) return
 
   const displayName = device.patient?.name || device.imei
+  const markerVisual = getPatientMarkerVisual(device, normalizedDeviceId)
   const customIcon = L.divIcon({
     className: 'custom-marker',
     html: `
-      <div class="marker-drop">
-        <div class="marker-number">${displayName.charAt(0)}</div>
+      <div class="care-marker" style="--marker-color: ${markerVisual.color}; --marker-x: ${markerVisual.offsetX}px; --marker-y: ${markerVisual.offsetY}px;">
+        <div class="care-marker-pin">
+          <span class="care-marker-initial">${markerVisual.initial}</span>
+        </div>
+        <div class="care-marker-label">${markerVisual.label}</div>
       </div>
     `,
-    iconSize: [30, 30],
-    iconAnchor: [15, 30]
+    iconSize: [96, 64],
+    iconAnchor: [48, 54]
   });
 
   const marker = L.marker([location.latitude, location.longitude], { icon: customIcon })
@@ -561,6 +565,53 @@ const formatLocationSource = (source) => {
     'device-status': '设备状态'
   }
   return labels[source] || source || '-'
+}
+
+const markerPalette = [
+  '#2563EB',
+  '#059669',
+  '#EA580C',
+  '#7C3AED',
+  '#DC2626',
+  '#0891B2',
+  '#CA8A04',
+  '#DB2777'
+]
+
+const hashMarkerSeed = (value) => {
+  const text = String(value || '')
+  let hash = 0
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) - hash) + text.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+const getPatientMarkerVisual = (device, fallbackId) => {
+  const seed = hashMarkerSeed(device.patient?.id || device.imei || fallbackId)
+  const offsets = [
+    [0, 0],
+    [14, -10],
+    [-14, -10],
+    [18, 8],
+    [-18, 8],
+    [8, -20],
+    [-8, 18],
+    [22, -18]
+  ]
+  const [offsetX, offsetY] = offsets[seed % offsets.length]
+  const patientName = device.patient?.name || ''
+  const shortImei = String(device.imei || fallbackId || '').slice(-4)
+  const label = device.patient?.bed || device.patient?.bedNumber || shortImei || '设备'
+
+  return {
+    color: markerPalette[seed % markerPalette.length],
+    initial: (patientName || String(shortImei || '?')).charAt(0),
+    label,
+    offsetX,
+    offsetY
+  }
 }
 
 // 定时刷新
@@ -710,42 +761,71 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 
-/* 自定义水滴标记样式 */
+/* 高密度患者位置标记：颜色、短标签和错位提升聚集场景辨识度 */
 :deep(.custom-marker) {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  background: none !important;
+  border: none !important;
 }
 
-:deep(.marker-drop) {
+:deep(.care-marker) {
   position: relative;
-  width: 32px;
-  height: 32px;
-  background: var(--color-primary);
+  width: 96px;
+  height: 64px;
+  transform: translate(var(--marker-x, 0), var(--marker-y, 0));
+  pointer-events: auto;
+}
+
+:deep(.care-marker-pin) {
+  position: absolute;
+  left: 32px;
+  top: 0;
+  width: 34px;
+  height: 34px;
+  background: var(--marker-color, var(--color-primary));
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
   display: flex;
   justify-content: center;
   align-items: center;
-  box-shadow: var(--elevation-2);
+  border: 3px solid #fff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.28);
 }
 
-:deep(.marker-number) {
+:deep(.care-marker-pin::after) {
+  content: '';
   position: absolute;
-  bottom: -10px;
-  right: -10px;
-  background-color: var(--bg-card);
-  border: 2px solid var(--primary-color);
+  inset: 5px;
   border-radius: 50%;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 10px;
-  font-weight: bold;
-  color: var(--primary-color);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+:deep(.care-marker-initial) {
   transform: rotate(45deg);
-  box-shadow: var(--shadow-sm);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  z-index: 1;
+}
+
+:deep(.care-marker-label) {
+  position: absolute;
+  left: 50%;
+  top: 36px;
+  transform: translateX(-50%);
+  max-width: 76px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid color-mix(in srgb, var(--marker-color, var(--color-primary)) 45%, #fff);
+  color: #0f172a;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

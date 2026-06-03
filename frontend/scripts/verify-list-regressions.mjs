@@ -84,6 +84,11 @@ assert.match(
   /marker\.openPopup\(\)/,
   'selected realtime marker should open its location popup automatically'
 )
+assert.match(
+  realtimeSource,
+  /care-marker/,
+  'realtime map should use the high-density patient marker'
+)
 
 const patientDetailSource = readSource('src/views/PatientDetail.vue')
 assert.match(
@@ -100,4 +105,20 @@ assert.match(
   patientDetailSource,
   /setInterval\(\(\) => fetchLatestLocation\(\), 30000\)/,
   'patient detail map should refresh the latest location periodically'
+)
+assert.match(
+  patientDetailSource,
+  /care-marker/,
+  'patient detail map should use the high-density patient marker'
+)
+
+assert.match(
+  dashboardSource,
+  /care-marker/,
+  'dashboard map should use the high-density patient marker'
+)
+assert.match(
+  readSource('index.html'),
+  /favicon\.svg/,
+  'app shell should use the branded SVG favicon instead of an inline blue square'
 )

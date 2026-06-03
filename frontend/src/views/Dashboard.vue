@@ -198,6 +198,67 @@ const ALARM_TYPE_MAP = {
   'body_temperature_abnormal': '体温异常'
 }
 
+const markerPalette = [
+  '#2563EB',
+  '#059669',
+  '#EA580C',
+  '#7C3AED',
+  '#DC2626',
+  '#0891B2',
+  '#CA8A04',
+  '#DB2777'
+]
+
+const markerOffsets = [
+  [0, 0],
+  [14, -10],
+  [-14, -10],
+  [18, 8],
+  [-18, 8],
+  [8, -20],
+  [-8, 18],
+  [22, -18]
+]
+
+const hashMarkerSeed = (value) => {
+  const text = String(value || '')
+  let hash = 0
+  for (let i = 0; i < text.length; i++) {
+    hash = ((hash << 5) - hash) + text.charCodeAt(i)
+    hash |= 0
+  }
+  return Math.abs(hash)
+}
+
+const getPatientMarkerVisual = (device) => {
+  const seed = hashMarkerSeed(device.patient?.id || device.imei || device.id)
+  const [offsetX, offsetY] = markerOffsets[seed % markerOffsets.length]
+  const patientName = device.patient?.name || ''
+  const shortImei = String(device.imei || device.id || '').slice(-4)
+
+  return {
+    color: markerPalette[seed % markerPalette.length],
+    initial: (patientName || shortImei || '?').charAt(0),
+    label: device.patient?.bedNumber || device.patient?.bed || shortImei || '设备',
+    offsetX,
+    offsetY
+  }
+}
+
+const hasValidMarkerLocation = (location) => {
+  const latitude = Number(location?.latitude)
+  const longitude = Number(location?.longitude)
+  return (
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180 &&
+    !(latitude === 0 && longitude === 0)
+  )
+}
+
 /**
  * 跳转到报警页面
  */
@@ -365,12 +426,20 @@ const updateMapMarkers = async (devices) => {
     if (!device.isOnline || !device.patient) continue
     try {
       const location = await locationApi.getLatestLocation(device.id)
-      if (location && location.latitude && location.longitude) {
+      if (hasValidMarkerLocation(location)) {
+        const markerVisual = getPatientMarkerVisual(device)
         const customIcon = L.divIcon({
           className: 'custom-marker',
-          html: `<div class="marker-patient"><span>${device.patient?.name || '?'}</span></div>`,
-          iconSize: [40, 40],
-          iconAnchor: [20, 40]
+          html: `
+            <div class="care-marker" style="--marker-color: ${markerVisual.color}; --marker-x: ${markerVisual.offsetX}px; --marker-y: ${markerVisual.offsetY}px;">
+              <div class="care-marker-pin">
+                <span class="care-marker-initial">${markerVisual.initial}</span>
+              </div>
+              <div class="care-marker-label">${markerVisual.label}</div>
+            </div>
+          `,
+          iconSize: [96, 64],
+          iconAnchor: [48, 54]
         })
         const marker = L.marker([location.latitude, location.longitude], { icon: customIcon })
           .bindPopup(`<b>${device.patient?.name || '未知'}</b><br>${device.patient?.ward || ''} ${device.patient?.bed ? '床位' + device.patient.bed : ''}<br>位置: ${location.address || '未知'}`)
@@ -756,33 +825,72 @@ onUnmounted(() => {
   background-color: var(--color-surface-raised);
 }
 
-/* Leaflet custom marker reset */
+/* High-density patient marker: color, short label, and stable offset for clusters. */
 :deep(.custom-marker) {
   background: none !important;
   border: none !important;
 }
 
-:deep(.marker-patient) {
-  background: var(--color-primary);
+:deep(.care-marker) {
+  position: relative;
+  width: 96px;
+  height: 64px;
+  transform: translate(var(--marker-x, 0), var(--marker-y, 0));
+  pointer-events: auto;
+}
+
+:deep(.care-marker-pin) {
+  position: absolute;
+  left: 32px;
+  top: 0;
+  width: 34px;
+  height: 34px;
+  background: var(--marker-color, var(--color-primary));
   border-radius: 50% 50% 50% 0;
   transform: rotate(-45deg);
-  width: 36px;
-  height: 36px;
   display: flex;
   justify-content: center;
   align-items: center;
-  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+  border: 3px solid #fff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.28);
 }
 
-:deep(.marker-patient span) {
+:deep(.care-marker-pin::after) {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+:deep(.care-marker-initial) {
   transform: rotate(45deg);
   color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  z-index: 1;
+}
+
+:deep(.care-marker-label) {
+  position: absolute;
+  left: 50%;
+  top: 36px;
+  transform: translateX(-50%);
+  max-width: 76px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid color-mix(in srgb, var(--marker-color, var(--color-primary)) 45%, #fff);
+  color: #0f172a;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
   font-size: 11px;
-  font-weight: 600;
-  max-width: 30px;
+  font-weight: 700;
+  line-height: 16px;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ============================

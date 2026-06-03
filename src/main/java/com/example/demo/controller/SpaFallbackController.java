@@ -18,7 +18,7 @@ public class SpaFallbackController {
     }
 
     @GetMapping({
-            "/login", "/register", "/home", "/menu",
+            "/login", "/register", "/home",
             "/devices", "/patients", "/fences", "/alarm", "/alarms",
             "/realtime", "/history", "/dashboard"
     })

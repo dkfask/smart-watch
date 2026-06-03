@@ -41,7 +41,7 @@ public class SecurityConfig {
                 // 因此使用明确的目录通配路径（例如 /assets/** /css/** /js/**）来替代通配扩展名的写法。
                 .requestMatchers(
                     "/login", "/register",
-                    "/", "/index.html", "/favicon.ico",
+                    "/", "/index.html", "/favicon.ico", "/favicon.svg",
                     "/css/**", "/js/**", "/images/**", "/assets/**", "/static/**",
                     "/webjars/**"
                 ).permitAll()
