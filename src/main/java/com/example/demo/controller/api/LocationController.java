@@ -111,27 +111,7 @@ public class LocationController {
         if (dl == null) {
             return ResponseEntity.notFound().build();
         }
-
-        double lat = dl.getLatitude().doubleValue();
-        double lng = dl.getLongitude().doubleValue();
-        String address = normalizeAddress(dl.getAddress());
-        if (address == null) {
-            address = amapLocationService.regeoAddress(lat, lng);
-            address = normalizeAddress(address);
-        }
-
-        DeviceLocationDto dto = new DeviceLocationDto();
-        dto.setDeviceId(dl.getDeviceId());
-        dto.setImei(dl.getImei());
-        dto.setLatitude(lat);
-        dto.setLongitude(lng);
-        dto.setAddress(address);
-        dto.setTime(dl.getTime());
-        dto.setSource(dl.getSource());
-        dto.setBatteryLevel(dl.getBatteryLevel());
-        dto.setAccuracy(dl.getAccuracy());
-
-        return ResponseEntity.ok(dto);
+        return ResponseEntity.ok(toDto(dl, true));
     }
 
     private DeviceLocation latestValidLocation(long deviceId) {
@@ -143,6 +123,14 @@ public class LocationController {
                 .filter(LocationController::hasValidCoordinate)
                 .findFirst()
                 .orElse(null);
+    }
+
+    private DeviceLocation latestAnyLocation(long deviceId) {
+        List<DeviceLocation> list = locationRepo.listRecent(deviceId, 1, 0);
+        if (list == null || list.isEmpty()) {
+            return null;
+        }
+        return list.get(0);
     }
 
     private static boolean hasValidCoordinate(DeviceLocation dl) {
@@ -201,7 +189,36 @@ public class LocationController {
      */
     @GetMapping("/device/{deviceId}/latest-with-amap")
     public ResponseEntity<DeviceLocationDto> latestWithAmap(@PathVariable long deviceId) {
-        return getLatestLocationWithAddress(deviceId);
+        DeviceLocation dl = latestValidLocation(deviceId);
+        if (dl == null) {
+            dl = latestAnyLocation(deviceId);
+        }
+        if (dl == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(toDto(dl, hasValidCoordinate(dl)));
+    }
+
+    private DeviceLocationDto toDto(DeviceLocation dl, boolean resolveAddress) {
+        Double lat = dl.getLatitude() == null ? null : dl.getLatitude().doubleValue();
+        Double lng = dl.getLongitude() == null ? null : dl.getLongitude().doubleValue();
+        String address = normalizeAddress(dl.getAddress());
+        if (resolveAddress && lat != null && lng != null && address == null) {
+            address = amapLocationService.regeoAddress(lat, lng);
+            address = normalizeAddress(address);
+        }
+
+        DeviceLocationDto dto = new DeviceLocationDto();
+        dto.setDeviceId(dl.getDeviceId());
+        dto.setImei(dl.getImei());
+        dto.setLatitude(lat);
+        dto.setLongitude(lng);
+        dto.setAddress(address);
+        dto.setTime(dl.getTime());
+        dto.setSource(dl.getSource());
+        dto.setBatteryLevel(dl.getBatteryLevel());
+        dto.setAccuracy(dl.getAccuracy());
+        return dto;
     }
 
     /**

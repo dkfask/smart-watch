@@ -1,7 +1,6 @@
 package com.example.demo.controller.api;
 
 import com.example.demo.model.DeviceLocation;
-import com.example.demo.model.dto.PageResponse;
 import com.example.demo.repository.DeviceLocationRepository;
 import com.example.demo.service.AmapLocationService;
 import com.example.demo.service.TrackingService;
@@ -29,7 +28,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * LocationController集成测试（MockMvc）
+ * LocationController MockMvc tests.
  */
 @WebMvcTest(value = LocationController.class, excludeAutoConfiguration = {
         org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration.class,
@@ -51,7 +50,7 @@ class LocationControllerTest {
     @MockBean private RateLimiter rateLimiter;
 
     /**
-     * POST /api/locations/report 上报位置
+     * POST /api/locations/report accepts a device location report.
      */
     @Test
     void report_returns201() throws Exception {
@@ -64,7 +63,7 @@ class LocationControllerTest {
     }
 
     /**
-     * GET /api/locations/device/{deviceId} 获取最近位置
+     * GET /api/locations/device/{deviceId} returns recent locations.
      */
     @Test
     void recent_returnsPagedResult() throws Exception {
@@ -78,7 +77,7 @@ class LocationControllerTest {
     }
 
     /**
-     * GET /api/locations/device/{deviceId}/history 获取历史位置
+     * GET /api/locations/device/{deviceId}/history returns a paged history range.
      */
     @Test
     void history_returnsPagedResult() throws Exception {
@@ -94,7 +93,7 @@ class LocationControllerTest {
     }
 
     /**
-     * GET /api/locations/device/{deviceId}/latest 获取最新位置
+     * GET /api/locations/device/{deviceId}/latest returns the latest location.
      */
     @Test
     void latest_exists_returns200() throws Exception {
@@ -109,7 +108,7 @@ class LocationControllerTest {
     }
 
     /**
-     * GET /api/locations/device/{deviceId}/latest 无位置返回404
+     * GET /api/locations/device/{deviceId}/latest returns 404 when no location exists.
      */
     @Test
     void latest_notFound_returns404() throws Exception {
@@ -120,7 +119,7 @@ class LocationControllerTest {
     }
 
     /**
-     * GET /api/locations/device/{deviceId}/latest-with-address 获取最新位置含地址
+     * GET /api/locations/device/{deviceId}/latest-with-address returns the latest location with address.
      */
     @Test
     void latestWithAddress_exists_returns200() throws Exception {
@@ -130,7 +129,7 @@ class LocationControllerTest {
         dl.setLatitude(BigDecimal.valueOf(39.9));
         dl.setLongitude(BigDecimal.valueOf(116.4));
         when(locationRepo.listRecent(1L, 20, 0)).thenReturn(List.of(dl));
-        when(amapLocationService.regeoAddress(39.9, 116.4)).thenReturn("北京市东城区");
+        when(amapLocationService.regeoAddress(39.9, 116.4)).thenReturn("\u5317\u4eac\u5e02\u4e1c\u57ce\u533a");
 
         mockMvc.perform(get("/api/locations/device/1/latest-with-address"))
                 .andExpect(status().isOk());
@@ -150,7 +149,7 @@ class LocationControllerTest {
     }
 
     /**
-     * GET /api/locations/device/{deviceId}/latest-with-address 跳过0,0无效定位
+     * GET /api/locations/device/{deviceId}/latest-with-address skips invalid 0,0 coordinates.
      */
     @Test
     void latestWithAddress_skipsZeroZeroLocation() throws Exception {
@@ -165,7 +164,7 @@ class LocationControllerTest {
         valid.setImei("IMEI001");
         valid.setLatitude(BigDecimal.valueOf(30.886866));
         valid.setLongitude(BigDecimal.valueOf(103.594415));
-        valid.setAddress("四川省成都市都江堰市青城山镇成都东软学院C5座");
+        valid.setAddress("\u56db\u5ddd\u7701\u6210\u90fd\u5e02\u90fd\u6c5f\u5830\u5e02\u9752\u57ce\u5c71\u9547\u6210\u90fd\u4e1c\u8f6f\u5b66\u9662C5\u5ea7");
 
         when(locationRepo.listRecent(1L, 20, 0)).thenReturn(List.of(invalid, valid));
 
@@ -173,18 +172,38 @@ class LocationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.latitude").value(30.886866))
                 .andExpect(jsonPath("$.data.longitude").value(103.594415))
-                .andExpect(jsonPath("$.data.address").value("四川省成都市都江堰市青城山镇成都东软学院C5座"));
+                .andExpect(jsonPath("$.data.address").value("\u56db\u5ddd\u7701\u6210\u90fd\u5e02\u90fd\u6c5f\u5830\u5e02\u9752\u57ce\u5c71\u9547\u6210\u90fd\u4e1c\u8f6f\u5b66\u9662C5\u5ea7"));
+    }
+
+    @Test
+    void latestWithAmap_returnsLatestRecordWhenOnlyInvalidCoordinateExists() throws Exception {
+        DeviceLocation invalid = new DeviceLocation();
+        invalid.setDeviceId(15L);
+        invalid.setImei("355932600124999");
+        invalid.setLatitude(BigDecimal.ZERO);
+        invalid.setLongitude(BigDecimal.ZERO);
+        invalid.setBatteryLevel(53);
+        invalid.setSource("lbs");
+
+        when(locationRepo.listRecent(15L, 20, 0)).thenReturn(List.of(invalid));
+        when(locationRepo.listRecent(15L, 1, 0)).thenReturn(List.of(invalid));
+
+        mockMvc.perform(get("/api/locations/device/15/latest-with-amap"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.batteryLevel").value(53))
+                .andExpect(jsonPath("$.data.latitude").value(0))
+                .andExpect(jsonPath("$.data.longitude").value(0));
     }
 
     /**
-     * GET /api/locations/search 地址搜索
+     * GET /api/locations/search resolves an address.
      */
     @Test
     void search_returnsResult() throws Exception {
-        when(amapLocationService.addressToLocation("北京")).thenReturn(Map.of("lat", 39.9, "lng", 116.4));
+        when(amapLocationService.addressToLocation("\u5317\u4eac")).thenReturn(Map.of("lat", 39.9, "lng", 116.4));
 
         mockMvc.perform(get("/api/locations/search")
-                        .param("address", "北京"))
+                        .param("address", "\u5317\u4eac"))
                 .andExpect(status().isOk());
     }
 }
