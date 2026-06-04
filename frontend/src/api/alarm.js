@@ -21,8 +21,15 @@ export const alarmApi = {
   },
 
   // 处理报警
-  handleAlarm(id, status) {
-    return api.put(`/alarms/${id}/handle`, { status })
+  handleAlarm(id, status = 'handled', result = '', remark = '') {
+    return api.put(`/alarms/${id}/handle`, { status, result, remark })
+      .then(handleApiResponse)
+      .catch(handleApiError)
+  },
+
+  // 批量处理报警，避免前端并发触发后端限流
+  batchHandleAlarms(ids, status = 'handled', result = '', remark = '') {
+    return api.put('/alarms/batch/handle', { ids, status, result, remark })
       .then(handleApiResponse)
       .catch(handleApiError)
   },

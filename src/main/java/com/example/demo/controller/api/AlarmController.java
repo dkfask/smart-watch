@@ -11,6 +11,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -171,6 +172,59 @@ public class AlarmController {
         Integer readValue = read ? 1 : 0;
         boolean success = alertService.markPatientAlertsAsRead(patientId, readValue);
         return success ? ResponseEntity.ok().build() : ResponseEntity.notFound().build();
+    }
+
+    /**
+     * 批量处理报警。
+     * 前端批量处置不再并发调用单条接口，避免触发全局API限流。
+     */
+    @PutMapping("/batch/handle")
+    public ResponseEntity<?> batchHandle(@RequestBody Map<String, Object> body) {
+        List<Long> ids = parseAlarmIds(body.get("ids"));
+        if (ids.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "ids is required"));
+        }
+
+        String status = Optional.ofNullable(body.get("status")).map(Object::toString).orElse("handled");
+        String result = Optional.ofNullable(body.get("result")).map(Object::toString).orElse("");
+        String remark = Optional.ofNullable(body.get("remark")).map(Object::toString).orElse("");
+
+        int successCount = 0;
+        List<Long> failedIds = new ArrayList<>();
+        for (Long id : ids) {
+            boolean success = alertService.handleAlert(id, status, result, remark);
+            if (success) {
+                successCount++;
+            } else {
+                failedIds.add(id);
+            }
+        }
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("total", ids.size());
+        response.put("successCount", successCount);
+        response.put("failedCount", failedIds.size());
+        response.put("failedIds", failedIds);
+        return ResponseEntity.ok(response);
+    }
+
+    private List<Long> parseAlarmIds(Object rawIds) {
+        List<Long> ids = new ArrayList<>();
+        if (!(rawIds instanceof List<?>)) {
+            return ids;
+        }
+
+        for (Object rawId : (List<?>) rawIds) {
+            if (rawId == null) {
+                continue;
+            }
+            try {
+                ids.add(Long.parseLong(rawId.toString()));
+            } catch (NumberFormatException ignored) {
+                // Ignore invalid ids and report only valid attempts.
+            }
+        }
+        return ids;
     }
 
     /**

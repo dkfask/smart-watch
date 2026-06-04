@@ -3,25 +3,32 @@
     <el-card shadow="hover">
       <template #header>
         <div class="card-header">
-          <h2>报警管理</h2>
-          <div class="header-actions">
-            <el-select v-model="filterStatus" placeholder="筛选状态" size="small" @change="fetchAlarms">
-              <el-option label="全部" value="" />
-              <el-option label="未处理" value="pending" />
-              <el-option label="已处理" value="handled" />
-            </el-select>
-            <el-select v-model="alarmInterval" placeholder="同一病人报警间隔" size="small" @change="saveAlarmInterval">
-              <el-option label="1分钟" :value="1" />
-              <el-option label="5分钟" :value="5" />
-              <el-option label="10分钟" :value="10" />
-              <el-option label="15分钟" :value="15" />
-              <el-option label="30分钟" :value="30" />
-              <el-option label="60分钟" :value="60" />
-            </el-select>
-            <el-switch v-model="soundEnabled" active-text="声音提醒" inactive-text="" @change="toggleSound" />
-            <el-button type="primary" size="small" @click="refreshAlarms">
-              刷新
-            </el-button>
+          <div class="header-title">
+            <h2>报警管理</h2>
+            <span class="header-subtitle">集中查看、筛选和处置未处理报警</span>
+          </div>
+          <div class="header-actions alarm-toolbar">
+            <div class="toolbar-field">
+              <span class="toolbar-label">状态</span>
+              <el-select v-model="filterStatus" placeholder="全部报警" @change="fetchAlarms">
+                <el-option label="全部" value="" />
+                <el-option label="未处理" value="pending" />
+                <el-option label="已处理" value="handled" />
+              </el-select>
+            </div>
+            <div class="toolbar-field">
+              <span class="toolbar-label">提醒间隔</span>
+              <el-select v-model="alarmInterval" placeholder="报警间隔" @change="saveAlarmInterval">
+                <el-option label="1分钟" :value="1" />
+                <el-option label="5分钟" :value="5" />
+                <el-option label="10分钟" :value="10" />
+                <el-option label="15分钟" :value="15" />
+                <el-option label="30分钟" :value="30" />
+                <el-option label="60分钟" :value="60" />
+              </el-select>
+            </div>
+            <el-switch class="sound-switch" v-model="soundEnabled" active-text="声音提醒" inactive-text="" @change="toggleSound" />
+            <el-button type="primary" class="refresh-button" @click="refreshAlarms">刷新</el-button>
           </div>
         </div>
       </template>
@@ -29,18 +36,41 @@
         <el-row :gutter="20">
           <el-col :span="14">
             <div class="alarm-list-panel">
-              <h3>报警列表
+              <div class="list-heading">
+                <div>
+                  <h3>报警列表</h3>
+                  <p>当前未处理 {{ pendingCount }} 条，超时 {{ overdueCount }} 条</p>
+                </div>
                 <el-badge v-if="pendingCount > 0" :value="pendingCount" class="pending-badge" />
-              </h3>
-              <el-input
-                v-model="searchQuery"
-                placeholder="搜索病人姓名或设备IMEI"
-                prefix-icon="Search"
-                class="search-input"
-                clearable
-              />
+              </div>
+              <div class="list-tools">
+                <el-input
+                  v-model="searchQuery"
+                  placeholder="搜索病人姓名或设备IMEI"
+                  prefix-icon="Search"
+                  class="search-input"
+                  clearable
+                />
+                <el-button
+                  type="danger"
+                  plain
+                  :disabled="selectedPendingAlarms.length === 0"
+                  @click="openBatchHandleDialog"
+                >
+                  批量处理
+                  <span v-if="selectedPendingAlarms.length > 0">({{ selectedPendingAlarms.length }})</span>
+                </el-button>
+              </div>
+              <div v-if="selectedAlarms.length > 0" class="batch-strip">
+                已选择 {{ selectedAlarms.length }} 条，其中 {{ selectedPendingAlarms.length }} 条可批量处理
+                <el-button link type="primary" @click="clearSelection">清空选择</el-button>
+              </div>
               <el-table :data="filteredAlarms" style="width: 100%" v-loading="loading"
-                        @row-click="selectAlarm" :row-class-name="getRowClassName">
+                        ref="alarmTableRef"
+                        @row-click="selectAlarm"
+                        @selection-change="handleSelectionChange"
+                        :row-class-name="getRowClassName">
+                <el-table-column type="selection" width="44" :selectable="isSelectableAlarm" />
                 <el-table-column label="报警类型" width="110">
                   <template #default="scope">
                     <el-tag :type="getAlarmTypeColor(scope.row)" size="small">
@@ -81,7 +111,7 @@
                 </el-table-column>
                 <el-table-column label="操作" width="120" fixed="right">
                   <template #default="scope">
-                    <el-button type="primary" size="small" @click="handleAlarm(scope.row)">
+                    <el-button type="primary" size="small" @click.stop="handleAlarm(scope.row)">
                       {{ scope.row.status === 'pending' ? '处理' : '查看' }}
                     </el-button>
                   </template>
@@ -172,6 +202,49 @@
         </span>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="batchDialogVisible"
+      title="批量处理报警"
+      width="460px"
+      :close-on-click-modal="false"
+    >
+      <div class="batch-summary">
+        将处理 <strong>{{ selectedPendingAlarms.length }}</strong> 条未处理报警。已处理报警不会被重复提交。
+      </div>
+      <el-form :model="batchForm" label-width="88px">
+        <el-form-item label="处理结果">
+          <el-select v-model="batchForm.result" style="width: 100%">
+            <el-option label="已通知医生" value="已通知医生" />
+            <el-option label="病人已返回" value="病人已返回" />
+            <el-option label="误报" value="误报" />
+            <el-option label="需进一步处理" value="需进一步处理" />
+            <el-option label="已处理" value="已处理" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="处理备注">
+          <el-input
+            v-model="batchForm.remark"
+            type="textarea"
+            placeholder="请输入批量处理备注，例如：值班护士已统一确认"
+            :rows="4"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="batchDialogVisible = false">取消</el-button>
+          <el-button
+            type="danger"
+            :loading="batchLoading"
+            :disabled="selectedPendingAlarms.length === 0"
+            @click="saveBatchHandleResult"
+          >
+            确认批量处理
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -194,10 +267,15 @@ const soundEnabled = ref(true)
 let refreshTimer = null
 let audioContext = null
 
+const alarmTableRef = ref()
+const selectedAlarms = ref([])
 const handleDialogVisible = ref(false)
 const handleFormRef = ref()
 const handleForm = reactive({ result: '已处理', remark: '' })
 const handleLoading = ref(false)
+const batchDialogVisible = ref(false)
+const batchLoading = ref(false)
+const batchForm = reactive({ result: '已通知医生', remark: '' })
 
 const OVERDUE_MINUTES = 15
 
@@ -205,6 +283,8 @@ const OVERDUE_MINUTES = 15
  * 计算未处理报警数
  */
 const pendingCount = computed(() => alarms.value.filter(a => a.status === 'pending').length)
+const overdueCount = computed(() => alarms.value.filter(a => a.status === 'pending' && isOverdue(a)).length)
+const selectedPendingAlarms = computed(() => selectedAlarms.value.filter(a => a.status === 'pending'))
 
 /**
  * 搜索过滤后的报警列表
@@ -236,6 +316,17 @@ const getRowClassName = ({ row }) => {
   if (row.status === 'pending' && isOverdue(row)) return 'alarm-row-overdue'
   if (row.status === 'pending') return 'alarm-row-pending'
   return ''
+}
+
+const isSelectableAlarm = (row) => row.status === 'pending'
+
+const handleSelectionChange = (selection) => {
+  selectedAlarms.value = selection
+}
+
+const clearSelection = () => {
+  alarmTableRef.value?.clearSelection()
+  selectedAlarms.value = []
 }
 
 /**
@@ -354,6 +445,7 @@ const fetchAlarms = async () => {
       playAlarmSound()
       sendNotification(newPending[0])
     }
+    clearSelection()
   } catch (error) {
     ElMessage.error('获取报警列表失败')
   } finally {
@@ -393,13 +485,23 @@ const openHandleDialog = () => {
   handleDialogVisible.value = true
 }
 
+const openBatchHandleDialog = () => {
+  if (selectedPendingAlarms.value.length === 0) {
+    ElMessage.warning('请先选择未处理报警')
+    return
+  }
+  batchForm.result = '已通知医生'
+  batchForm.remark = ''
+  batchDialogVisible.value = true
+}
+
 /**
  * 快捷处理报警
  */
 const quickHandle = async (result) => {
   if (!selectedAlarm.value) return
   try {
-    await alarmApi.handleAlarm(selectedAlarm.value.id, result)
+    await alarmApi.handleAlarm(selectedAlarm.value.id, 'handled', result, '')
     ElMessage.success('报警处理成功')
     selectedAlarm.value.status = 'handled'
     fetchAlarms()
@@ -415,7 +517,7 @@ const saveHandleResult = async () => {
   if (!selectedAlarm.value) return
   handleLoading.value = true
   try {
-    await alarmApi.handleAlarm(selectedAlarm.value.id, handleForm.result)
+    await alarmApi.handleAlarm(selectedAlarm.value.id, 'handled', handleForm.result, handleForm.remark)
     ElMessage.success('报警处理成功')
     handleDialogVisible.value = false
     selectedAlarm.value.status = 'handled'
@@ -424,6 +526,37 @@ const saveHandleResult = async () => {
     ElMessage.error('报警处理失败')
   } finally {
     handleLoading.value = false
+  }
+}
+
+const saveBatchHandleResult = async () => {
+  const targets = [...selectedPendingAlarms.value]
+  if (targets.length === 0) {
+    ElMessage.warning('没有可处理的未处理报警')
+    return
+  }
+
+  batchLoading.value = true
+  try {
+    const alarmIds = targets.map(alarm => alarm.id)
+    const result = await alarmApi.batchHandleAlarms(alarmIds, 'handled', batchForm.result, batchForm.remark)
+    const successCount = result?.successCount ?? alarmIds.length
+    const failedCount = result?.failedCount ?? 0
+
+    if (successCount > 0) {
+      ElMessage.success(`已批量处理 ${successCount} 条报警${failedCount ? `，${failedCount} 条失败` : ''}`)
+    }
+    if (failedCount > 0 && successCount === 0) {
+      ElMessage.error('批量处理失败')
+    }
+
+    batchDialogVisible.value = false
+    clearSelection()
+    fetchAlarms()
+  } catch (error) {
+    ElMessage.error('批量处理失败，请稍后重试')
+  } finally {
+    batchLoading.value = false
   }
 }
 
@@ -453,18 +586,143 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.alarm-container { width: 100%; padding: 20px; background: transparent; }
-.card-header { display: flex; justify-content: space-between; align-items: center; }
-.header-actions { display: flex; gap: 10px; align-items: center; }
+.alarm-container {
+  width: 100%;
+  padding: 20px;
+  background: transparent;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  min-height: 64px;
+}
+
+.header-title {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.header-title h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.header-subtitle {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.alarm-toolbar {
+  max-width: 860px;
+}
+
+.toolbar-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid #dbe6f3;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.toolbar-field :deep(.el-select) {
+  width: 132px;
+}
+
+.toolbar-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+.sound-switch {
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.refresh-button {
+  height: 36px;
+  border-radius: 14px;
+}
+
 .alarm-content { padding: 20px 0; }
 
 .alarm-list-panel {
-  background: var(--bg-card); border: 1px solid var(--border-color);
-  padding: 15px; border-radius: var(--radius-lg); backdrop-filter: blur(10px);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(10px);
 }
-.alarm-list-panel h3 { margin: 0 0 15px 0; font-size: 16px; font-weight: bold; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+
+.list-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.list-heading h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.list-heading p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #64748b;
+}
+
 .pending-badge { margin-left: 8px; }
-.search-input { margin-bottom: 20px; width: 300px; }
+
+.list-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.search-input {
+  width: min(360px, 100%);
+}
+
+.batch-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 13px;
+  font-weight: 700;
+}
 
 .patient-cell { display: flex; flex-direction: column; }
 .patient-name { font-weight: 500; color: var(--text-primary); }
@@ -474,11 +732,16 @@ onUnmounted(() => {
 :deep(.alarm-row-overdue) { background-color: rgba(245, 108, 108, 0.1); }
 
 .alarm-detail-panel {
-  background: var(--bg-card); border: 1px solid var(--border-color);
-  padding: 15px; border-radius: var(--radius-lg); height: 650px;
-  overflow-y: auto; backdrop-filter: blur(10px);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  height: 650px;
+  overflow-y: auto;
+  backdrop-filter: blur(10px);
 }
-.alarm-detail-panel h3 { margin: 0 0 15px 0; font-size: 16px; font-weight: bold; color: var(--text-primary); }
+
+.alarm-detail-panel h3 { margin: 0 0 15px 0; font-size: 17px; font-weight: 800; color: var(--text-primary); }
 .alarm-detail { overflow-y: auto; max-height: 580px; }
 
 .quick-handle-section { margin-top: 20px; padding: 16px; background: rgba(0,0,0,0.02); border-radius: 8px; }
@@ -487,4 +750,35 @@ onUnmounted(() => {
 .custom-handle-btn { width: 100%; }
 
 .pagination { margin-top: 20px; display: flex; justify-content: flex-end; }
+
+.batch-summary {
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  font-size: 14px;
+}
+
+@media (max-width: 1200px) {
+  .card-header {
+    flex-direction: column;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .list-tools {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+}
 </style>
+

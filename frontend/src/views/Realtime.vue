@@ -751,12 +751,13 @@ onBeforeUnmount(() => {
 }
 
 .device-info {
-  display: flex;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 52px;
   align-items: center;
   width: 100%;
   min-height: 72px;
-  padding: 12px 12px 12px 14px;
-  gap: 12px;
+  padding: 12px 10px 12px 14px;
+  column-gap: 10px;
   position: relative;
 }
 
@@ -798,7 +799,7 @@ onBeforeUnmount(() => {
 
 .device-copy {
   min-width: 0;
-  flex: 1;
+  text-align: center;
 }
 
 .device-imei {
@@ -830,15 +831,20 @@ onBeforeUnmount(() => {
 }
 
 .device-status {
-  flex: 0 0 auto;
-  margin-left: 4px;
+  justify-self: end;
+  align-self: start;
+  min-width: 48px;
+  padding-top: 2px;
 }
 
 .device-status :deep(.el-tag) {
   height: 24px;
-  padding: 0 9px;
+  min-width: 42px;
+  justify-content: center;
+  padding: 0 8px;
   border: 0;
   font-weight: 700;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
 }
 
 .map-panel {
