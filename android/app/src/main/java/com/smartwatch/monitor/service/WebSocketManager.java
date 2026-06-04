@@ -65,11 +65,9 @@ public class WebSocketManager implements WebSocketService.WebSocketCallback {
         this.appContext = context.getApplicationContext();
         this.sessionManager = ApiClient.getInstance().getSessionManager();
 
-        String wsHost = Constants.BASE_URL
-                .replace("http://", "")
-                .replace("https://", "")
-                .replace("/api/", "");
-        String wsUrl = "ws://" + wsHost + WS_PATH;
+        String wsUrl = appContext
+                .getSharedPreferences(Constants.PREF_NAME, Context.MODE_PRIVATE)
+                .getString("ws_url", Constants.DEFAULT_WS_URL);
 
         String cookie = buildCookieString();
         webSocketService = new WebSocketService(wsUrl, cookie);

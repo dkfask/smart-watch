@@ -1,4 +1,4 @@
-# Smart Watch 数据库优化设计文档
+﻿# Smart Watch 数据库优化设计文档
 
 **日期**: 2026-04-12
 **项目**: smart (智慧医疗定位追踪系统)
@@ -12,7 +12,7 @@
 ### 1.1 技术栈
 
 - **后端**: Spring Boot + JPA/Hibernate
-- **数据库**: MySQL 8.0 (远程: 8.156.83.206:3306/smart_watch)
+- **数据库**: MySQL 8.0 (远程: <DB_HOST>:3306/smart_watch)
 - **连接池**: HikariCP
 - **缓存**: Redis (本地)
 - **DDL 策略**: `hibernate.ddl-auto=update` (自动更新表结构)
@@ -682,7 +682,7 @@ spring.datasource.hikari.pool-name=SmartWatchHikariPool
 |------|--------|---------|
 | 数据库密码硬编码在 `application.properties` 中并提交到 Git | **CRITICAL** | 迁移到环境变量或 Spring Cloud Config |
 | 默认用户密码 `admin/admin123`、`user/user123` | **CRITICAL** | 强制首次登录修改密码 |
-| 远程数据库 `8.156.83.206:3306` 对外暴露 | **HIGH** | 限制 IP 白名单或通过 VPN 访问 |
+| 远程数据库 `<DB_HOST>:3306` 对外暴露 | **HIGH** | 限制 IP 白名单或通过 VPN 访问 |
 | 高德 API Key 和设备通信 Key 硬编码 | **HIGH** | 迁移到环境变量 |
 
 **密钥管理迁移方案**:

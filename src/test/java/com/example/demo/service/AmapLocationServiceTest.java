@@ -28,7 +28,7 @@ class AmapLocationServiceTest {
     @BeforeEach
     void setUp() {
         serviceWithEmptyKey = new AmapLocationService("");
-        serviceWithNullKey = new AmapLocationService(null);
+        serviceWithNullKey = new AmapLocationService((String) null);
 
         // 创建带有效key的service，注入mock RestTemplate
         serviceWithKey = new AmapLocationService("test-amap-key");

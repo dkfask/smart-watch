@@ -812,7 +812,7 @@ const handleCommand = async (deviceId, commandType) => {
         // 实时追踪
         const interval = await ElMessageBox.prompt('请输入追踪间隔（秒）', '实时追踪', {
           inputType: 'number',
-          inputValue: 5
+          inputValue: 300
         })
         response = await downlinkApi.startRealTimeTracking(imei, parseInt(interval.value))
         break

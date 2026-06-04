@@ -106,8 +106,8 @@ public class MpbandServer implements SmartLifecycle {
 
     // 处理器类
     private final PacketProcessor packetProcessor;
-    private final ResponseGenerator responseGenerator;
-    private final LogProcessor logProcessor;
+    private ResponseGenerator responseGenerator;
+    private LogProcessor logProcessor;
 
     // 协议常量
     private static final String HEADER = "IW";
@@ -148,15 +148,14 @@ public class MpbandServer implements SmartLifecycle {
         // 初始化处理器类
         this.packetProcessor = new PacketProcessor(deviceRepository, downlinkManager, locationRecordRepository,
                 heartbeatRecordRepository, healthRecordRepository, deviceStatusRepository, amapLocationService, healthMonitorService, trackingService);
-        // 先创建logProcessor，然后再创建responseGenerator
-        this.logProcessor = new LogProcessor(saveDirName);
-        this.responseGenerator = new ResponseGenerator(responseKey, appendNewlineAfterResponse, logProcessor);
     }
 
     @Override
     public synchronized void start() {
         if (running) return;
         try {
+            initializeRuntimeProcessors();
+
             serverSocket = new ServerSocket();
             serverSocket.bind(new InetSocketAddress("0.0.0.0", port));
 
@@ -180,6 +179,18 @@ public class MpbandServer implements SmartLifecycle {
             closeQuietly(serverSocket);
             log.error("❌ Failed to start MpbandServer on port {}", port, e);
             throw new IllegalStateException("Failed to start MpbandServer", e);
+        }
+    }
+
+    private void initializeRuntimeProcessors() {
+        // @Value fields are injected after construction, so create these at
+        // lifecycle start to make responseKey/saveDir/appendNewline effective.
+        if (logProcessor == null) {
+            logProcessor = new LogProcessor(saveDirName);
+        }
+        if (responseGenerator == null) {
+            responseGenerator = new ResponseGenerator(responseKey, appendNewlineAfterResponse, logProcessor);
+            log.info("Mpband AP00 response key configured: {}", responseKey != null && !responseKey.isBlank());
         }
     }
 

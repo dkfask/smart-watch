@@ -306,10 +306,11 @@ public class DownlinkApiController {
     public ResponseEntity<?> sendBp15(@RequestParam String imei, @RequestParam int interval, @RequestParam(required = false) String seq) {
         if (imei == null || imei.isEmpty()) return ResponseEntity.badRequest().body(Map.of("error", "imei required"));
         if (interval < 0) return ResponseEntity.badRequest().body(Map.of("error", "interval must be non-negative"));
+        int effectiveInterval = normalizeLocationInterval(interval);
         String seqVal = seq != null ? seq : "1";
 
         DownlinkService service = new DownlinkService();
-        String msg = service.buildBP15(imei, seqVal, interval);
+        String msg = service.buildBP15(imei, seqVal, effectiveInterval);
         try {
             downlinkManager.sendToImei(imei, msg);
             return ResponseEntity.ok(Map.of("status", "sent", "message", msg));
@@ -317,6 +318,13 @@ public class DownlinkApiController {
             log.warn("sendBp15 failed imei={} msg={} err={}", imei, msg, e.getMessage());
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(Map.of("status", "failed", "error", e.getMessage()));
         }
+    }
+
+    private int normalizeLocationInterval(int interval) {
+        if (interval > 0 && interval < 60) {
+            return 300;
+        }
+        return interval;
     }
 
     /**

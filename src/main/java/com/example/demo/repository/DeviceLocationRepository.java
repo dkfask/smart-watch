@@ -79,6 +79,18 @@ public class DeviceLocationRepository {
         return jdbc.query("SELECT * FROM location_records WHERE device_id=? ORDER BY recv_time DESC LIMIT ? OFFSET ?", MAPPER, deviceId, limit, offset);
     }
 
+    public List<DeviceLocation> listRecentValid(long deviceId, int limit) {
+        return jdbc.query("""
+                SELECT * FROM location_records
+                WHERE device_id=?
+                  AND latitude IS NOT NULL
+                  AND longitude IS NOT NULL
+                  AND NOT (latitude = 0 AND longitude = 0)
+                ORDER BY recv_time DESC
+                LIMIT ?
+                """, MAPPER, deviceId, limit);
+    }
+
     public List<DeviceLocation> listByRange(long deviceId, LocalDateTime start, LocalDateTime end, int limit, int offset) {
         return jdbc.query("SELECT * FROM location_records WHERE device_id=? AND recv_time BETWEEN ? AND ? ORDER BY recv_time DESC LIMIT ? OFFSET ?",
                 MAPPER, deviceId, Timestamp.valueOf(start), Timestamp.valueOf(end), limit, offset);

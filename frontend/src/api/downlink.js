@@ -268,13 +268,14 @@ export const downlinkApi = {
   },
 
   // 实时追踪
-  startRealTimeTracking(imei, interval = 5) {
-    return this.sendBP15(imei, interval)
+  startRealTimeTracking(imei, interval = 300) {
+    const safeInterval = interval > 0 && interval < 60 ? 300 : interval
+    return this.sendBP15(imei, safeInterval)
   },
 
   // 停止实时追踪
   stopRealTimeTracking(imei) {
-    return this.sendBP15(imei, 0)
+    return this.sendBP15(imei, 300)
   },
 
   // 获取历史轨迹

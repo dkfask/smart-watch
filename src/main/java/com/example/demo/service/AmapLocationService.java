@@ -1,6 +1,7 @@
 package com.example.demo.service;
 
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,10 +24,30 @@ public class AmapLocationService {
     private final RestTemplate restTemplate;
     private final String webKey;
 
-    public AmapLocationService(@Value("${amap.web.key:}") String webKey) {
-        // 不依赖容器提供的 RestTemplate，直接创建以避免装配问题
+    @Autowired
+    public AmapLocationService(Environment env) {
         this.restTemplate = new RestTemplate();
-        this.webKey = webKey;
+        this.webKey = firstNonBlank(
+                env.getProperty("AMAP_REST_KEY"),
+                env.getProperty("amap.web.key"),
+                env.getProperty("AMAP_WEB_KEY"));
+    }
+
+    AmapLocationService(String webKey) {
+        this.restTemplate = new RestTemplate();
+        this.webKey = firstNonBlank(webKey);
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) {
+            return "";
+        }
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return value.trim();
+            }
+        }
+        return "";
     }
 
     /**
@@ -58,6 +79,7 @@ public class AmapLocationService {
             Map<?, ?> body = resp.getBody();
             Object status = body.get("status");
             if (!"1".equals(String.valueOf(status))) {
+                log.warn("Amap regeo failed: info={}, infocode={}", body.get("info"), body.get("infocode"));
                 return null;
             }
             Object regeocode = body.get("regeocode");
@@ -67,6 +89,7 @@ public class AmapLocationService {
             }
             return null;
         } catch (Exception ex) {
+            log.warn("Amap regeo request failed: {}", ex.getMessage());
             return null;
         }
     }

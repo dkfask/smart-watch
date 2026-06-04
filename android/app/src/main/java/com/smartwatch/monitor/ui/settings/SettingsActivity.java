@@ -68,7 +68,7 @@ public class SettingsActivity extends AppCompatActivity {
      */
     private void loadSettings() {
         String serverUrl = prefs.getString("server_url", Constants.BASE_URL);
-        String wsUrl = prefs.getString("ws_url", "ws://8.156.83.206:8080/ws");
+        String wsUrl = prefs.getString("ws_url", Constants.DEFAULT_WS_URL);
         boolean notificationEnabled = prefs.getBoolean("notification_enabled", true);
         boolean darkModeEnabled = prefs.getBoolean("dark_mode_enabled", false);
 

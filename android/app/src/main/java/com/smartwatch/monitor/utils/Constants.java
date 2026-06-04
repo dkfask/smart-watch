@@ -1,5 +1,7 @@
 package com.smartwatch.monitor.utils;
 
+import com.smartwatch.monitor.BuildConfig;
+
 /**
  * 全局常量定义类
  * 包含API基础地址、分页默认值、键名等常量
@@ -7,7 +9,10 @@ package com.smartwatch.monitor.utils;
 public class Constants {
 
     /** API基础地址 */
-    public static final String BASE_URL = "http://8.156.83.206:8080/api/";
+    public static final String BASE_URL = BuildConfig.DEFAULT_API_BASE_URL;
+
+    /** WebSocket默认地址 */
+    public static final String DEFAULT_WS_URL = BuildConfig.DEFAULT_WS_URL;
 
     /** SharedPreferences文件名 */
     public static final String PREF_NAME = "smartwatch_prefs";

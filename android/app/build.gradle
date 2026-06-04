@@ -2,6 +2,17 @@ plugins {
     id 'com.android.application'
 }
 
+def buildConfigString = { value ->
+    "\"${value.toString().replace("\\", "\\\\").replace("\"", "\\\"")}\""
+}
+
+def defaultApiBaseUrl = project.findProperty("SMART_API_BASE_URL")
+        ?: System.getenv("SMART_API_BASE_URL")
+        ?: "http://localhost:8080/api/"
+def defaultWsUrl = project.findProperty("SMART_WS_URL")
+        ?: System.getenv("SMART_WS_URL")
+        ?: "ws://localhost:8080/ws"
+
 android {
     namespace 'com.smartwatch.monitor'
     compileSdk 36
@@ -13,6 +24,9 @@ android {
         targetSdk 36
         versionCode 1
         versionName "1.0"
+
+        buildConfigField "String", "DEFAULT_API_BASE_URL", buildConfigString(defaultApiBaseUrl)
+        buildConfigField "String", "DEFAULT_WS_URL", buildConfigString(defaultWsUrl)
     }
 
     buildTypes {
@@ -29,6 +43,7 @@ android {
 
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 }
 

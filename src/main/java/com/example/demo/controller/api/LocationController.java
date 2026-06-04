@@ -115,14 +115,12 @@ public class LocationController {
     }
 
     private DeviceLocation latestValidLocation(long deviceId) {
-        List<DeviceLocation> list = locationRepo.listRecent(deviceId, 20, 0);
+        List<DeviceLocation> list = locationRepo.listRecentValid(deviceId, 1);
         if (list == null || list.isEmpty()) {
             return null;
         }
-        return list.stream()
-                .filter(LocationController::hasValidCoordinate)
-                .findFirst()
-                .orElse(null);
+        DeviceLocation location = list.get(0);
+        return hasValidCoordinate(location) ? location : null;
     }
 
     private DeviceLocation latestAnyLocation(long deviceId) {
