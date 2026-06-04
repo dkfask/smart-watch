@@ -20,21 +20,31 @@
               />
               <el-scrollbar height="600px">
                 <el-radio-group v-model="selectedDeviceId" class="device-radio-group">
-                  <div v-if="devices.length === 0" class="no-devices">
+                  <div v-if="filteredDevices.length === 0" class="no-devices">
                     暂无设备数据
                   </div>
                   <el-radio-button
                     v-else
-                    v-for="device in devices"
+                    v-for="device in filteredDevices"
                     :key="device.id"
                     :value="device.id"
                     class="device-radio"
                   >
                     <div class="device-info">
-                      <div class="device-patient-name">{{ device.patient?.name || device.imei }}</div>
-                      <div class="device-imei-sub" v-if="device.patient">{{ device.imei }}</div>
+                      <div class="device-avatar">
+                        {{ (device.patient?.name || device.imei || '?').slice(0, 1) }}
+                      </div>
+                      <div class="device-copy">
+                        <div class="device-patient-name">{{ device.patient?.name || '未关联患者' }}</div>
+                        <div class="device-imei-sub">{{ device.imei }}</div>
+                      </div>
                       <div class="device-status">
-                        <el-tag :type="getDeviceStatus(device.id) ? 'success' : 'danger'" size="small">
+                        <el-tag
+                          :type="getDeviceStatus(device.id) ? 'success' : 'danger'"
+                          size="small"
+                          effect="light"
+                          round
+                        >
                           {{ getDeviceStatus(device.id) ? '在线' : '离线' }}
                         </el-tag>
                       </div>
@@ -702,7 +712,8 @@ onBeforeUnmount(() => {
 .device-radio-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  width: 100%;
 }
 
 .device-radio {
@@ -710,12 +721,84 @@ onBeforeUnmount(() => {
   text-align: left;
 }
 
+.device-radio :deep(.el-radio-button__original-radio) {
+  display: none;
+}
+
+.device-radio :deep(.el-radio-button__inner) {
+  width: 100%;
+  display: block;
+  padding: 0;
+  border: 1px solid #dbe6f3;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+  color: var(--text-primary);
+  overflow: hidden;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+
+.device-radio :deep(.el-radio-button__inner:hover) {
+  border-color: #7aa7ff;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.14);
+  transform: translateY(-1px);
+}
+
+.device-radio.is-active :deep(.el-radio-button__inner) {
+  border-color: #2563eb;
+  background: linear-gradient(135deg, #eaf2ff 0%, #f7fbff 100%);
+  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.22);
+}
+
 .device-info {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 8px 0;
+  min-height: 72px;
+  padding: 12px 12px 12px 14px;
+  gap: 12px;
+  position: relative;
+}
+
+.device-info::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 4px;
+  border-radius: 0 999px 999px 0;
+  background: #cbd5e1;
+}
+
+.device-radio.is-active .device-info::before {
+  background: #2563eb;
+}
+
+.device-avatar {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: #eaf2ff;
+  color: #1d4ed8;
+  font-size: 15px;
+  font-weight: 800;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.16);
+}
+
+.device-radio.is-active .device-avatar {
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
+}
+
+.device-copy {
+  min-width: 0;
+  flex: 1;
 }
 
 .device-imei {
@@ -726,19 +809,36 @@ onBeforeUnmount(() => {
 }
 
 .device-patient-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 20px;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .device-imei-sub {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-family: monospace;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .device-status {
-  margin-left: 8px;
+  flex: 0 0 auto;
+  margin-left: 4px;
+}
+
+.device-status :deep(.el-tag) {
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  font-weight: 700;
 }
 
 .map-panel {
