@@ -955,9 +955,15 @@ def run_gui() -> None:
 
             self._section(left, "模拟参数", 12)
             ttk.Label(left, text="场景").grid(row=13, column=0, sticky="w", pady=5)
-            ttk.Combobox(left, textvariable=self.vars["scenario"], values=SCENARIOS, state="readonly", width=22).grid(
-                row=13, column=1, sticky="ew", pady=5
-            )
+            scenario_frame = ttk.Frame(left)
+            scenario_frame.grid(row=13, column=1, sticky="ew", pady=5)
+            for index, scenario in enumerate(SCENARIOS):
+                ttk.Radiobutton(
+                    scenario_frame,
+                    text=scenario,
+                    value=scenario,
+                    variable=self.vars["scenario"],
+                ).grid(row=index // 3, column=index % 3, sticky="w", padx=(0, 12), pady=2)
             self._field(left, "纬度", "latitude", 14)
             self._field(left, "经度", "longitude", 15)
             self._field(left, "半径(m)", "radius", 16, width=12)
