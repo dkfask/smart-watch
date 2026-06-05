@@ -65,6 +65,9 @@ public class PacketProcessor {
             // 去掉开头 IWAPxx 并去掉尾部的 '#'
             int end = raw.endsWith("#") ? raw.length() - 1 : raw.length();
             payload = raw.substring(6, end);
+            if (payload.startsWith(",")) {
+                payload = payload.substring(1);
+            }
         }
 
         try {
@@ -329,7 +332,7 @@ public class PacketProcessor {
     /** 处理 APTP 体温数据 */
     private void handleApTp(String payload, String clientInfo, String imei) {
         Map<String, String> params = parseKeyValueParams(payload);
-        if (params.isEmpty() && payload != null && !payload.isBlank()) {
+        if (!params.containsKey("data_type") && !params.containsKey("temp") && payload != null && !payload.isBlank() && !payload.contains("=")) {
             String[] parts = payload.split(",", 2);
             if (parts.length >= 1 && !parts[0].isBlank()) {
                 params.put("data_type", "body_temperature");
