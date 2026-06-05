@@ -89,8 +89,6 @@
         <h3 class="card-title">病人位置分布</h3>
         <div class="map-container">
           <div class="map-tools">
-            <el-button size="small" class="map-tool-btn" @click="zoomIn">+</el-button>
-            <el-button size="small" class="map-tool-btn" @click="zoomOut">−</el-button>
             <el-button size="small" class="map-tool-btn" @click="resetView">重置</el-button>
           </div>
           <div id="heatmap" class="map"></div>
@@ -209,16 +207,7 @@ const markerPalette = [
   '#DB2777'
 ]
 
-const markerOffsets = [
-  [0, 0],
-  [14, -10],
-  [-14, -10],
-  [18, 8],
-  [-18, 8],
-  [8, -20],
-  [-8, 18],
-  [22, -18]
-]
+const CLUSTER_RADIUS_METERS = 35
 
 const hashMarkerSeed = (value) => {
   const text = String(value || '')
@@ -232,17 +221,97 @@ const hashMarkerSeed = (value) => {
 
 const getPatientMarkerVisual = (device) => {
   const seed = hashMarkerSeed(device.patient?.id || device.imei || device.id)
-  const [offsetX, offsetY] = markerOffsets[seed % markerOffsets.length]
   const patientName = device.patient?.name || ''
   const shortImei = String(device.imei || device.id || '').slice(-4)
 
   return {
     color: markerPalette[seed % markerPalette.length],
     initial: (patientName || shortImei || '?').charAt(0),
-    label: device.patient?.bedNumber || device.patient?.bed || shortImei || '设备',
-    offsetX,
-    offsetY
+    label: device.patient?.bedNumber || device.patient?.bed || shortImei || '设备'
   }
+}
+
+const escapeHtml = (value) => String(value ?? '')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;')
+  .replace(/'/g, '&#039;')
+
+const getBedText = (patient) => patient?.bedNumber || patient?.bed || ''
+
+const getPatientLocationSummary = (entry) => {
+  const patient = entry.device.patient || {}
+  const ward = patient.ward || ''
+  const bed = getBedText(patient)
+  return [ward, bed ? `${bed}床` : ''].filter(Boolean).join(' ')
+}
+
+const buildSinglePopup = (entry) => {
+  const patient = entry.device.patient || {}
+  const summary = getPatientLocationSummary(entry) || '未分配病区'
+  return `
+    <div class="dashboard-map-popup">
+      <div class="map-popup-title">${escapeHtml(patient.name || '未知病人')}</div>
+      <div class="map-popup-meta">${escapeHtml(summary)}</div>
+      <div class="map-popup-row">设备：${escapeHtml(entry.device.imei || entry.device.id || '-')}</div>
+      <div class="map-popup-row">位置：${escapeHtml(entry.location.address || '未知')}</div>
+    </div>
+  `
+}
+
+const buildClusterPopup = (entries) => {
+  const list = entries.map((entry) => {
+    const patient = entry.device.patient || {}
+    const summary = getPatientLocationSummary(entry) || '未分配病区'
+    return `
+      <div class="map-popup-patient">
+        <span class="map-popup-dot"></span>
+        <div>
+          <div class="map-popup-patient-name">${escapeHtml(patient.name || '未知病人')}</div>
+          <div class="map-popup-meta">${escapeHtml(summary)} · ${escapeHtml(entry.device.imei || '-')}</div>
+        </div>
+      </div>
+    `
+  }).join('')
+
+  return `
+    <div class="dashboard-map-popup cluster">
+      <div class="map-popup-title">该区域 ${entries.length} 名病人</div>
+      <div class="map-popup-meta">${escapeHtml(entries[0]?.location?.address || '点击病人查看详情')}</div>
+      <div class="map-popup-list">${list}</div>
+    </div>
+  `
+}
+
+const clusterPatientLocations = (entries) => {
+  const clusters = []
+
+  entries.forEach((entry) => {
+    const point = L.latLng(entry.location.latitude, entry.location.longitude)
+    const existingCluster = clusters.find(cluster => (
+      point.distanceTo(L.latLng(cluster.center.latitude, cluster.center.longitude)) <= CLUSTER_RADIUS_METERS
+    ))
+
+    if (existingCluster) {
+      existingCluster.entries.push(entry)
+      const count = existingCluster.entries.length
+      existingCluster.center = {
+        latitude: existingCluster.entries.reduce((sum, item) => sum + Number(item.location.latitude), 0) / count,
+        longitude: existingCluster.entries.reduce((sum, item) => sum + Number(item.location.longitude), 0) / count
+      }
+    } else {
+      clusters.push({
+        center: {
+          latitude: Number(entry.location.latitude),
+          longitude: Number(entry.location.longitude)
+        },
+        entries: [entry]
+      })
+    }
+  })
+
+  return clusters
 }
 
 const hasValidMarkerLocation = (location) => {
@@ -257,6 +326,21 @@ const hasValidMarkerLocation = (location) => {
     longitude <= 180 &&
     !(latitude === 0 && longitude === 0)
   )
+}
+
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+const runLimited = async (items, worker, concurrency = 2, gapMs = 200) => {
+  const results = []
+  for (let index = 0; index < items.length; index += concurrency) {
+    const batch = items.slice(index, index + concurrency)
+    const batchResults = await Promise.all(batch.map(worker))
+    results.push(...batchResults)
+    if (index + concurrency < items.length) {
+      await sleep(gapMs)
+    }
+  }
+  return results
 }
 
 /**
@@ -422,34 +506,69 @@ const updateMapMarkers = async (devices) => {
   markers.forEach(m => map.removeLayer(m))
   markers = []
 
-  for (const device of devices) {
-    if (!device.isOnline || !device.patient) continue
+  const targetDevices = devices.filter(device => device.isOnline && device.patient)
+  const locationEntries = (await runLimited(targetDevices, async (device) => {
+    const fallbackLocation = {
+      latitude: device.lastLatitude,
+      longitude: device.lastLongitude,
+      time: device.lastLocationTime,
+      batteryLevel: device.batteryLevel,
+      source: 'device-status'
+    }
+
     try {
       const location = await locationApi.getLatestLocation(device.id)
-      if (hasValidMarkerLocation(location)) {
-        const markerVisual = getPatientMarkerVisual(device)
-        const customIcon = L.divIcon({
-          className: 'custom-marker',
-          html: `
-            <div class="care-marker" style="--marker-color: ${markerVisual.color}; --marker-x: ${markerVisual.offsetX}px; --marker-y: ${markerVisual.offsetY}px;">
-              <div class="care-marker-pin">
-                <span class="care-marker-initial">${markerVisual.initial}</span>
-              </div>
-              <div class="care-marker-label">${markerVisual.label}</div>
-            </div>
-          `,
-          iconSize: [96, 64],
-          iconAnchor: [48, 54]
-        })
-        const marker = L.marker([location.latitude, location.longitude], { icon: customIcon })
-          .bindPopup(`<b>${device.patient?.name || '未知'}</b><br>${device.patient?.ward || ''} ${device.patient?.bed ? '床位' + device.patient.bed : ''}<br>位置: ${location.address || '未知'}`)
-          .addTo(map)
-        markers.push(marker)
-      }
+      const candidate = hasValidMarkerLocation(location) ? location : fallbackLocation
+      return hasValidMarkerLocation(candidate) ? { device, location: candidate } : null
     } catch (e) {
-      // 忽略单个设备位置获取失败
+      return hasValidMarkerLocation(fallbackLocation) ? { device, location: fallbackLocation } : null
     }
-  }
+  }, 2, 200)).filter(Boolean)
+
+  const clusters = clusterPatientLocations(locationEntries)
+
+  clusters.forEach((cluster) => {
+    if (cluster.entries.length === 1) {
+      const entry = cluster.entries[0]
+      const { device, location } = entry
+      const markerVisual = getPatientMarkerVisual(device)
+      const customIcon = L.divIcon({
+        className: 'custom-marker',
+        html: `
+          <div class="care-marker single" style="--marker-color: ${markerVisual.color};">
+            <div class="care-marker-pin">
+              <span class="care-marker-initial">${markerVisual.initial}</span>
+            </div>
+            <div class="care-marker-label">${escapeHtml(device.patient?.name || markerVisual.label)}</div>
+          </div>
+        `,
+        iconSize: [96, 68],
+        iconAnchor: [48, 56]
+      })
+      const marker = L.marker([location.latitude, location.longitude], { icon: customIcon })
+        .bindPopup(buildSinglePopup(entry))
+        .addTo(map)
+      markers.push(marker)
+      return
+    }
+
+    const customIcon = L.divIcon({
+      className: 'custom-marker',
+      html: `
+        <div class="care-cluster">
+          <div class="care-cluster-ring"></div>
+          <div class="care-cluster-count">${cluster.entries.length}</div>
+          <div class="care-cluster-label">名病人</div>
+        </div>
+      `,
+      iconSize: [76, 76],
+      iconAnchor: [38, 38]
+    })
+    const marker = L.marker([cluster.center.latitude, cluster.center.longitude], { icon: customIcon })
+      .bindPopup(buildClusterPopup(cluster.entries), { maxWidth: 320 })
+      .addTo(map)
+    markers.push(marker)
+  })
 
   if (markers.length > 0) {
     const group = L.featureGroup(markers)
@@ -789,26 +908,26 @@ onUnmounted(() => {
 .map-tools {
   position: absolute;
   top: 12px;
-  left: 12px;
+  right: 12px;
   z-index: 1000;
   display: flex;
-  gap: 4px;
-  background: var(--color-surface);
-  padding: 4px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 3px;
   border-radius: 24px;
   box-shadow: var(--elevation-2);
+  backdrop-filter: blur(8px);
 }
 
 /* Override Element Plus button styles for pill toolbar */
 :deep(.map-tool-btn) {
-  min-width: 36px !important;
-  height: 36px !important;
-  padding: 0 14px !important;
-  background: var(--color-surface) !important;
-  border: none !important;
-  border-radius: 20px !important;
-  color: var(--color-text-secondary) !important;
+  height: 30px !important;
+  padding: 0 13px !important;
+  background: transparent !important;
+  border: 1px solid rgba(148, 163, 184, 0.28) !important;
+  border-radius: 999px !important;
+  color: #475569 !important;
   font-size: 14px !important;
+  font-weight: 700 !important;
   font-family: var(--font-sans) !important;
   box-shadow: none !important;
   transition: all 0.15s ease !important;
@@ -825,7 +944,7 @@ onUnmounted(() => {
   background-color: var(--color-surface-raised);
 }
 
-/* High-density patient marker: color, short label, and stable offset for clusters. */
+/* High-density patient map: single pins for isolated patients, clusters for crowded areas. */
 :deep(.custom-marker) {
   background: none !important;
   border: none !important;
@@ -834,8 +953,7 @@ onUnmounted(() => {
 :deep(.care-marker) {
   position: relative;
   width: 96px;
-  height: 64px;
-  transform: translate(var(--marker-x, 0), var(--marker-y, 0));
+  height: 68px;
   pointer-events: auto;
 }
 
@@ -891,6 +1009,109 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+:deep(.care-cluster) {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border-radius: 24px;
+  background: linear-gradient(145deg, #2563eb 0%, #0f766e 100%);
+  border: 4px solid rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.34), 0 0 0 8px rgba(37, 99, 235, 0.16);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  isolation: isolate;
+}
+
+:deep(.care-cluster-ring) {
+  position: absolute;
+  inset: -10px;
+  border-radius: 28px;
+  border: 2px solid rgba(37, 99, 235, 0.26);
+  background: rgba(37, 99, 235, 0.08);
+  z-index: -1;
+}
+
+:deep(.care-cluster-count) {
+  font-size: 24px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+:deep(.care-cluster-label) {
+  margin-top: 3px;
+  font-size: 11px;
+  font-weight: 800;
+  opacity: 0.9;
+}
+
+:deep(.leaflet-popup-content-wrapper) {
+  border-radius: 16px;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.22);
+}
+
+:deep(.leaflet-popup-content) {
+  margin: 14px 16px;
+}
+
+:deep(.dashboard-map-popup) {
+  min-width: 210px;
+  color: #0f172a;
+  font-family: var(--font-sans);
+}
+
+:deep(.map-popup-title) {
+  font-size: 15px;
+  font-weight: 900;
+  margin-bottom: 5px;
+}
+
+:deep(.map-popup-meta),
+:deep(.map-popup-row) {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+:deep(.map-popup-list) {
+  max-height: 220px;
+  overflow-y: auto;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+:deep(.map-popup-patient) {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+:deep(.map-popup-dot) {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+:deep(.map-popup-patient-name) {
+  font-size: 13px;
+  font-weight: 800;
+  color: #0f172a;
 }
 
 /* ============================

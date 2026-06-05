@@ -97,6 +97,7 @@ let map = null
 let markers = new Map()
 let fenceLayers = new Map()
 let refreshTimer = null
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
 // 计算过滤后的设备列表
 const filteredDevices = computed(() => {
@@ -367,16 +368,31 @@ const fixDeviceListDisplay = () => {
 // 刷新所有设备位置
 const refreshAllLocations = async () => {
   for (const device of devices.value) {
-    // 使用设备ID作为标识符
     const deviceIdentifier = normalizeDeviceId(device.id)
-    await fetchDeviceLatestLocation(deviceIdentifier)
+    const fallbackLocation = normalizeLocation({
+      latitude: device.lastLatitude,
+      longitude: device.lastLongitude,
+      time: device.lastLocationTime,
+      batteryLevel: device.batteryLevel,
+      source: 'device-status'
+    })
+
+    if (isValidLocation(fallbackLocation)) {
+      deviceLocations.value.set(deviceIdentifier, fallbackLocation)
+      updateMarker(deviceIdentifier, fallbackLocation)
+    }
+
+    if (device.isOnline) {
+      await fetchDeviceLatestLocation(deviceIdentifier)
+      await sleep(200)
+    }
   }
   
-  // 刷新完所有设备位置后，自动定位到设备位置
+  // ????????????????????
   autoLocateToDevices()
 }
 
-// 自动定位到设备和围栏位置
+// ????????????
 const autoLocateToDevices = () => {
   if (!map) return
   

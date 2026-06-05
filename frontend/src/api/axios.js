@@ -8,6 +8,8 @@ const api = axios.create({
   withCredentials: true
 })
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
 // 请求拦截器
 api.interceptors.request.use(
   config => {
