@@ -45,6 +45,14 @@ DEFAULT_DOWNLINK_DELAY_SECONDS = 1.5
 DEFAULT_DOWNLINK_RETRIES = 3
 DEFAULT_API_RETRY_DELAY_SECONDS = 2.0
 DEFAULT_API_RETRIES = 5
+DEFAULT_HEART_RATE = 78
+DEFAULT_BLOOD_DIASTOLIC = 75
+DEFAULT_BLOOD_SYSTOLIC = 122
+DEFAULT_SPO2 = 98
+DEFAULT_BODY_TEMP = 36.5
+DEFAULT_WRIST_TEMP = 34.0
+DEFAULT_BLUETOOTH_PAYLOAD = "TraxBean064|BF:0C:B8:3F:2F:37|-30&VG05|F0:49:32:83:F9:9E|-52"
+DEFAULT_BLUETOOTH_GATEWAY = "28:05:31:16:02:04"
 
 SCENARIOS = ("basic", "location", "health", "alarm", "downlink", "all")
 LOG_SINK = None
@@ -436,13 +444,15 @@ def build_apwr(imei: str, worn: bool = True) -> str:
     return f"IWAPWR,{imei},{1 if worn else 0},{timestamp_ms}#"
 
 
-def build_apbl(imei: str) -> str:
+def build_apbl(
+    imei: str,
+    bluetooth_payload: str = DEFAULT_BLUETOOTH_PAYLOAD,
+    gateway_mac: str = DEFAULT_BLUETOOTH_GATEWAY,
+) -> str:
     timestamp_ms = int(time.time() * 1000)
-    return (
-        f"IWAPBL,{imei},"
-        "TraxBean064|BF:0C:B8:3F:2F:37|-30&VG05|F0:49:32:83:F9:9E|-52,"
-        f"28:05:31:16:02:04,{timestamp_ms}#"
-    )
+    payload = bluetooth_payload.strip() or DEFAULT_BLUETOOTH_PAYLOAD
+    gateway = gateway_mac.strip() or DEFAULT_BLUETOOTH_GATEWAY
+    return f"IWAPBL,{imei},{payload},{gateway},{timestamp_ms}#"
 
 
 def build_ap16_ack(seq: str) -> str:
@@ -467,6 +477,23 @@ class PreparedDevice:
     patient_name: Optional[str] = None
 
 
+@dataclass
+class HealthProfile:
+    heart_rate: int = DEFAULT_HEART_RATE
+    blood_diastolic: int = DEFAULT_BLOOD_DIASTOLIC
+    blood_systolic: int = DEFAULT_BLOOD_SYSTOLIC
+    spo2: int = DEFAULT_SPO2
+    body_temp: float = DEFAULT_BODY_TEMP
+    wrist_temp: float = DEFAULT_WRIST_TEMP
+    worn: bool = True
+    bluetooth_payload: str = DEFAULT_BLUETOOTH_PAYLOAD
+    bluetooth_gateway: str = DEFAULT_BLUETOOTH_GATEWAY
+
+    @property
+    def blood_pressure_value(self) -> str:
+        return f"{self.blood_diastolic}|{self.blood_systolic}"
+
+
 class BraceletSimulator:
     def __init__(
         self,
@@ -481,6 +508,7 @@ class BraceletSimulator:
         interval: int,
         duration: int,
         battery: int,
+        health: HealthProfile,
         seed: int,
         verbose: bool,
     ) -> None:
@@ -495,6 +523,7 @@ class BraceletSimulator:
         self.interval = max(1, interval)
         self.duration = max(1, duration)
         self.battery = battery
+        self.health = health
         self.verbose = verbose
         self.rng = random.Random(seed + index)
         self.sock: Optional[socket.socket] = None
@@ -561,14 +590,14 @@ class BraceletSimulator:
             except Exception as exc:  # pragma: no cover - best effort during socket teardown
                 log(f"{self.imei} failed to auto reply BP16: {exc}")
         elif frame.startswith("IWBPXL,"):
-            self._send_health_safe(2, "78")
+            self._send_health_safe(2, str(self.health.heart_rate))
         elif frame.startswith("IWBPXY,"):
-            self._send_health_safe(1, "75|122")
+            self._send_health_safe(1, self.health.blood_pressure_value)
         elif frame.startswith("IWBPXZ,"):
-            self._send_health_safe(4, "98")
+            self._send_health_safe(4, str(self.health.spo2))
         elif frame.startswith("IWBPXX,"):
             try:
-                self.send(build_aptp(36.5, 34.0))
+                self.send(build_aptp(self.health.body_temp, self.health.wrist_temp))
             except Exception as exc:  # pragma: no cover
                 log(f"{self.imei} failed to auto reply BPXX: {exc}")
 
@@ -594,13 +623,13 @@ class BraceletSimulator:
             self.send(build_ap04(self.imei, battery=min(self.battery, 15)))
 
     def send_health_frames(self) -> None:
-        self.send(build_apjk(2, "78"))
-        self.send(build_apjk(1, "75|122"))
-        self.send(build_apjk(4, "98"))
-        self.send(build_apjk(3, "36.5"))
-        self.send(build_aptp(36.5, 34.0))
-        self.send(build_apwr(self.imei, worn=True))
-        self.send(build_apbl(self.imei))
+        self.send(build_apjk(2, str(self.health.heart_rate)))
+        self.send(build_apjk(1, self.health.blood_pressure_value))
+        self.send(build_apjk(4, str(self.health.spo2)))
+        self.send(build_apjk(3, f"{self.health.body_temp:.1f}"))
+        self.send(build_aptp(self.health.body_temp, self.health.wrist_temp))
+        self.send(build_apwr(self.imei, worn=self.health.worn))
+        self.send(build_apbl(self.imei, self.health.bluetooth_payload, self.health.bluetooth_gateway))
 
     def run(self) -> None:
         self.connect()
@@ -648,6 +677,27 @@ def build_imeis(args: argparse.Namespace) -> List[str]:
     return [imei_for_index(start, i) for i in range(int(getattr(args, "count", DEFAULT_COUNT)))]
 
 
+def parse_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    return text not in {"0", "false", "no", "n", "off", "未佩戴"}
+
+
+def health_profile_from_args(args: argparse.Namespace) -> HealthProfile:
+    return HealthProfile(
+        heart_rate=int(getattr(args, "heart_rate", DEFAULT_HEART_RATE)),
+        blood_diastolic=int(getattr(args, "blood_diastolic", DEFAULT_BLOOD_DIASTOLIC)),
+        blood_systolic=int(getattr(args, "blood_systolic", DEFAULT_BLOOD_SYSTOLIC)),
+        spo2=int(getattr(args, "spo2", DEFAULT_SPO2)),
+        body_temp=float(getattr(args, "body_temp", DEFAULT_BODY_TEMP)),
+        wrist_temp=float(getattr(args, "wrist_temp", DEFAULT_WRIST_TEMP)),
+        worn=parse_bool(getattr(args, "health_worn", True)),
+        bluetooth_payload=str(getattr(args, "bluetooth_payload", DEFAULT_BLUETOOTH_PAYLOAD)),
+        bluetooth_gateway=str(getattr(args, "bluetooth_gateway", DEFAULT_BLUETOOTH_GATEWAY)),
+    )
+
+
 def create_data(client: ApiClient, args: argparse.Namespace) -> List[PreparedDevice]:
     prepared: List[PreparedDevice] = []
     start = int(args.imei_start)
@@ -667,6 +717,7 @@ def run_simulators(args: argparse.Namespace, imeis: Sequence[str], client: Optio
     scenario = args.scenario
     if scenario not in SCENARIOS:
         raise ScriptError(f"Unsupported scenario: {scenario}. Supported: {', '.join(SCENARIOS)}")
+    health = health_profile_from_args(args)
 
     for index, imei in enumerate(imeis, start=1):
         simulator = BraceletSimulator(
@@ -681,6 +732,7 @@ def run_simulators(args: argparse.Namespace, imeis: Sequence[str], client: Optio
             interval=args.interval,
             duration=args.duration,
             battery=args.battery,
+            health=health,
             seed=args.seed,
             verbose=args.verbose,
         )
@@ -803,6 +855,7 @@ def cleanup_data(client: ApiClient, args: argparse.Namespace) -> None:
 
 def dry_run(args: argparse.Namespace) -> None:
     imei = imei_for_index(args.imei_start, 0)
+    health = health_profile_from_args(args)
     frames = [
         build_ap00(imei),
         build_ap01_network_location(args.latitude, args.longitude, battery=args.battery),
@@ -810,12 +863,13 @@ def dry_run(args: argparse.Namespace) -> None:
         build_ap03(battery=args.battery, steps=1234, interval=args.interval),
         build_ap04(imei, battery=15),
         build_ap10(imei, args.latitude, args.longitude, battery=args.battery),
-        build_apjk(2, "78"),
-        build_apjk(1, "75|122"),
-        build_apjk(4, "98"),
-        build_aptp(36.5, 34.0),
-        build_apwr(imei, True),
-        build_apbl(imei),
+        build_apjk(2, str(health.heart_rate)),
+        build_apjk(1, health.blood_pressure_value),
+        build_apjk(4, str(health.spo2)),
+        build_apjk(3, f"{health.body_temp:.1f}"),
+        build_aptp(health.body_temp, health.wrist_temp),
+        build_apwr(imei, health.worn),
+        build_apbl(imei, health.bluetooth_payload, health.bluetooth_gateway),
     ]
     for frame in frames:
         if not frame.startswith("IW") or not frame.endswith("#"):
@@ -881,6 +935,15 @@ def run_gui() -> None:
                 "interval": tk.StringVar(value=str(DEFAULT_INTERVAL_SECONDS)),
                 "duration": tk.StringVar(value=str(DEFAULT_DURATION_SECONDS)),
                 "battery": tk.StringVar(value="80"),
+                "heart_rate": tk.StringVar(value=str(DEFAULT_HEART_RATE)),
+                "blood_diastolic": tk.StringVar(value=str(DEFAULT_BLOOD_DIASTOLIC)),
+                "blood_systolic": tk.StringVar(value=str(DEFAULT_BLOOD_SYSTOLIC)),
+                "spo2": tk.StringVar(value=str(DEFAULT_SPO2)),
+                "body_temp": tk.StringVar(value=str(DEFAULT_BODY_TEMP)),
+                "wrist_temp": tk.StringVar(value=str(DEFAULT_WRIST_TEMP)),
+                "health_worn": tk.BooleanVar(value=True),
+                "bluetooth_payload": tk.StringVar(value=DEFAULT_BLUETOOTH_PAYLOAD),
+                "bluetooth_gateway": tk.StringVar(value=DEFAULT_BLUETOOTH_GATEWAY),
                 "downlink_delay": tk.StringVar(value=str(DEFAULT_DOWNLINK_DELAY_SECONDS)),
                 "downlink_retries": tk.StringVar(value=str(DEFAULT_DOWNLINK_RETRIES)),
                 "verbose": tk.BooleanVar(value=False),
@@ -973,11 +1036,20 @@ def run_gui() -> None:
                 "interval": self._field(left, "上报间隔(s)", "interval", 18, width=12),
                 "duration": self._field(left, "持续时间(s)", "duration", 19, width=12),
                 "battery": self._field(left, "初始电量(%)", "battery", 20, width=12),
-                "downlink_delay": self._field(left, "下行命令间隔(s)", "downlink_delay", 21, width=12),
-                "downlink_retries": self._field(left, "429重试次数", "downlink_retries", 22, width=12),
+                "heart_rate": self._field(left, "心率", "heart_rate", 21, width=12),
+                "blood_diastolic": self._field(left, "舒张压", "blood_diastolic", 22, width=12),
+                "blood_systolic": self._field(left, "收缩压", "blood_systolic", 23, width=12),
+                "spo2": self._field(left, "血氧(%)", "spo2", 24, width=12),
+                "body_temp": self._field(left, "体温(℃)", "body_temp", 25, width=12),
+                "wrist_temp": self._field(left, "腕温(℃)", "wrist_temp", 26, width=12),
+                "health_worn": self._check_field(left, "佩戴状态", "已佩戴", "health_worn", 27),
+                "bluetooth_payload": self._field(left, "蓝牙周边", "bluetooth_payload", 28),
+                "bluetooth_gateway": self._field(left, "蓝牙网关MAC", "bluetooth_gateway", 29),
+                "downlink_delay": self._field(left, "下行命令间隔(s)", "downlink_delay", 30, width=12),
+                "downlink_retries": self._field(left, "429重试次数", "downlink_retries", 31, width=12),
             }
             ttk.Checkbutton(left, text="打印协议帧", variable=self.vars["verbose"]).grid(
-                row=23, column=0, columnspan=2, sticky="w", pady=(8, 0)
+                row=32, column=0, columnspan=2, sticky="w", pady=(8, 0)
             )
             self.vars["scenario"].trace_add("write", lambda *_: self._refresh_scenario_fields())
             self._refresh_scenario_fields()
@@ -1044,9 +1116,30 @@ def run_gui() -> None:
             parent.columnconfigure(1, weight=1)
             return label_widget, entry
 
+        def _check_field(self, parent: Any, label: str, text: str, key: str, row: int) -> Tuple[Any, Any]:
+            import tkinter.ttk as ttk
+
+            label_widget = ttk.Label(parent, text=label)
+            label_widget.grid(row=row, column=0, sticky="w", pady=5, padx=(0, 10))
+            check = ttk.Checkbutton(parent, text=text, variable=self.vars[key])
+            check.grid(row=row, column=1, sticky="w", pady=5)
+            parent.columnconfigure(1, weight=1)
+            return label_widget, check
+
         def _refresh_scenario_fields(self) -> None:
             scenario = str(self.vars["scenario"].get())
             location_fields = {"latitude", "longitude", "radius"}
+            health_fields = {
+                "heart_rate",
+                "blood_diastolic",
+                "blood_systolic",
+                "spo2",
+                "body_temp",
+                "wrist_temp",
+                "health_worn",
+                "bluetooth_payload",
+                "bluetooth_gateway",
+            }
             downlink_fields = {"downlink_delay", "downlink_retries"}
             visible = {"interval", "duration", "battery"}
 
@@ -1061,8 +1154,11 @@ def run_gui() -> None:
 
             if scenario in {"basic", "location", "alarm", "downlink", "all"}:
                 visible.update(location_fields)
+            if scenario in {"health", "all"}:
+                visible.update(health_fields)
             if scenario in {"downlink", "all"}:
                 visible.update(downlink_fields)
+                visible.update(health_fields)
 
             self.scenario_hint.configure(text=hints.get(scenario, ""))
             for key, widgets in self.parameter_fields.items():
@@ -1134,6 +1230,15 @@ def run_gui() -> None:
                 interval=int_value("interval", DEFAULT_INTERVAL_SECONDS),
                 duration=int_value("duration", DEFAULT_DURATION_SECONDS),
                 battery=int_value("battery", 80),
+                heart_rate=int_value("heart_rate", DEFAULT_HEART_RATE),
+                blood_diastolic=int_value("blood_diastolic", DEFAULT_BLOOD_DIASTOLIC),
+                blood_systolic=int_value("blood_systolic", DEFAULT_BLOOD_SYSTOLIC),
+                spo2=int_value("spo2", DEFAULT_SPO2),
+                body_temp=float_value("body_temp", DEFAULT_BODY_TEMP),
+                wrist_temp=float_value("wrist_temp", DEFAULT_WRIST_TEMP),
+                health_worn=bool(self.vars["health_worn"].get()),
+                bluetooth_payload=str(self.vars["bluetooth_payload"].get()).strip() or DEFAULT_BLUETOOTH_PAYLOAD,
+                bluetooth_gateway=str(self.vars["bluetooth_gateway"].get()).strip() or DEFAULT_BLUETOOTH_GATEWAY,
                 downlink_delay=float_value("downlink_delay", DEFAULT_DOWNLINK_DELAY_SECONDS),
                 downlink_retries=int_value("downlink_retries", DEFAULT_DOWNLINK_RETRIES),
                 seed=20260605,
@@ -1204,6 +1309,7 @@ def run_gui() -> None:
             threads: List[threading.Thread] = []
             simulators: List[BraceletSimulator] = []
             self.running_simulators = simulators
+            health = health_profile_from_args(args)
             for index, imei in enumerate(imeis, start=1):
                 if self.stop_requested.is_set():
                     break
@@ -1219,6 +1325,7 @@ def run_gui() -> None:
                     interval=args.interval,
                     duration=args.duration,
                     battery=args.battery,
+                    health=health,
                     seed=args.seed,
                     verbose=args.verbose,
                 )
@@ -1290,6 +1397,15 @@ def add_simulation_options(parser: argparse.ArgumentParser, include_scenario: bo
     parser.add_argument("--interval", type=int, default=DEFAULT_INTERVAL_SECONDS, help="Report interval seconds.")
     parser.add_argument("--duration", type=int, default=DEFAULT_DURATION_SECONDS, help="Simulation duration seconds.")
     parser.add_argument("--battery", type=int, default=80, help="Initial battery percentage.")
+    parser.add_argument("--heart-rate", type=int, default=DEFAULT_HEART_RATE, help="APJK heart-rate value.")
+    parser.add_argument("--blood-diastolic", type=int, default=DEFAULT_BLOOD_DIASTOLIC, help="APJK blood-pressure diastolic value.")
+    parser.add_argument("--blood-systolic", type=int, default=DEFAULT_BLOOD_SYSTOLIC, help="APJK blood-pressure systolic value.")
+    parser.add_argument("--spo2", type=int, default=DEFAULT_SPO2, help="APJK blood-oxygen value.")
+    parser.add_argument("--body-temp", type=float, default=DEFAULT_BODY_TEMP, help="APTP body temperature.")
+    parser.add_argument("--wrist-temp", type=float, default=DEFAULT_WRIST_TEMP, help="APTP wrist temperature.")
+    parser.add_argument("--health-worn", choices=("yes", "no"), default="yes", help="APWR wearing state.")
+    parser.add_argument("--bluetooth-payload", default=DEFAULT_BLUETOOTH_PAYLOAD, help="APBL bluetooth beacon payload.")
+    parser.add_argument("--bluetooth-gateway", default=DEFAULT_BLUETOOTH_GATEWAY, help="APBL gateway MAC.")
     parser.add_argument("--downlink-delay", type=float, default=DEFAULT_DOWNLINK_DELAY_SECONDS, help="Delay between downlink API calls.")
     parser.add_argument("--downlink-retries", type=int, default=DEFAULT_DOWNLINK_RETRIES, help="Retry count for HTTP 429 downlink responses.")
     parser.add_argument("--seed", type=int, default=20260605, help="Random seed.")
