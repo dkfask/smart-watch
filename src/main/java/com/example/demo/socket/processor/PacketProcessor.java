@@ -26,6 +26,7 @@ public class PacketProcessor {
     private final LocationRecordRepository locationRecordRepository;
     private final HeartbeatRecordRepository heartbeatRecordRepository;
     private final HealthRecordRepository healthRecordRepository;
+    private final PatientDeviceRepository patientDeviceRepository;
     private final DeviceStatusRepository deviceStatusRepository;
     private final AmapLocationService amapLocationService;
     private final HealthMonitorService healthMonitorService;
@@ -36,6 +37,7 @@ public class PacketProcessor {
                           LocationRecordRepository locationRecordRepository,
                           HeartbeatRecordRepository heartbeatRecordRepository,
                           HealthRecordRepository healthRecordRepository,
+                          PatientDeviceRepository patientDeviceRepository,
                           DeviceStatusRepository deviceStatusRepository,
                           AmapLocationService amapLocationService,
                           HealthMonitorService healthMonitorService,
@@ -45,6 +47,7 @@ public class PacketProcessor {
         this.locationRecordRepository = locationRecordRepository;
         this.heartbeatRecordRepository = heartbeatRecordRepository;
         this.healthRecordRepository = healthRecordRepository;
+        this.patientDeviceRepository = patientDeviceRepository;
         this.deviceStatusRepository = deviceStatusRepository;
         this.amapLocationService = amapLocationService;
         this.healthMonitorService = healthMonitorService;
@@ -326,6 +329,16 @@ public class PacketProcessor {
     /** 处理 APTP 体温数据 */
     private void handleApTp(String payload, String clientInfo, String imei) {
         Map<String, String> params = parseKeyValueParams(payload);
+        if (params.isEmpty() && payload != null && !payload.isBlank()) {
+            String[] parts = payload.split(",", 2);
+            if (parts.length >= 1 && !parts[0].isBlank()) {
+                params.put("data_type", "body_temperature");
+                params.put("value", parts[0].trim());
+            }
+            if (parts.length >= 2 && !parts[1].isBlank()) {
+                params.put("wrist_temp", parts[1].trim());
+            }
+        }
         if (imei != null) params.put("imei", imei);
         saveHealthData(params, imei);
     }
@@ -495,7 +508,13 @@ public class PacketProcessor {
             if (imei != null && !imei.isEmpty()) {
                 rec.setImei(imei);
                 Device d = findOrCreateDeviceByImei(imei);
-                if (d != null) rec.setDeviceId(d.getId());
+                if (d != null) {
+                    rec.setDeviceId(d.getId());
+                    patientDeviceRepository.findByDeviceId(d.getId()).stream()
+                            .filter(pd -> pd.getIsActive() == null || pd.getIsActive())
+                            .findFirst()
+                            .ifPresent(pd -> rec.setPatientId(pd.getPatientId()));
+                }
             }
 
             // 保存原始数据

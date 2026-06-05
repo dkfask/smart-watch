@@ -199,6 +199,27 @@ class HealthRecordControllerTest {
                 .andExpect(jsonPath("$.data.length()").value(0));
     }
 
+    @Test
+    void latest_mapsProtocolTypeAliasesForFrontend() throws Exception {
+        Date now = new Date();
+        when(repo.findTopByPatientIdAndDataTypeOrderByRecvTimeDesc(100L, "temperature"))
+                .thenReturn(Optional.empty());
+        when(repo.findTopByPatientIdAndDataTypeOrderByRecvTimeDesc(100L, "body_temperature"))
+                .thenReturn(Optional.of(buildRecord(1L, 100L, null, "body_temperature", "36.8", now)));
+        when(repo.findTopByPatientIdAndDataTypeOrderByRecvTimeDesc(100L, "spo2"))
+                .thenReturn(Optional.empty());
+        when(repo.findTopByPatientIdAndDataTypeOrderByRecvTimeDesc(100L, "blood_oxygen"))
+                .thenReturn(Optional.of(buildRecord(2L, 100L, null, "blood_oxygen", "97", now)));
+
+        mockMvc.perform(get("/api/health-records/latest")
+                        .param("patientId", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.temperature.value").value("36.8"))
+                .andExpect(jsonPath("$.data.temperature.unit").value("°C"))
+                .andExpect(jsonPath("$.data.spo2.value").value("97"))
+                .andExpect(jsonPath("$.data.spo2.unit").value("%"));
+    }
+
     /**
      * GET /api/health-records/stats 带patientId+dataType+时间范围查询
      */

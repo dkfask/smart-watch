@@ -79,16 +79,27 @@ public class HealthRecordController {
     @GetMapping("/latest")
     public ResponseEntity<?> getLatestHealthRecords(@RequestParam Long patientId) {
         Map<String, Object> latest = new HashMap<>();
-        String[] types = {"temperature", "heart_rate", "blood_pressure", "spo2", "blood_oxygen"};
-        for (String type : types) {
-            Optional<HealthRecord> record = repo.findTopByPatientIdAndDataTypeOrderByRecvTimeDesc(patientId, type);
+        Map<String, List<String>> typeAliases = new LinkedHashMap<>();
+        typeAliases.put("temperature", List.of("temperature", "body_temperature"));
+        typeAliases.put("heart_rate", List.of("heart_rate"));
+        typeAliases.put("blood_pressure", List.of("blood_pressure"));
+        typeAliases.put("spo2", List.of("spo2", "blood_oxygen"));
+
+        for (Map.Entry<String, List<String>> alias : typeAliases.entrySet()) {
+            Optional<HealthRecord> record = Optional.empty();
+            for (String dataType : alias.getValue()) {
+                record = repo.findTopByPatientIdAndDataTypeOrderByRecvTimeDesc(patientId, dataType);
+                if (record.isPresent()) {
+                    break;
+                }
+            }
             if (record.isPresent()) {
                 HealthRecord r = record.get();
                 Map<String, Object> entry = new HashMap<>();
                 entry.put("value", r.getValue());
                 entry.put("time", r.getRecvTime());
-                entry.put("unit", getUnitForType(type));
-                latest.put(type, entry);
+                entry.put("unit", getUnitForType(alias.getKey()));
+                latest.put(alias.getKey(), entry);
             }
         }
         return ResponseEntity.ok(latest);

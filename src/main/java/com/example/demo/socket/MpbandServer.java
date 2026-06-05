@@ -33,6 +33,7 @@ import com.example.demo.repository.DeviceStatusRepository;
 import com.example.demo.repository.HealthRecordRepository;
 import com.example.demo.repository.HeartbeatRecordRepository;
 import com.example.demo.repository.LocationRecordRepository;
+import com.example.demo.repository.PatientDeviceRepository;
 import com.example.demo.service.AmapLocationService;
 import com.example.demo.service.HealthMonitorService;
 import com.example.demo.service.TrackingService;
@@ -100,6 +101,7 @@ public class MpbandServer implements SmartLifecycle {
     private final LocationRecordRepository locationRecordRepository;
     private final HeartbeatRecordRepository heartbeatRecordRepository;
     private final HealthRecordRepository healthRecordRepository;
+    private final PatientDeviceRepository patientDeviceRepository;
     private final DeviceStatusRepository deviceStatusRepository;
     private final AmapLocationService amapLocationService;
     private final TrackingService trackingService;
@@ -131,6 +133,7 @@ public class MpbandServer implements SmartLifecycle {
                         LocationRecordRepository locationRecordRepository,
                         HeartbeatRecordRepository heartbeatRecordRepository,
                         HealthRecordRepository healthRecordRepository,
+                        PatientDeviceRepository patientDeviceRepository,
                         DeviceStatusRepository deviceStatusRepository,
                         AmapLocationService amapLocationService,
                         HealthMonitorService healthMonitorService,
@@ -140,6 +143,7 @@ public class MpbandServer implements SmartLifecycle {
         this.locationRecordRepository = locationRecordRepository;
         this.heartbeatRecordRepository = heartbeatRecordRepository;
         this.healthRecordRepository = healthRecordRepository;
+        this.patientDeviceRepository = patientDeviceRepository;
         this.deviceStatusRepository = deviceStatusRepository;
         this.amapLocationService = amapLocationService;
         this.healthMonitorService = healthMonitorService;
@@ -147,7 +151,8 @@ public class MpbandServer implements SmartLifecycle {
         
         // 初始化处理器类
         this.packetProcessor = new PacketProcessor(deviceRepository, downlinkManager, locationRecordRepository,
-                heartbeatRecordRepository, healthRecordRepository, deviceStatusRepository, amapLocationService, healthMonitorService, trackingService);
+                heartbeatRecordRepository, healthRecordRepository, patientDeviceRepository, deviceStatusRepository,
+                amapLocationService, healthMonitorService, trackingService);
     }
 
     @Override
