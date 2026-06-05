@@ -1131,29 +1131,32 @@ def run_gui() -> None:
                     value=scenario,
                     variable=self.vars["scenario"],
                 ).grid(row=index // 3, column=index % 3, sticky="w", padx=(0, 12), pady=2)
+            ttk.Button(left, text="随机生成参数", command=self._randomize_parameters).grid(
+                row=14, column=0, columnspan=2, sticky="ew", pady=(4, 8)
+            )
             self.scenario_hint = ttk.Label(left, text="", style="Hint.TLabel", wraplength=260)
-            self.scenario_hint.grid(row=14, column=0, columnspan=2, sticky="w", pady=(0, 6))
+            self.scenario_hint.grid(row=15, column=0, columnspan=2, sticky="w", pady=(0, 6))
             self.parameter_fields = {
-                "latitude": self._field(left, "纬度", "latitude", 15),
-                "longitude": self._field(left, "经度", "longitude", 16),
-                "radius": self._field(left, "半径(m)", "radius", 17, width=12),
-                "interval": self._field(left, "上报间隔(s)", "interval", 18, width=12),
-                "duration": self._field(left, "持续时间(s)", "duration", 19, width=12),
-                "battery": self._field(left, "初始电量(%)", "battery", 20, width=12),
-                "heart_rate": self._field(left, "心率", "heart_rate", 21, width=12),
-                "blood_diastolic": self._field(left, "舒张压", "blood_diastolic", 22, width=12),
-                "blood_systolic": self._field(left, "收缩压", "blood_systolic", 23, width=12),
-                "spo2": self._field(left, "血氧(%)", "spo2", 24, width=12),
-                "body_temp": self._field(left, "体温(℃)", "body_temp", 25, width=12),
-                "wrist_temp": self._field(left, "腕温(℃)", "wrist_temp", 26, width=12),
-                "health_worn": self._check_field(left, "佩戴状态", "已佩戴", "health_worn", 27),
-                "bluetooth_payload": self._field(left, "蓝牙周边", "bluetooth_payload", 28),
-                "bluetooth_gateway": self._field(left, "蓝牙网关MAC", "bluetooth_gateway", 29),
-                "downlink_delay": self._field(left, "下行命令间隔(s)", "downlink_delay", 30, width=12),
-                "downlink_retries": self._field(left, "429重试次数", "downlink_retries", 31, width=12),
+                "latitude": self._field(left, "纬度", "latitude", 16),
+                "longitude": self._field(left, "经度", "longitude", 17),
+                "radius": self._field(left, "半径(m)", "radius", 18, width=12),
+                "interval": self._field(left, "上报间隔(s)", "interval", 19, width=12),
+                "duration": self._field(left, "持续时间(s)", "duration", 20, width=12),
+                "battery": self._field(left, "初始电量(%)", "battery", 21, width=12),
+                "heart_rate": self._field(left, "心率", "heart_rate", 22, width=12),
+                "blood_diastolic": self._field(left, "舒张压", "blood_diastolic", 23, width=12),
+                "blood_systolic": self._field(left, "收缩压", "blood_systolic", 24, width=12),
+                "spo2": self._field(left, "血氧(%)", "spo2", 25, width=12),
+                "body_temp": self._field(left, "体温(℃)", "body_temp", 26, width=12),
+                "wrist_temp": self._field(left, "腕温(℃)", "wrist_temp", 27, width=12),
+                "health_worn": self._check_field(left, "佩戴状态", "已佩戴", "health_worn", 28),
+                "bluetooth_payload": self._field(left, "蓝牙周边", "bluetooth_payload", 29),
+                "bluetooth_gateway": self._field(left, "蓝牙网关MAC", "bluetooth_gateway", 30),
+                "downlink_delay": self._field(left, "下行命令间隔(s)", "downlink_delay", 31, width=12),
+                "downlink_retries": self._field(left, "429重试次数", "downlink_retries", 32, width=12),
             }
             ttk.Checkbutton(left, text="打印协议帧", variable=self.vars["verbose"]).grid(
-                row=32, column=0, columnspan=2, sticky="w", pady=(8, 0)
+                row=33, column=0, columnspan=2, sticky="w", pady=(8, 0)
             )
             self.vars["scenario"].trace_add("write", lambda *_: self._refresh_scenario_fields())
             self._refresh_scenario_fields()
