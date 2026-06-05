@@ -53,6 +53,19 @@ DEFAULT_BODY_TEMP = 36.5
 DEFAULT_WRIST_TEMP = 34.0
 DEFAULT_BLUETOOTH_PAYLOAD = "TraxBean064|BF:0C:B8:3F:2F:37|-30&VG05|F0:49:32:83:F9:9E|-52"
 DEFAULT_BLUETOOTH_GATEWAY = "28:05:31:16:02:04"
+RANDOM_LOCATION_RADIUS_RANGE = (5.0, 120.0)
+RANDOM_LOCATION_CENTER_JITTER_METERS = 80.0
+RANDOM_INTERVAL_RANGE = (10, 120)
+RANDOM_DURATION_RANGE = (120, 1800)
+RANDOM_BATTERY_RANGE = (20, 100)
+RANDOM_HEART_RATE_RANGE = (55, 115)
+RANDOM_BLOOD_DIASTOLIC_RANGE = (60, 95)
+RANDOM_BLOOD_PRESSURE_GAP_RANGE = (25, 65)
+RANDOM_SPO2_RANGE = (92, 100)
+RANDOM_BODY_TEMP_RANGE = (35.5, 38.2)
+RANDOM_WRIST_TEMP_RANGE = (32.0, 36.0)
+RANDOM_DOWNLINK_DELAY_RANGE = (1.0, 3.0)
+RANDOM_DOWNLINK_RETRIES_RANGE = (2, 6)
 
 SCENARIOS = ("basic", "location", "health", "alarm", "downlink", "all")
 LOG_SINK = None
@@ -698,6 +711,97 @@ def health_profile_from_args(args: argparse.Namespace) -> HealthProfile:
     )
 
 
+def random_mac(rng: random.Random) -> str:
+    return ":".join(f"{rng.randint(0, 255):02X}" for _ in range(6))
+
+
+def random_bluetooth_payload(rng: random.Random) -> str:
+    beacon_count = rng.randint(2, 4)
+    names = ("TEST-BEACON-A", "TEST-BEACON-B", "WARD-GATE", "BED-SENSOR")
+    beacons = []
+    for index in range(beacon_count):
+        name = names[index % len(names)]
+        rssi = rng.randint(-88, -35)
+        beacons.append(f"{name}|{random_mac(rng)}|{rssi}")
+    return "&".join(beacons)
+
+
+def random_parameter_values(
+    scenario: str,
+    rng: Optional[random.Random] = None,
+    latitude: float = DEFAULT_LATITUDE,
+    longitude: float = DEFAULT_LONGITUDE,
+) -> Dict[str, Any]:
+    rng = rng or random.Random()
+    scenario = scenario if scenario in SCENARIOS else "all"
+    location_fields = scenario in {"basic", "location", "alarm", "downlink", "all"}
+    health_fields = scenario in {"health", "downlink", "all"}
+    downlink_fields = scenario in {"downlink", "all"}
+
+    values: Dict[str, Any] = {
+        "interval": rng.randint(*RANDOM_INTERVAL_RANGE),
+        "duration": rng.randint(*RANDOM_DURATION_RANGE),
+        "battery": rng.randint(*RANDOM_BATTERY_RANGE),
+    }
+
+    if location_fields:
+        lat, lng = random_point(latitude, longitude, RANDOM_LOCATION_CENTER_JITTER_METERS, rng)
+        values.update(
+            {
+                "latitude": round(lat, 6),
+                "longitude": round(lng, 6),
+                "radius": round(rng.uniform(*RANDOM_LOCATION_RADIUS_RANGE), 1),
+            }
+        )
+
+    if health_fields:
+        diastolic = rng.randint(*RANDOM_BLOOD_DIASTOLIC_RANGE)
+        systolic = max(95, min(160, diastolic + rng.randint(*RANDOM_BLOOD_PRESSURE_GAP_RANGE)))
+        values.update(
+            {
+                "heart_rate": rng.randint(*RANDOM_HEART_RATE_RANGE),
+                "blood_diastolic": diastolic,
+                "blood_systolic": systolic,
+                "spo2": rng.randint(*RANDOM_SPO2_RANGE),
+                "body_temp": round(rng.uniform(*RANDOM_BODY_TEMP_RANGE), 1),
+                "wrist_temp": round(rng.uniform(*RANDOM_WRIST_TEMP_RANGE), 1),
+                "health_worn": rng.random() >= 0.08,
+                "bluetooth_payload": random_bluetooth_payload(rng),
+                "bluetooth_gateway": random_mac(rng),
+            }
+        )
+
+    if downlink_fields:
+        values.update(
+            {
+                "downlink_delay": round(rng.uniform(*RANDOM_DOWNLINK_DELAY_RANGE), 1),
+                "downlink_retries": rng.randint(*RANDOM_DOWNLINK_RETRIES_RANGE),
+            }
+        )
+
+    return values
+
+
+def apply_random_parameter_values(args: argparse.Namespace) -> None:
+    if not getattr(args, "random_params", False):
+        return
+    scenario = str(getattr(args, "scenario", getattr(args, "scenario_name", "all")))
+    seed = getattr(args, "seed", None)
+    rng = random.Random(seed if seed is not None else time.time_ns())
+    values = random_parameter_values(
+        scenario,
+        rng=rng,
+        latitude=float(getattr(args, "latitude", DEFAULT_LATITUDE)),
+        longitude=float(getattr(args, "longitude", DEFAULT_LONGITUDE)),
+    )
+    for key, value in values.items():
+        setattr(args, key, value)
+    log(
+        "Randomized parameters: "
+        + ", ".join(f"{key}={value}" for key, value in sorted(values.items()) if key != "bluetooth_payload")
+    )
+
+
 def create_data(client: ApiClient, args: argparse.Namespace) -> List[PreparedDevice]:
     prepared: List[PreparedDevice] = []
     start = int(args.imei_start)
@@ -1192,6 +1296,28 @@ def run_gui() -> None:
         def _clear_logs(self) -> None:
             self.log_text.delete("1.0", "end")
 
+        def _randomize_parameters(self) -> None:
+            try:
+                center_lat = float(str(self.vars["latitude"].get()).strip() or DEFAULT_LATITUDE)
+                center_lng = float(str(self.vars["longitude"].get()).strip() or DEFAULT_LONGITUDE)
+            except ValueError:
+                center_lat = DEFAULT_LATITUDE
+                center_lng = DEFAULT_LONGITUDE
+            values = random_parameter_values(
+                str(self.vars["scenario"].get()),
+                rng=random.Random(time.time_ns()),
+                latitude=center_lat,
+                longitude=center_lng,
+            )
+            for key, value in values.items():
+                if key in self.vars:
+                    self.vars[key].set(value if isinstance(value, bool) else str(value))
+            self._refresh_scenario_fields()
+            log(
+                "GUI randomized parameters: "
+                + ", ".join(f"{key}={value}" for key, value in sorted(values.items()) if key != "bluetooth_payload")
+            )
+
         def _set_busy(self, busy: bool, text: str = "") -> None:
             state = "disabled" if busy else "normal"
             for button in self.buttons:
@@ -1406,6 +1532,7 @@ def add_simulation_options(parser: argparse.ArgumentParser, include_scenario: bo
     parser.add_argument("--health-worn", choices=("yes", "no"), default="yes", help="APWR wearing state.")
     parser.add_argument("--bluetooth-payload", default=DEFAULT_BLUETOOTH_PAYLOAD, help="APBL bluetooth beacon payload.")
     parser.add_argument("--bluetooth-gateway", default=DEFAULT_BLUETOOTH_GATEWAY, help="APBL gateway MAC.")
+    parser.add_argument("--random-params", action="store_true", help="Randomize scenario parameters within type-specific thresholds.")
     parser.add_argument("--downlink-delay", type=float, default=DEFAULT_DOWNLINK_DELAY_SECONDS, help="Delay between downlink API calls.")
     parser.add_argument("--downlink-retries", type=int, default=DEFAULT_DOWNLINK_RETRIES, help="Retry count for HTTP 429 downlink responses.")
     parser.add_argument("--seed", type=int, default=20260605, help="Random seed.")
@@ -1461,6 +1588,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.command == "gui":
             run_gui()
             return 0
+
+        apply_random_parameter_values(args)
 
         if args.command == "dry-run":
             dry_run(args)
