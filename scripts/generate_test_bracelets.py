@@ -964,17 +964,23 @@ def run_gui() -> None:
                     value=scenario,
                     variable=self.vars["scenario"],
                 ).grid(row=index // 3, column=index % 3, sticky="w", padx=(0, 12), pady=2)
-            self._field(left, "纬度", "latitude", 14)
-            self._field(left, "经度", "longitude", 15)
-            self._field(left, "半径(m)", "radius", 16, width=12)
-            self._field(left, "间隔(s)", "interval", 17, width=12)
-            self._field(left, "持续(s)", "duration", 18, width=12)
-            self._field(left, "电量(%)", "battery", 19, width=12)
-            self._field(left, "下行间隔(s)", "downlink_delay", 20, width=12)
-            self._field(left, "429重试", "downlink_retries", 21, width=12)
+            self.scenario_hint = ttk.Label(left, text="", style="Hint.TLabel", wraplength=260)
+            self.scenario_hint.grid(row=14, column=0, columnspan=2, sticky="w", pady=(0, 6))
+            self.parameter_fields = {
+                "latitude": self._field(left, "纬度", "latitude", 15),
+                "longitude": self._field(left, "经度", "longitude", 16),
+                "radius": self._field(left, "半径(m)", "radius", 17, width=12),
+                "interval": self._field(left, "上报间隔(s)", "interval", 18, width=12),
+                "duration": self._field(left, "持续时间(s)", "duration", 19, width=12),
+                "battery": self._field(left, "初始电量(%)", "battery", 20, width=12),
+                "downlink_delay": self._field(left, "下行命令间隔(s)", "downlink_delay", 21, width=12),
+                "downlink_retries": self._field(left, "429重试次数", "downlink_retries", 22, width=12),
+            }
             ttk.Checkbutton(left, text="打印协议帧", variable=self.vars["verbose"]).grid(
-                row=22, column=0, columnspan=2, sticky="w", pady=(8, 0)
+                row=23, column=0, columnspan=2, sticky="w", pady=(8, 0)
             )
+            self.vars["scenario"].trace_add("write", lambda *_: self._refresh_scenario_fields())
+            self._refresh_scenario_fields()
 
             ttk.Label(right, text="操作", style="Section.TLabel").grid(row=0, column=0, sticky="w")
             buttons = ttk.Frame(right)
@@ -1028,13 +1034,43 @@ def run_gui() -> None:
             ttk_label = ttk.Label(parent, text=text, style="Section.TLabel")
             ttk_label.grid(row=row, column=0, columnspan=2, sticky="w", pady=(12 if row else 0, 6))
 
-        def _field(self, parent: Any, label: str, key: str, row: int, width: int = 24, show: Optional[str] = None) -> None:
+        def _field(self, parent: Any, label: str, key: str, row: int, width: int = 24, show: Optional[str] = None) -> Tuple[Any, Any]:
             import tkinter.ttk as ttk
 
-            ttk.Label(parent, text=label).grid(row=row, column=0, sticky="w", pady=5, padx=(0, 10))
+            label_widget = ttk.Label(parent, text=label)
+            label_widget.grid(row=row, column=0, sticky="w", pady=5, padx=(0, 10))
             entry = ttk.Entry(parent, textvariable=self.vars[key], width=width, show=show)
             entry.grid(row=row, column=1, sticky="ew", pady=5)
             parent.columnconfigure(1, weight=1)
+            return label_widget, entry
+
+        def _refresh_scenario_fields(self) -> None:
+            scenario = str(self.vars["scenario"].get())
+            location_fields = {"latitude", "longitude", "radius"}
+            downlink_fields = {"downlink_delay", "downlink_retries"}
+            visible = {"interval", "duration", "battery"}
+
+            hints = {
+                "basic": "基础场景：心跳 + 网络定位 + GPS定位。",
+                "location": "定位场景：循环上报网络定位，主要使用经纬度和随机半径。",
+                "health": "健康场景：只发送心率、血压、血氧、体温、佩戴和蓝牙数据；经纬度参数不参与。",
+                "alarm": "告警场景：发送 SOS/低电量告警，告警包会使用定位参数。",
+                "downlink": "下行场景：模拟设备在线并测试立即定位、定位间隔等下行命令。",
+                "all": "全量场景：定位、健康、告警和下行命令都会参与。",
+            }
+
+            if scenario in {"basic", "location", "alarm", "downlink", "all"}:
+                visible.update(location_fields)
+            if scenario in {"downlink", "all"}:
+                visible.update(downlink_fields)
+
+            self.scenario_hint.configure(text=hints.get(scenario, ""))
+            for key, widgets in self.parameter_fields.items():
+                for widget in widgets:
+                    if key in visible:
+                        widget.grid()
+                    else:
+                        widget.grid_remove()
 
         def _button(self, parent: Any, text: str, command: Any, row: int, column: int, style: Optional[str] = None) -> None:
             import tkinter.ttk as ttk
@@ -1067,37 +1103,39 @@ def run_gui() -> None:
             self.status.configure(text=text or ("运行中" if busy else "空闲"))
 
         def _args(self) -> argparse.Namespace:
-            def int_value(key: str) -> int:
-                return int(str(self.vars[key].get()).strip())
+            def int_value(key: str, default: int) -> int:
+                raw = str(self.vars[key].get()).strip()
+                return default if not raw else int(raw)
 
-            def float_value(key: str) -> float:
-                return float(str(self.vars[key].get()).strip())
+            def float_value(key: str, default: float) -> float:
+                raw = str(self.vars[key].get()).strip()
+                return default if not raw else float(raw)
 
             raw_imeis = str(self.vars["imeis"].get()).strip()
             imei_values = [raw_imeis] if raw_imeis else None
             password = str(self.vars["password"].get())
             return argparse.Namespace(
                 host=str(self.vars["host"].get()).strip(),
-                api_port=int_value("api_port"),
-                tcp_port=int_value("tcp_port"),
+                api_port=int_value("api_port", DEFAULT_API_PORT),
+                tcp_port=int_value("tcp_port", DEFAULT_TCP_PORT),
                 username=str(self.vars["username"].get()).strip(),
                 password=password if password else None,
                 api_timeout=15.0,
                 verbose=bool(self.vars["verbose"].get()),
-                count=int_value("count"),
-                imei_start=int_value("imei_start"),
+                count=int_value("count", DEFAULT_COUNT),
+                imei_start=int_value("imei_start", DEFAULT_IMEI_START),
                 prefix=str(self.vars["prefix"].get()),
                 imei=imei_values,
                 scenario=str(self.vars["scenario"].get()),
                 scenario_name=str(self.vars["scenario"].get()),
-                latitude=float_value("latitude"),
-                longitude=float_value("longitude"),
-                radius=float_value("radius"),
-                interval=int_value("interval"),
-                duration=int_value("duration"),
-                battery=int_value("battery"),
-                downlink_delay=float_value("downlink_delay"),
-                downlink_retries=int_value("downlink_retries"),
+                latitude=float_value("latitude", DEFAULT_LATITUDE),
+                longitude=float_value("longitude", DEFAULT_LONGITUDE),
+                radius=float_value("radius", DEFAULT_RADIUS_METERS),
+                interval=int_value("interval", DEFAULT_INTERVAL_SECONDS),
+                duration=int_value("duration", DEFAULT_DURATION_SECONDS),
+                battery=int_value("battery", 80),
+                downlink_delay=float_value("downlink_delay", DEFAULT_DOWNLINK_DELAY_SECONDS),
+                downlink_retries=int_value("downlink_retries", DEFAULT_DOWNLINK_RETRIES),
                 seed=20260605,
                 connect_stagger=0.2,
                 cleanup_range=10000,
