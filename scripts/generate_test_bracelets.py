@@ -653,7 +653,8 @@ class BraceletSimulator:
             start = time.monotonic()
             next_health = start + self.interval * 2
             while time.monotonic() - start < self.duration and not self.stop_event.is_set():
-                time.sleep(self.interval)
+                if self.stop_event.wait(self.interval):
+                    break
                 elapsed = int(time.monotonic() - start)
                 lat, lng = self.next_point()
                 steps = 1000 + self.index + elapsed
