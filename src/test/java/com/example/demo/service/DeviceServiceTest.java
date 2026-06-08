@@ -1,12 +1,14 @@
 package com.example.demo.service;
 
 import com.example.demo.model.Device;
+import com.example.demo.model.DeviceLocation;
 import com.example.demo.model.DeviceStatus;
 import com.example.demo.model.Patient;
 import com.example.demo.model.PatientDevice;
 import com.example.demo.model.dto.DeviceInfoDto;
 import com.example.demo.model.dto.PageResponse;
 import com.example.demo.repository.DeviceRepository;
+import com.example.demo.repository.DeviceLocationRepository;
 import com.example.demo.repository.DeviceStatusRepository;
 import com.example.demo.repository.PatientDeviceRepository;
 import com.example.demo.repository.PatientRepository;
@@ -33,6 +35,7 @@ import static org.mockito.Mockito.*;
 class DeviceServiceTest {
 
     @Mock private DeviceRepository deviceRepo;
+    @Mock private DeviceLocationRepository locationRepo;
     @Mock private DeviceStatusRepository statusRepo;
     @Mock private PatientDeviceRepository patientDeviceRepo;
     @Mock private PatientRepository patientRepo;
@@ -43,7 +46,7 @@ class DeviceServiceTest {
 
     @BeforeEach
     void setUp() {
-        deviceService = new DeviceService(deviceRepo, statusRepo, patientDeviceRepo, patientRepo, downlinkManager, cacheService);
+        deviceService = new DeviceService(deviceRepo, locationRepo, statusRepo, patientDeviceRepo, patientRepo, downlinkManager, cacheService);
     }
 
     /**
@@ -187,7 +190,28 @@ class DeviceServiceTest {
         assertEquals("张三", result.getContent().get(0).getPatient().getName());
     }
 
-    /**
+
+    @Test
+    void listDevices_fillsLatestLocationAddress() {
+        Device d = new Device();
+        d.setId(1L);
+        d.setImei("IMEI001");
+        Page<Device> page = new PageImpl<>(List.of(d));
+
+        DeviceLocation location = new DeviceLocation();
+        location.setDeviceId(1L);
+        location.setAddress("四川省成都市郫都区犀浦镇成都东软学院");
+
+        when(deviceRepo.findAll(any(Pageable.class))).thenReturn(page);
+        when(statusRepo.findAllById(anyList())).thenReturn(Collections.emptyList());
+        when(patientDeviceRepo.findByDeviceIdIn(anyList())).thenReturn(Collections.emptyList());
+        when(downlinkManager.getOnlineImeis()).thenReturn(Collections.emptySet());
+        when(locationRepo.listRecentValid(1L, 1)).thenReturn(List.of(location));
+
+        PageResponse<DeviceInfoDto> result = deviceService.listDevices(0, 20, null);
+
+        assertEquals("四川省成都市郫都区犀浦镇成都东软学院", result.getContent().get(0).getLastLocationAddress());
+    }    /**
      * 删除设备并清除缓存
      */
     @Test

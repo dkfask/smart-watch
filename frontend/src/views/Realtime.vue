@@ -333,6 +333,7 @@ const fetchDeviceLatestLocation = async (deviceId) => {
     const fallbackLocation = location || normalizeLocation({
       latitude: device?.lastLatitude,
       longitude: device?.lastLongitude,
+      address: device?.lastLocationAddress,
       time: device?.lastLocationTime,
       batteryLevel: device?.batteryLevel,
       source: 'device-status'
@@ -372,6 +373,7 @@ const refreshAllLocations = async () => {
     const fallbackLocation = normalizeLocation({
       latitude: device.lastLatitude,
       longitude: device.lastLongitude,
+      address: device.lastLocationAddress,
       time: device.lastLocationTime,
       batteryLevel: device.batteryLevel,
       source: 'device-status'
