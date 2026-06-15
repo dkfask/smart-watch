@@ -44,6 +44,7 @@ import com.example.demo.socket.processor.ResponseGenerator;
 import com.example.demo.socket.protocol.BraceletPacket;
 import com.example.demo.socket.protocol.ProtocolParser;
 import com.example.demo.socket.protocol.ProtocolException;
+import com.example.demo.socket.util.ImeiValidator;
 
 /**
  * 最简单的手环协议服务器 - Spring 集成版本
@@ -580,7 +581,7 @@ public class MpbandServer implements SmartLifecycle {
         if (payload == null || payload.isEmpty()) return;
         String[] parts = payload.split(",");
         String imei = parts[0].trim();
-        if (imei.length() != 15 || !imei.chars().allMatch(Character::isDigit)) {
+        if (!ImeiValidator.isValid(imei)) {
             // 不再打印WARN级别日志，保持控制台简洁
             // log.warn("AP00: 无效 IMEI: {}");
             return;
@@ -1275,32 +1276,11 @@ public class MpbandServer implements SmartLifecycle {
      * @return true if valid, false otherwise
      */
     private boolean isValidImei(String imei) {
-        if (imei == null || imei.length() != 15) {
-            return false;
-        }
-        
-        // 排除已知的无效IMEI
-        if ("05700008100008".equals(imei) || "000570001000000".equals(imei)) {
-            return false;
-        }
-        
-        // 排除全是0的IMEI
-        if (imei.matches("^0+$")) {
-            return false;
-        }
-        
-        // 排除以000开头的IMEI，这些看起来像是无效的测试值
-        if (imei.startsWith("000")) {
-            return false;
-        }
-        
-        // 可以添加Luhn算法验证，这里暂时省略
-        return true;
+        return ImeiValidator.isValid(imei);
     }
 
     /**
-     * 保存原始报文到设备日志文件（按 IMEI）
-     * 设备日志追加到: {saveBasePath}/devices/{imei}_yyyyMMdd.log
+     * Append raw packets to the per-device daily log file.
      */
     private void saveRawAndDeviceLog(String rawMessage, String imei, String clientInfo) {
         // 只保留设备号加日期的日志，IMEI为空时不生成日志

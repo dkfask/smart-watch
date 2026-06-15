@@ -7,6 +7,7 @@ import com.example.demo.service.HealthMonitorService;
 import com.example.demo.service.TrackingService;
 import com.example.demo.socket.downlink.DownlinkManager;
 import com.example.demo.socket.protocol.BraceletPacket;
+import com.example.demo.socket.util.ImeiValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -148,7 +149,7 @@ public class PacketProcessor {
         if (payload == null || payload.isEmpty()) return;
         String[] parts = payload.split(",");
         String imei = parts[0].trim();
-        if (imei.length() != 15 || !imei.chars().allMatch(Character::isDigit)) {
+        if (!ImeiValidator.isValid(imei)) {
             return;
         }
 
@@ -649,26 +650,6 @@ public class PacketProcessor {
      * @return true if valid, false otherwise
      */
     private boolean isValidImei(String imei) {
-        if (imei == null || imei.length() != 15) {
-            return false;
-        }
-        
-        // 排除已知的无效IMEI
-        if ("05700008100008".equals(imei) || "000570001000000".equals(imei)) {
-            return false;
-        }
-        
-        // 排除全是0的IMEI
-        if (imei.matches("^0+$")) {
-            return false;
-        }
-        
-        // 排除以000开头的IMEI，这些看起来像是无效的测试值
-        if (imei.startsWith("000")) {
-            return false;
-        }
-        
-        // 可以添加Luhn算法验证，这里暂时省略
-        return true;
+        return ImeiValidator.isValid(imei);
     }
 }
