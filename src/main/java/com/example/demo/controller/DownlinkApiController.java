@@ -10,6 +10,7 @@ import com.example.demo.repository.DeviceStatusRepository;
 import com.example.demo.repository.LocationRecordRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -39,6 +40,9 @@ public class DownlinkApiController {
     private final DeviceRepository deviceRepository;
     private final DeviceStatusRepository deviceStatusRepository;
     private final LocationRecordRepository locationRecordRepository;
+
+    @Value("${app.mpband.saveDir:mpband_data}")
+    private String mpbandSaveDir;
 
     public DownlinkApiController(DownlinkManager downlinkManager,
                                  DeviceRepository deviceRepository,
@@ -753,27 +757,47 @@ public class DownlinkApiController {
             current = current.plusDays(1);
         }
 
-        Path deviceLogsPath = Paths.get(System.getProperty("user.dir"), "mpband_data", "devices");
         List<String> allLogLines = new ArrayList<>();
         DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd");
 
         for (LocalDate date : dates) {
-            Path logFile = deviceLogsPath.resolve(String.format("%s_%s.log", imei, dateFormatter.format(date)));
-            if (!Files.exists(logFile)) {
-                continue;
-            }
-            try {
-                for (String line : Files.readAllLines(logFile)) {
-                    if (isLineInTimeRange(line, start, end) &&
-                            (keyword == null || keyword.isBlank() || line.contains(keyword))) {
-                        allLogLines.add(line);
-                    }
+            String logFileName = String.format("%s_%s.log", imei, dateFormatter.format(date));
+            for (Path deviceLogsPath : getDeviceLogDirectories()) {
+                Path logFile = deviceLogsPath.resolve(logFileName);
+                if (!Files.exists(logFile)) {
+                    continue;
                 }
-            } catch (IOException e) {
-                log.warn("Failed to read device log file {}: {}", logFile, e.getMessage());
+                try {
+                    for (String line : Files.readAllLines(logFile)) {
+                        if (isLineInTimeRange(line, start, end) &&
+                                (keyword == null || keyword.isBlank() || line.contains(keyword))) {
+                            allLogLines.add(line);
+                        }
+                    }
+                } catch (IOException e) {
+                    log.warn("Failed to read device log file {}: {}", logFile, e.getMessage());
+                }
             }
         }
         return allLogLines;
+    }
+
+    private List<Path> getDeviceLogDirectories() {
+        Path userDir = Paths.get(System.getProperty("user.dir"));
+        String configured = mpbandSaveDir == null || mpbandSaveDir.isBlank() ? "mpband_data" : mpbandSaveDir.trim();
+        Path configuredBase = Paths.get(configured);
+        if (!configuredBase.isAbsolute()) {
+            configuredBase = userDir.resolve(configuredBase);
+        }
+
+        LinkedHashSet<Path> dirs = new LinkedHashSet<>();
+        dirs.add(configuredBase.resolve("devices").normalize());
+        // Compatibility with the deployed app configuration app.mpband.saveDir=.,
+        // where LogProcessor writes device logs directly under user.dir/devices.
+        dirs.add(userDir.resolve("devices").normalize());
+        // Compatibility with earlier deployments that used the default mpband_data directory.
+        dirs.add(userDir.resolve("mpband_data").resolve("devices").normalize());
+        return new ArrayList<>(dirs);
     }
 
     private List<LocationRecord> filterLocationRecords(String imei, LocalDateTime start, LocalDateTime end) {
