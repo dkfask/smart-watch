@@ -428,3 +428,33 @@ Key routing rules:
 | **Device simulator** | `java -cp target/classes com.example.demo.tools.BraceletClientSimulator` |
 | **API docs** | See README.md (endpoint reference) |
 | **Design system** | See DESIGN.md (colors, typography, components) |
+
+---
+
+## Docker Deployment
+
+完整容器化部署说明：[docker/README.md](docker/README.md)。
+
+```bash
+cp .env.docker .env       # 编辑密码/端口/AMAP key
+docker compose build      # 首次构建 ~5-10 分钟
+docker compose up -d      # 后台启动两个服务
+docker compose ps         # 等 mysql 与 app 都进入 healthy
+```
+
+| 资源 | 端口 | 说明 |
+|------|------|------|
+| HTTP API + Vue SPA | 8080 | 浏览器访问 `http://localhost:8080`（默认 `admin`/`admin123`） |
+| Netty 设备通信（mpband） | 9000 | 手表/手环 TCP 接入 |
+| TCP 回显服务 | 9090 | 可选 |
+| MySQL | 3306 | 暴露给宿主机便于调试 |
+
+关键文件：
+- `Dockerfile` — 三阶段构建（Node 20 前端 → JDK 21 后端 → JRE 21 运行时）。
+- `docker-compose.yml` — `app` + `mysql` 服务编排、健康检查、命名卷。
+- `src/main/resources/application-docker.properties` — 仅在 `SPRING_PROFILES_ACTIVE=docker` 时激活（`ddl-auto=none`、Actuator health 暴露、`app.mpband.saveDir` 指向挂载卷）。
+- `docker/mysql/init/*.sql` — MySQL 首次启动时执行的 schema 初始化（来自仓库根的 SQL 文件）。
+- `docker/mysql/conf.d/my.cnf` — `event_scheduler=ON`、时区 `+08:00`、utf8mb4。
+- `scripts/docker-entrypoint.sh` — 等待 MySQL 可达后启动 jar。
+
+容器化**不替代**本地开发：`gradlew.bat bootRun` + `npm run dev` 仍按原方式工作，`application-docker.properties` 不会影响默认 profile。

@@ -1,0 +1,28 @@
+# ============================================================================
+# Smart Watch — example crontab for the `deploy` user
+# ============================================================================
+# Install:  crontab -u deploy /home/deploy/config/crontab.example
+# Verify:   crontab -u deploy -l
+#
+# Notes:
+#   - Times are interpreted in the system timezone. bootstrap.sh sets it to
+#     Asia/Shanghai, so 03:00 means 03:00 Beijing time.
+#   - Scripts write to /home/deploy/logs/ — make sure it exists.
+#   - For alerting, hook /home/deploy/logs/healthcheck.log into your
+#     monitoring stack (Loki / ELK / Prometheus) — the script intentionally
+#     does NOT call home.
+# ============================================================================
+
+# m  h  dom  mon  dow  command
+
+# ---- Daily database backup at 03:00 -----------------------------------------
+0  3  *    *    *    /home/deploy/smart-watch/scripts/deploy/backup.sh >> /home/deploy/logs/backup.log 2>&1
+
+# ---- Health probe every 5 minutes (log only; alerting is your job) ----------
+*/5  *  *    *    *    /home/deploy/smart-watch/scripts/deploy/healthcheck.sh
+
+# ---- Weekly log cleanup: prune logs older than 30 days (Sundays 04:00) -----
+0  4  *    *    0    find /home/deploy/logs -type f -name '*.log' -mtime +30 -delete
+
+# ---- Weekly Docker image prune (Sundays 04:30) ------------------------------
+30 4  *    *    0    docker image prune -f >> /home/deploy/logs/docker-prune.log 2>&1
