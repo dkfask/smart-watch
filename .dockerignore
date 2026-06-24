@@ -46,8 +46,10 @@ frontend/dist
 frontend/scripts
 frontend/.env
 
-# Pre-built jars (rebuilt in the container)
+# Pre-built jars (rebuilt in the container).
+# EXCEPT gradle-wrapper.jar which the Docker build needs to run Gradle.
 **/*.jar
+!gradle/wrapper/gradle-wrapper.jar
 
 # Project documentation that doesn't belong in the image
 HELP.md
