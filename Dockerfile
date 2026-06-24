@@ -19,6 +19,11 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /build
 
+# Use the Taobao npm mirror (registry.npmjs.org is blocked from many
+# mainland-China networks). Pinned at build time so future lockfile
+# resolution is reproducible.
+RUN npm config set registry https://registry.npmmirror.com
+
 # Copy manifests first so this layer is cached when only sources change.
 COPY frontend/package.json frontend/package-lock.json* ./frontend/
 
