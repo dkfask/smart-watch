@@ -1,1 +1,19 @@
+// ============================================================================
+// settings.gradle — Gradle plugin and dependency resolution
+// ============================================================================
+// Force Gradle to fetch plugins from the Aliyun mirror first because
+// plugins.gradle.org is unreachable from many mainland-China networks.
+// Falls back to gradlePluginPortal() and mavenCentral() if the mirror is
+// missing a plugin version.
+// ============================================================================
+pluginManagement {
+    repositories {
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        maven { url 'https://maven.aliyun.com/repository/spring-plugin' }
+        gradlePluginPortal()
+        mavenCentral()
+    }
+}
+
 rootProject.name = 'demo2'
