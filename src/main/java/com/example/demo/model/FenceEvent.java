@@ -78,10 +78,29 @@ public class FenceEvent {
     public void setId(Long id) { this.id = id; }
     public GeoFence getFence() { return fence; }
     public void setFence(GeoFence fence) { this.fence = fence; }
+    /** Helper for callers that only have the FK id (most JDBC code). */
+    public Long getFenceId() { return fence == null ? null : fence.getId(); }
+    public void setFenceId(Long fenceId) {
+        if (fenceId == null) { this.fence = null; return; }
+        if (this.fence == null) this.fence = new GeoFence();
+        this.fence.setId(fenceId);
+    }
     public Device getDevice() { return device; }
     public void setDevice(Device device) { this.device = device; }
+    public Long getDeviceId() { return device == null ? null : device.getId(); }
+    public void setDeviceId(Long deviceId) {
+        if (deviceId == null) { this.device = null; return; }
+        if (this.device == null) this.device = new Device();
+        this.device.setId(deviceId);
+    }
     public Patient getPatient() { return patient; }
     public void setPatient(Patient patient) { this.patient = patient; }
+    public Long getPatientId() { return patient == null ? null : patient.getId(); }
+    public void setPatientId(Long patientId) {
+        if (patientId == null) { this.patient = null; return; }
+        if (this.patient == null) this.patient = new Patient();
+        this.patient.setId(patientId);
+    }
     public EventType getEventType() { return eventType; }
     public void setEventType(EventType eventType) { this.eventType = eventType; }
     public Double getLatitude() { return latitude; }
