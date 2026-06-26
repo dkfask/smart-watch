@@ -103,10 +103,25 @@ public class GeoFenceRepository {
      */
     public List<GeoFence> listByPatient(Long patientId) {
         return jdbc.query(
-            "SELECT * FROM geo_fences WHERE patient_id = ? AND status='active' ORDER BY id DESC", 
-            MAPPER, 
+            "SELECT * FROM geo_fences WHERE patient_id = ? AND status='active' ORDER BY id DESC",
+            MAPPER,
             patientId
         );
+    }
+
+    /**
+     * Look up active fences via the {@code fence_patients} many-to-many
+     * join table. Used by FenceEngine to find fences assigned through
+     * the newer m:n relationship in addition to the legacy single-FK
+     * path on {@code geo_fences.patient_id}.
+     */
+    public List<GeoFence> listActiveByFencePatients(Long patientId) {
+        return jdbc.query(
+            "SELECT gf.* FROM geo_fences gf "
+          + "INNER JOIN fence_patients fp ON gf.id = fp.fence_id "
+          + "WHERE fp.patient_id = ? AND gf.status = 'active' "
+          + "ORDER BY gf.id DESC",
+            MAPPER, patientId);
     }
 }
 
