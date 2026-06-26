@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS fence_events (
     CONSTRAINT fk_fe_fence  FOREIGN KEY (fence_id)
         REFERENCES geo_fences(id) ON DELETE CASCADE,
     CONSTRAINT fk_fe_device FOREIGN KEY (device_id)
-        REFERENCES device(id) ON DELETE CASCADE,
+        REFERENCES devices(id) ON DELETE CASCADE,
     CONSTRAINT fk_fe_patient FOREIGN KEY (patient_id)
         REFERENCES patients(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS fence_device_state (
     CONSTRAINT fk_fds_fence  FOREIGN KEY (fence_id)
         REFERENCES geo_fences(id) ON DELETE CASCADE,
     CONSTRAINT fk_fds_device FOREIGN KEY (device_id)
-        REFERENCES device(id) ON DELETE CASCADE
+        REFERENCES devices(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ----------------------------------------------------------------------------
