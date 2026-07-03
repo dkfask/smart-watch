@@ -926,13 +926,15 @@ const handleDeleteDevice = (id) => {
 // 获取可用病人
 const fetchAvailablePatients = async () => {
   try {
-    const data = await patientApi.getPatients(100, 0)
+    const data = await patientApi.getPatients({ limit: 100, page: 0 })
     console.log('获取到的病人数据:', data)
     
     // 确保返回的数据是数组，如果是对象则提取list或data字段
     let patientList = []
     if (Array.isArray(data)) {
       patientList = data
+    } else if (data && Array.isArray(data.content)) {
+      patientList = data.content
     } else if (data && Array.isArray(data.list)) {
       patientList = data.list
     } else if (data && Array.isArray(data.data)) {
