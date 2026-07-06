@@ -70,6 +70,86 @@ class PacketProcessorHealthTest {
         assertThat(record.getValue()).isEqualTo("37.3");
     }
 
+    @Test
+    void apjkBloodPressurePayloadSavesStructuredRecord() {
+        HealthRecordRepository healthRecordRepository = mock(HealthRecordRepository.class);
+        PacketProcessor processor = newProcessor(healthRecordRepository);
+
+        processor.processPacket(
+                packet("APJK"),
+                "IWAPJK,2026-06-05 23:33:19,1,75|120#",
+                "test-client",
+                null,
+                "359999000000001"
+        );
+
+        ArgumentCaptor<HealthRecord> captor = ArgumentCaptor.forClass(HealthRecord.class);
+        verify(healthRecordRepository).save(captor.capture());
+        HealthRecord record = captor.getValue();
+        assertThat(record.getDataType()).isEqualTo("blood_pressure");
+        assertThat(record.getValue()).isEqualTo("75|120");
+    }
+
+    @Test
+    void apjkSpo2PayloadSavesBloodOxygenRecord() {
+        HealthRecordRepository healthRecordRepository = mock(HealthRecordRepository.class);
+        PacketProcessor processor = newProcessor(healthRecordRepository);
+
+        processor.processPacket(
+                packet("APJK"),
+                "IWAPJK,2026-06-05 23:33:19,4,98#",
+                "test-client",
+                null,
+                "359999000000001"
+        );
+
+        ArgumentCaptor<HealthRecord> captor = ArgumentCaptor.forClass(HealthRecord.class);
+        verify(healthRecordRepository).save(captor.capture());
+        HealthRecord record = captor.getValue();
+        assertThat(record.getDataType()).isEqualTo("blood_oxygen");
+        assertThat(record.getValue()).isEqualTo("98");
+    }
+
+    @Test
+    void ap02TimestampTypeValuePayloadSavesHeartRateRecord() {
+        HealthRecordRepository healthRecordRepository = mock(HealthRecordRepository.class);
+        PacketProcessor processor = newProcessor(healthRecordRepository);
+
+        processor.processPacket(
+                packet("AP02"),
+                "IWAP02,2026-06-05 23:33:19,2,79#",
+                "test-client",
+                null,
+                "359999000000001"
+        );
+
+        ArgumentCaptor<HealthRecord> captor = ArgumentCaptor.forClass(HealthRecord.class);
+        verify(healthRecordRepository).save(captor.capture());
+        HealthRecord record = captor.getValue();
+        assertThat(record.getDataType()).isEqualTo("heart_rate");
+        assertThat(record.getValue()).isEqualTo("79");
+    }
+
+    @Test
+    void ap02UnknownPayloadFallsBackToUnknown() {
+        HealthRecordRepository healthRecordRepository = mock(HealthRecordRepository.class);
+        PacketProcessor processor = newProcessor(healthRecordRepository);
+
+        processor.processPacket(
+                packet("AP02"),
+                "IWAP02,garbled-payload#",
+                "test-client",
+                null,
+                "359999000000001"
+        );
+
+        ArgumentCaptor<HealthRecord> captor = ArgumentCaptor.forClass(HealthRecord.class);
+        verify(healthRecordRepository).save(captor.capture());
+        HealthRecord record = captor.getValue();
+        assertThat(record.getDataType()).isEqualTo("unknown");
+        assertThat(record.getValue()).isEqualTo("garbled-payload");
+    }
+
     private static PacketProcessor newProcessor(HealthRecordRepository healthRecordRepository) {
         DeviceRepository deviceRepository = mock(DeviceRepository.class);
         PatientDeviceRepository patientDeviceRepository = mock(PatientDeviceRepository.class);

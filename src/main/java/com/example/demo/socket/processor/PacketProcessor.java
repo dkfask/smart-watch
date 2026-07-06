@@ -86,8 +86,7 @@ public class PacketProcessor {
                     log.debug("✅ AP01 处理完成, IMEI={}", imei);
                     break;
                 case "AP02":
-                    // 健康包（旧版 AP02 可能另用，此处如无明确需求可当作健康数据）
-                    saveHealthData(parseKeyValueParams(payload), imei);
+                    handleAp02(packet, payload, imei);
                     log.debug("✅ AP02 处理完成, IMEI={}", imei);
                     break;
                 case "AP03":
@@ -194,6 +193,19 @@ public class PacketProcessor {
         saveLocationData(paramsToSave, imei);
     }
 
+    /**
+     * 处理 AP02 健康包。
+     *
+     * 兼容三类格式：
+     * 1) key=value 键值对；
+     * 2) APJK 同款：timestamp,type,value；
+     * 3) 简化类型包：type,value 或单值体温包。
+     */
+    private void handleAp02(BraceletPacket packet, String payload, String imei) {
+        Map<String, String> params = parseHealthPayload(payload, packet == null ? null : packet.getParams(), "AP02");
+        saveHealthData(params, imei);
+    }
+
     /** 处理 AP03 心跳包 */
     private void handleAp03(Map<String, String> params, String clientInfo, String imei) {
         if (params == null || params.isEmpty()) return;
@@ -273,77 +285,13 @@ public class PacketProcessor {
 
     /** 处理 APJK 健康数据 */
     private void handleApJk(String payload, String clientInfo, String imei) {
-        if (payload == null || payload.isEmpty()) return;
-
-        // 期望形式为：timestamp,type,value  （value 可能含有 '|' 分隔多个子值）
-        // 例如: 2021-05-29 13:00:00,1,69|120
-        String[] parts = payload.split(",", 3);
-        Map<String, String> params = new LinkedHashMap<>();
-        if (parts.length >= 3) {
-            String timeStr = parts[0].trim();
-            String typeStr = parts[1].trim();
-            String valStr = parts[2].trim();
-            params.put("timestamp", timeStr);
-            params.put("type", typeStr);
-            params.put("raw_value", valStr);
-
-            // 解析类型并把值拆解为更具体字段
-            switch (typeStr) {
-                case "1": // 血压: diastolic|systolic
-                    params.put("data_type", "blood_pressure");
-                    if (valStr.contains("|")) {
-                        String[] vs = valStr.split("\\|", 2);
-                        params.put("bp_diastolic", vs[0]);
-                        params.put("bp_systolic", vs[1]);
-                        params.put("value", vs[0] + "|" + vs[1]);
-                    } else {
-                        params.put("value", valStr);
-                    }
-                    break;
-                case "2": // 心率
-                    params.put("data_type", "heart_rate");
-                    params.put("value", valStr);
-                    break;
-                case "3": // 体温
-                    params.put("data_type", "body_temperature");
-                    params.put("value", valStr);
-                    break;
-                case "4": // 血氧
-                    params.put("data_type", "blood_oxygen");
-                    params.put("value", valStr);
-                    break;
-                default:
-                    // 未知类型，回退为 raw
-                    params.put("data_type", "unknown");
-                    params.put("value", valStr);
-            }
-            // 将 imei 从 payload 或 raw 中尝试提取（若这个 payload 中包含 imei，虽然协议通常不在此处带 imei）
-            if (imei != null) params.put("imei", imei);
-
-            saveHealthData(params, imei);
-            return;
-        }
-
-        // 回退：如果不符合新的三段式格式，则尝试解析为 key=value 键值对（向后兼容）
-        Map<String, String> kv = parseKeyValueParams(payload);
-        if (imei != null) kv.put("imei", imei);
-        saveHealthData(kv, imei);
+        Map<String, String> params = parseHealthPayload(payload, null, "APJK");
+        saveHealthData(params, imei);
     }
 
     /** 处理 APTP 体温数据 */
     private void handleApTp(String payload, String clientInfo, String imei) {
-        Map<String, String> params = parseKeyValueParams(payload);
-        if (!params.containsKey("data_type") && !params.containsKey("temp") && payload != null && !payload.isBlank() && !payload.contains("=")) {
-            String[] parts = payload.split(",", 2);
-            if (parts.length >= 1 && !parts[0].isBlank()) {
-                params.put("data_type", "body_temperature");
-                params.put("value", parts[0].trim());
-            }
-            if (parts.length >= 2 && !parts[1].isBlank()) {
-                params.put("wrist_temp", parts[1].trim());
-            }
-        }
-        if (imei != null) params.put("imei", imei);
+        Map<String, String> params = parseHealthPayload(payload, null, "APTP");
         saveHealthData(params, imei);
     }
 
@@ -469,26 +417,10 @@ public class PacketProcessor {
     private void saveHealthData(Map<String, String> params, String imei) {
         try {
             HealthRecord rec = new HealthRecord();
-            // 保存数据类型和值
-            if (params.containsKey("temp")) {
-                rec.setDataType("body_temperature");
-                rec.setValue(params.get("temp"));
-            } else if (params.containsKey("data_type")) {
-                rec.setDataType(params.get("data_type"));
-                rec.setValue(params.getOrDefault("value", params.toString()));
-            } else if (params.containsKey("wrist_temp")) {
-                rec.setDataType("body_temperature");
-                rec.setValue(params.get("wrist_temp"));
-            } else if (params.containsKey("spo2")) {
-                rec.setDataType("blood_oxygen");
-                rec.setValue(params.get("spo2"));
-            } else if (params.containsKey("hr")) {
-                rec.setDataType("heart_rate");
-                rec.setValue(params.get("hr"));
-            } else {
-                rec.setDataType("unknown");
-                rec.setValue(params.toString());
-            }
+            String dataType = normalizeHealthDataType(params);
+            String value = normalizeHealthValue(params, dataType);
+            rec.setDataType(dataType);
+            rec.setValue(value);
 
             // 保存时间戳
             if (params.containsKey("timestamp")) {
@@ -523,11 +455,19 @@ public class PacketProcessor {
 
             // 保存原始数据
             rec.setRawData(params.toString());
-            
+
+            if ("unknown".equals(dataType)) {
+                log.warn("Unknown health payload: protocol={}, imei={}, payload={}",
+                        params.getOrDefault("protocol", "unknown"), imei, params.getOrDefault("raw_payload", params.toString()));
+            } else if ("body_temperature".equals(dataType) && isZeroTemperature(value)) {
+                log.warn("Zero body temperature payload: protocol={}, imei={}, payload={}",
+                        params.getOrDefault("protocol", "unknown"), imei, params.getOrDefault("raw_payload", params.toString()));
+            }
+
             // 保存健康数据到数据库
             healthRecordRepository.save(rec);
             log.debug("✅ 成功保存健康数据: IMEI={}, 类型={}", imei, rec.getDataType());
-            
+
             // 调用健康监测服务检测是否异常
             healthMonitorService.checkHealthData(rec);
         } catch (Exception e) {
@@ -594,6 +534,163 @@ public class PacketProcessor {
             m.put("raw", s);
         }
         return m;
+    }
+
+    private Map<String, String> parseHealthPayload(String payload, Map<String, String> packetParams, String protocol) {
+        Map<String, String> params = new LinkedHashMap<>();
+        if (packetParams != null && !packetParams.isEmpty()) {
+            params.putAll(packetParams);
+        }
+
+        String normalizedPayload = payload == null ? "" : payload.trim();
+        if (normalizedPayload.startsWith(",")) {
+            normalizedPayload = normalizedPayload.substring(1).trim();
+        }
+        params.put("protocol", protocol);
+        params.put("raw_payload", normalizedPayload);
+
+        if (normalizedPayload.isEmpty()) {
+            params.putIfAbsent("data_type", "unknown");
+            params.putIfAbsent("value", "");
+            return params;
+        }
+
+        if (normalizedPayload.contains("=")) {
+            params.putAll(parseKeyValueParams(normalizedPayload));
+        }
+
+        if (params.containsKey("data_type") || params.containsKey("temp") || params.containsKey("wrist_temp")
+                || params.containsKey("spo2") || params.containsKey("hr")) {
+            return params;
+        }
+
+        String[] parts = normalizedPayload.split(",", 3);
+        if (parts.length >= 3 && isHealthTypeCode(parts[1].trim())) {
+            params.put("timestamp", parts[0].trim());
+            params.put("type", parts[1].trim());
+            params.put("raw_value", parts[2].trim());
+            params.putAll(decodeHealthType(parts[1].trim(), parts[2].trim()));
+            return params;
+        }
+
+        String[] compactParts = normalizedPayload.split(",", 2);
+        if (compactParts.length >= 2 && isHealthTypeCode(compactParts[0].trim())) {
+            params.put("type", compactParts[0].trim());
+            params.put("raw_value", compactParts[1].trim());
+            params.putAll(decodeHealthType(compactParts[0].trim(), compactParts[1].trim()));
+            return params;
+        }
+
+        if ("APTP".equals(protocol)) {
+            if (compactParts.length >= 1 && !compactParts[0].isBlank()) {
+                params.put("data_type", "body_temperature");
+                params.put("value", compactParts[0].trim());
+                params.put("temp", compactParts[0].trim());
+            }
+            if (compactParts.length >= 2 && !compactParts[1].isBlank()) {
+                params.put("wrist_temp", compactParts[1].trim());
+            }
+            return params;
+        }
+
+        params.putIfAbsent("data_type", "unknown");
+        params.putIfAbsent("value", normalizedPayload);
+        return params;
+    }
+
+    private Map<String, String> decodeHealthType(String type, String rawValue) {
+        Map<String, String> params = new LinkedHashMap<>();
+        switch (type) {
+            case "1":
+                params.put("data_type", "blood_pressure");
+                if (rawValue.contains("|")) {
+                    String[] values = rawValue.split("\\|", 2);
+                    params.put("bp_diastolic", values[0].trim());
+                    params.put("bp_systolic", values[1].trim());
+                    params.put("value", values[0].trim() + "|" + values[1].trim());
+                } else if (rawValue.contains("/")) {
+                    String[] values = rawValue.split("/", 2);
+                    params.put("bp_diastolic", values[1].trim());
+                    params.put("bp_systolic", values[0].trim());
+                    params.put("value", values[1].trim() + "|" + values[0].trim());
+                } else {
+                    params.put("value", rawValue);
+                }
+                break;
+            case "2":
+                params.put("data_type", "heart_rate");
+                params.put("hr", rawValue);
+                params.put("value", rawValue);
+                break;
+            case "3":
+                params.put("data_type", "body_temperature");
+                params.put("temp", rawValue);
+                params.put("value", rawValue);
+                break;
+            case "4":
+                params.put("data_type", "blood_oxygen");
+                params.put("spo2", rawValue);
+                params.put("value", rawValue);
+                break;
+            default:
+                params.put("data_type", "unknown");
+                params.put("value", rawValue);
+                break;
+        }
+        return params;
+    }
+
+    private boolean isHealthTypeCode(String value) {
+        return value != null && value.matches("[1-4]");
+    }
+
+    private String normalizeHealthDataType(Map<String, String> params) {
+        String dataType = params.get("data_type");
+        if (dataType != null && !dataType.isBlank()) {
+            return switch (dataType) {
+                case "temperature", "body_temperature" -> "body_temperature";
+                case "spo2", "blood_oxygen" -> "blood_oxygen";
+                default -> dataType;
+            };
+        }
+        if (params.containsKey("temp") || params.containsKey("wrist_temp")) return "body_temperature";
+        if (params.containsKey("spo2")) return "blood_oxygen";
+        if (params.containsKey("hr")) return "heart_rate";
+        return "unknown";
+    }
+
+    private String normalizeHealthValue(Map<String, String> params, String dataType) {
+        String explicitValue = params.get("value");
+        if (explicitValue != null && !explicitValue.isBlank()) {
+            return explicitValue.trim();
+        }
+        return switch (dataType) {
+            case "body_temperature" -> firstNonBlank(params.get("temp"), params.get("wrist_temp"), params.toString());
+            case "blood_oxygen" -> firstNonBlank(params.get("spo2"), params.toString());
+            case "heart_rate" -> firstNonBlank(params.get("hr"), params.toString());
+            case "blood_pressure" -> firstNonBlank(params.get("bp_diastolic") != null && params.get("bp_systolic") != null
+                    ? params.get("bp_diastolic") + "|" + params.get("bp_systolic")
+                    : null, params.toString());
+            default -> firstNonBlank(params.get("raw_payload"), params.toString());
+        };
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) return "";
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value.trim();
+            }
+        }
+        return "";
+    }
+
+    private boolean isZeroTemperature(String value) {
+        try {
+            return Math.abs(Double.parseDouble(value)) < 0.000001d;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     /** 将字符串安全转换为 Double（返回 null 表示转换失败或为空） */

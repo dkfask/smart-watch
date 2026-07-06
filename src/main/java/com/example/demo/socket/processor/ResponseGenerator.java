@@ -56,12 +56,44 @@ public class ResponseGenerator {
             case "AP16" -> HEADER + "BP16" + END_MARKER;
             case "AP42" -> HEADER + "BP42" + END_MARKER;
             case "APBL" -> HEADER + "BPBL" + END_MARKER;
-            case "APJK" -> HEADER + "BPJK" + END_MARKER;
+            case "APJK" -> createHealthResponse(packet);
             case "APTP" -> HEADER + "BPTP" + END_MARKER;
             case "APVR" -> HEADER + "BPVR" + END_MARKER;
             case "APWR" -> HEADER + "BPWR" + END_MARKER;
             default -> HEADER + responseProtocol + END_MARKER;
         };
+    }
+
+    /**
+     * APJK responses must echo the health data type from the uplink frame.
+     * Thinkrace V2.22 defines the response as IWBPJK,{type}#.
+     */
+    private String createHealthResponse(BraceletPacket packet) {
+        String payload = packet.getParams() == null ? null : packet.getParams().get("payload");
+        if (payload == null || payload.isBlank()) {
+            String raw = packet.getRaw();
+            if (raw != null && raw.length() > 6) {
+                int end = raw.endsWith(END_MARKER) ? raw.length() - 1 : raw.length();
+                payload = raw.substring(6, end);
+            }
+        }
+
+        if (payload != null) {
+            payload = payload.strip();
+            if (payload.startsWith(",")) {
+                payload = payload.substring(1);
+            }
+            String[] fields = payload.split(",", 3);
+            if (fields.length >= 2) {
+                String healthType = fields[1].trim();
+                if (healthType.matches("[1-4]")) {
+                    return HEADER + "BPJK," + healthType + END_MARKER;
+                }
+            }
+        }
+
+        log.warn("Cannot extract APJK health type; falling back to legacy response");
+        return HEADER + "BPJK" + END_MARKER;
     }
 
     /**
