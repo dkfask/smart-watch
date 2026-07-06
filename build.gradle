@@ -16,8 +16,15 @@ java {
 }
 
 repositories {
-	mavenCentral()
+	// Note: mavenCentral() is intentionally OMITTED because it is
+	// unreachable from many mainland-China networks. When Gradle hits a
+	// timeout it disables ALL repositories for the failing module, then
+	// falls back to Maven Central — which times out again, causing a
+	// silent build failure. Using only the Aliyun + Huawei mirrors keeps
+	// resolution deterministic.
 	maven { url 'https://maven.aliyun.com/repository/public' }
+	maven { url 'https://maven.aliyun.com/repository/spring' }
+	maven { url 'https://maven.aliyun.com/repository/spring-plugin' }
 	maven { url 'https://repo.huaweicloud.com/repository/maven/' }
 }
 

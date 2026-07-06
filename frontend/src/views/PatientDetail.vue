@@ -76,6 +76,28 @@
             <el-empty v-else description="暂无位置数据" :image-size="60" />
           </div>
 
+          <div class="info-card">
+            <h3 class="card-title">健康信息</h3>
+            <div v-loading="healthLoading" class="health-summary-grid">
+              <div
+                v-for="metric in healthMetrics"
+                :key="metric.key"
+                class="health-metric-card"
+                :class="metric.status"
+              >
+                <div class="metric-head">
+                  <span class="metric-label">{{ metric.label }}</span>
+                  <span class="metric-status">{{ metric.statusText }}</span>
+                </div>
+                <div class="metric-value">
+                  <span>{{ metric.value }}</span>
+                  <small>{{ metric.unit }}</small>
+                </div>
+                <div class="metric-time">{{ metric.time }}</div>
+              </div>
+            </div>
+          </div>
+
           <!-- 最近报警 -->
           <div class="info-card">
             <h3 class="card-title">
@@ -128,6 +150,7 @@ import { deviceApi } from '../api/device'
 import { alarmApi } from '../api/alarm'
 import { locationApi } from '../api/location'
 import { fenceApi } from '../api/fence'
+import { healthApi } from '../api/health'
 import { ElMessage } from 'element-plus'
 import { formatBeijingTime } from '../utils/time'
 
@@ -139,6 +162,8 @@ const device = ref(null)
 const latestLocation = ref(null)
 const patientAlarms = ref([])
 const patientFences = ref([])
+const latestHealthData = ref({})
+const healthLoading = ref(false)
 const loading = ref(true)
 let map = null
 let marker = null
@@ -148,6 +173,35 @@ let refreshTimer = null
  * 未处理报警数
  */
 const pendingAlarmCount = computed(() => patientAlarms.value.filter(a => a.status === 'pending').length)
+
+const healthMetricConfig = [
+  { key: 'temperature', label: '体温', unit: '°C', normal: value => value >= 35.5 && value <= 37.5 },
+  { key: 'heart_rate', label: '心率', unit: '次/分', normal: value => value >= 50 && value <= 110 },
+  { key: 'blood_pressure', label: '血压', unit: 'mmHg', normal: value => isNormalBloodPressure(value) },
+  { key: 'spo2', label: '血氧', unit: '%', normal: value => Number(value) >= 95 }
+]
+
+const healthMetrics = computed(() => healthMetricConfig.map(config => {
+  const entry = latestHealthData.value?.[config.key]
+  const rawValue = entry?.value
+  const hasValue = rawValue !== undefined && rawValue !== null && rawValue !== ''
+  const status = hasValue && !config.normal(rawValue) ? 'warning' : 'normal'
+  return {
+    ...config,
+    value: hasValue ? rawValue : '-',
+    time: entry?.time ? formatDate(entry.time) : '暂无数据',
+    status: hasValue ? status : 'empty',
+    statusText: hasValue ? (status === 'warning' ? '需关注' : '正常') : '未上报'
+  }
+}))
+
+function isNormalBloodPressure(value) {
+  const match = String(value || '').match(/(\d{2,3})\D+(\d{2,3})/)
+  if (!match) return true
+  const systolic = Number(match[1])
+  const diastolic = Number(match[2])
+  return systolic >= 90 && systolic <= 140 && diastolic >= 60 && diastolic <= 90
+}
 
 /**
  * 返回病人列表
@@ -261,6 +315,8 @@ const fetchPatientDetail = async () => {
         f.patientIds?.includes(Number(patientId)) || f.patientId == patientId
       )
     } catch (e) { /* 忽略 */ }
+
+    await fetchLatestHealthData(patientId)
   } catch (error) {
     ElMessage.error('获取病人信息失败')
   } finally {
@@ -283,6 +339,19 @@ const fetchLatestLocation = async (deviceId = device.value?.id) => {
     renderPatientMap()
   } catch (e) {
     // 位置获取失败不影响病人详情展示。
+  }
+}
+
+const fetchLatestHealthData = async (patientId = route.params.id) => {
+  if (!patientId) return
+  healthLoading.value = true
+  try {
+    latestHealthData.value = await healthApi.getLatestHealthRecords(patientId)
+  } catch (error) {
+    latestHealthData.value = {}
+    console.error('Failed to fetch latest health data:', error)
+  } finally {
+    healthLoading.value = false
   }
 }
 
@@ -369,7 +438,10 @@ const renderPatientMap = () => {
 
 onMounted(() => {
   fetchPatientDetail()
-  refreshTimer = setInterval(() => fetchLatestLocation(), 30000)
+  refreshTimer = setInterval(() => {
+    fetchLatestLocation()
+    fetchLatestHealthData()
+  }, 30000)
 })
 
 onBeforeUnmount(() => {
@@ -475,6 +547,87 @@ onBeforeUnmount(() => {
 .location-time { font-size: 12px; color: var(--text-muted); }
 .patient-map { width: 100%; height: 250px; border-radius: 8px; border: 1px solid var(--border-color); }
 
+.health-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.health-metric-card {
+  min-height: 112px;
+  padding: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 251, 255, 0.96));
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.06);
+}
+
+.health-metric-card.warning {
+  border-color: rgba(245, 108, 108, 0.35);
+  background: linear-gradient(180deg, rgba(255, 245, 245, 0.98), rgba(255, 255, 255, 0.96));
+}
+
+.health-metric-card.empty {
+  background: rgba(248, 250, 252, 0.86);
+}
+
+.metric-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.metric-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.metric-status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #059669;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.health-metric-card.warning .metric-status {
+  background: rgba(245, 108, 108, 0.12);
+  color: #dc2626;
+}
+
+.health-metric-card.empty .metric-status {
+  background: rgba(148, 163, 184, 0.14);
+  color: #64748b;
+}
+
+.metric-value {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--text-primary);
+}
+
+.metric-value span {
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.metric-value small {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.metric-time {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 /* High-density patient marker: color, short label, and stable identity cue. */
 :deep(.custom-marker) {
   background: none !important;
@@ -541,5 +694,17 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@media (max-width: 1024px) {
+  .health-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .health-summary-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

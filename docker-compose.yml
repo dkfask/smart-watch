@@ -1,66 +1,33 @@
 # ============================================================================
-# Smart Watch Monitoring System — local compose stack
+# Smart Watch Monitoring System — host-network compose stack
 # ============================================================================
-# Two services:
-#   - mysql : official MySQL 8.0 with the project schema baked in via
-#             /docker-entrypoint-initdb.d/. Data persisted in the
-#             `mysql_data` named volume.
-#   - app   : the Spring Boot jar built from this repo's Dockerfile, exposing
-#             8080 (HTTP+UI), 9000 (Netty device comms), and 9090 (TCP echo).
+# Single-service compose: the app container uses the host's network stack
+# (`network_mode: host`) so it can connect to the host's already-running
+# MySQL 8.0 via 127.0.0.1:3306. We do NOT run MySQL inside Docker because
+# the upstream image is unreachable from this server's IP range.
 #
-# Usage:
-#   cp .env.docker .env       # then edit secrets
-#   docker compose build
-#   docker compose up -d
-#   docker compose ps         # wait until both services report `healthy`
-#   open http://localhost:8080
+# Why host MySQL?
+#   - mysql-server-8.0 is already installed and running on this host
+#     (see /usr/sbin/mysqld, /etc/mysql/).
+#   - The `smart_watch` schema and `smart_user` account are already
+#     provisioned from a prior deployment, with 20 tables including users,
+#     devices, alarms, fences, patients, etc.
+#   - Saving the data avoids the upstream-image connectivity issue entirely.
+#
+# Ports exposed (because of network_mode: host, these bind directly to the
+# host — DO NOT change without freeing the host port first):
+#   - 8080 : HTTP API + Vue SPA
+#   - 9000 : Netty device comms (mpband)
+#   - 9090 : TCP echo (intentionally NOT opened in UFW by bootstrap.sh)
+#
+# To switch back to a dockerised MySQL later, replace the `app:` block with
+# the previous two-service layout (mysql + app on smart_net) and update
+# DB_URL to jdbc:mysql://mysql:3306/smart_watch.
 # ============================================================================
 
 name: smart-watch
 
 services:
-
-  # -------------------------------------------------------------------------
-  # MySQL 8 — schema source of truth (init SQL baked into the app image)
-  # -------------------------------------------------------------------------
-  mysql:
-    image: mysql:8.0
-    container_name: smart-watch-mysql
-    restart: unless-stopped
-    command:
-      - "--default-time-zone=+08:00"
-      - "--character-set-server=utf8mb4"
-      - "--collation-server=utf8mb4_unicode_ci"
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpass_change_me}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-smart_watch}
-      MYSQL_USER: ${MYSQL_USER:-smart_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-smart123}
-      TZ: Asia/Shanghai
-    ports:
-      # Exposed on the host for ad-hoc inspection (DBeaver, mysql CLI, etc.).
-      # Comment out if you don't want MySQL reachable from the host.
-      - "${MYSQL_HOST_PORT:-3306}:3306"
-    volumes:
-      # Persistent database files (survives `docker compose down`).
-      - mysql_data:/var/lib/mysql
-      # Server-level config (event_scheduler, time zone, charset).
-      - ./docker/mysql/conf.d:/etc/mysql/conf.d:ro
-    healthcheck:
-      test:
-        - "CMD"
-        - "mysqladmin"
-        - "ping"
-        - "-h"
-        - "127.0.0.1"
-        - "-uroot"
-        - "-p${MYSQL_ROOT_PASSWORD:-rootpass_change_me}"
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 60s
-    networks:
-      - smart_net
 
   # -------------------------------------------------------------------------
   # Application — Spring Boot + embedded Vue SPA
@@ -72,21 +39,21 @@ services:
     image: smart-watch:local
     container_name: smart-watch-app
     restart: unless-stopped
+    network_mode: host
     # SIGTERM grace period — must be > spring.lifecycle.timeout-per-shutdown-phase
     # (30s, set in application-docker.properties) so the JVM can drain HTTP
     # requests and close Netty channels cleanly before docker sends SIGKILL.
     stop_grace_period: 35s
     stop_signal: SIGTERM
-    depends_on:
-      mysql:
-        condition: service_healthy
     environment:
       # Spring profile activates src/main/resources/application-docker.properties
       # (ddl-auto=none, actuator exposure, mpband saveDir override).
       SPRING_PROFILES_ACTIVE: docker
 
-      # Database connection — `mysql` is the compose service hostname.
-      DB_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-smart_watch}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8"
+      # Database connection — host MySQL on 127.0.0.1:3306.
+      # The schema, `smart_watch`, and `smart_user` account are already
+      # provisioned (see /usr/sbin/mysqld + SHOW DATABASES).
+      DB_URL: "jdbc:mysql://127.0.0.1:3306/${MYSQL_DATABASE:-smart_watch}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8"
       DB_USERNAME: ${MYSQL_USER:-smart_user}
       DB_PASSWORD: ${MYSQL_PASSWORD:-smart123}
 
@@ -100,8 +67,7 @@ services:
       AMAP_WEB_KEY: ${AMAP_WEB_KEY:-}
       MPBAND_RESPONSE_KEY: ${MPBAND_RESPONSE_KEY:-}
 
-      # Redis cache stays off by default; flip to true and add a redis service
-      # to docker-compose.yml if you want caching.
+      # Redis cache stays off by default (DefaultCacheService NoOp).
       APP_CACHE_REDIS_ENABLED: "false"
 
       TZ: Asia/Shanghai
@@ -110,26 +76,15 @@ services:
       JAVA_OPTS: >-
         -Duser.timezone=Asia/Shanghai
         -Dfile.encoding=UTF-8
-    ports:
-      - "${APP_HTTP_PORT:-8080}:8080"
-      - "${APP_MPBAND_PORT:-9000}:9000"
-      - "${APP_TCP_PORT:-9090}:9090"
     volumes:
       # Device raw frames and per-device logs survive container restarts.
       - mpband_data:/app/mpband_data
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8080/actuator/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/"]
       interval: 15s
       timeout: 5s
       retries: 8
       start_period: 120s
-    networks:
-      - smart_net
 
 volumes:
-  mysql_data:
   mpband_data:
-
-networks:
-  smart_net:
-    driver: bridge

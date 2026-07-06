@@ -21,18 +21,15 @@ public class TrackingService {
     private final DeviceLocationRepository locationRepo;
     private final DeviceStatusRepository statusRepo;
     private final FenceService fenceService;
-    private final FenceEngine fenceEngine;
     private final CacheService cacheService;
 
     public TrackingService(DeviceLocationRepository locationRepo,
                            DeviceStatusRepository statusRepo,
                            FenceService fenceService,
-                           FenceEngine fenceEngine,
                            CacheService cacheService) {
         this.locationRepo = locationRepo;
         this.statusRepo = statusRepo;
         this.fenceService = fenceService;
-        this.fenceEngine = fenceEngine;
         this.cacheService = cacheService;
     }
 
@@ -121,15 +118,7 @@ public class TrackingService {
             dl.setLatitude(BigDecimal.valueOf(currLat));
             dl.setLongitude(BigDecimal.valueOf(currLng));
             dl.setImei(imei);
-
-            // Dual-write: legacy fenceService + new fenceEngine run side
-            // by side during the migration window. Both write independently
-            // — fenceService still writes to fence_alerts + alarms + alerts,
-            // while fenceEngine writes to fence_events + fence_device_state.
-            // In stage 4 the fenceService call is removed and fenceEngine
-            // becomes the only path.
             fenceService.checkFencesAndAlert(dl, prevLat, prevLng);
-            fenceEngine.onLocationReport(deviceId, currLat, currLng);
         }
     }
 }
