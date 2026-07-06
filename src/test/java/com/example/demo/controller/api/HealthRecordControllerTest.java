@@ -1,7 +1,9 @@
 package com.example.demo.controller.api;
 
 import com.example.demo.model.HealthRecord;
+import com.example.demo.model.PatientDevice;
 import com.example.demo.repository.HealthRecordRepository;
+import com.example.demo.repository.PatientDeviceRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.util.concurrent.RateLimiter;
 import org.junit.jupiter.api.Test;
@@ -39,6 +41,7 @@ class HealthRecordControllerTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @MockBean private HealthRecordRepository repo;
+    @MockBean private PatientDeviceRepository patientDeviceRepo;
     @MockBean private RateLimiter rateLimiter;
 
     /**
@@ -55,6 +58,14 @@ class HealthRecordControllerTest {
         r.setCreatedAt(recvTime);
         r.setUpdatedAt(recvTime);
         return r;
+    }
+
+    private PatientDevice buildBinding(Long patientId, Long deviceId) {
+        PatientDevice binding = new PatientDevice();
+        binding.setPatientId(patientId);
+        binding.setDeviceId(deviceId);
+        binding.setIsActive(true);
+        return binding;
     }
 
     /**
@@ -197,6 +208,45 @@ class HealthRecordControllerTest {
                         .param("patientId", "100"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(0));
+    }
+
+    @Test
+    void latest_mapsProtocolTypeAliasesForFrontend() throws Exception {
+        Date now = new Date();
+        when(repo.findTopByPatientIdAndDataTypeOrderByRecvTimeDesc(100L, "temperature"))
+                .thenReturn(Optional.empty());
+        when(repo.findTopByPatientIdAndDataTypeOrderByRecvTimeDesc(100L, "body_temperature"))
+                .thenReturn(Optional.of(buildRecord(1L, 100L, null, "body_temperature", "36.8", now)));
+        when(repo.findTopByPatientIdAndDataTypeOrderByRecvTimeDesc(100L, "spo2"))
+                .thenReturn(Optional.empty());
+        when(repo.findTopByPatientIdAndDataTypeOrderByRecvTimeDesc(100L, "blood_oxygen"))
+                .thenReturn(Optional.of(buildRecord(2L, 100L, null, "blood_oxygen", "97", now)));
+
+        mockMvc.perform(get("/api/health-records/latest")
+                        .param("patientId", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.temperature.value").value("36.8"))
+                .andExpect(jsonPath("$.data.temperature.unit").value("°C"))
+                .andExpect(jsonPath("$.data.spo2.value").value("97"))
+                .andExpect(jsonPath("$.data.spo2.unit").value("%"));
+    }
+
+    @Test
+    void latest_fallsBackToBoundDeviceRecords_whenPatientIdWasNotSaved() throws Exception {
+        Date now = new Date();
+        HealthRecord record = buildRecord(1L, null, "359999000000001", "heart_rate", "88", now);
+        record.setDeviceId(15L);
+
+        when(patientDeviceRepo.findByPatientId(100L)).thenReturn(List.of(buildBinding(100L, 15L)));
+        when(repo.findTopByPatientIdAndDataTypeOrderByRecvTimeDesc(eq(100L), anyString()))
+                .thenReturn(Optional.empty());
+        when(repo.findByDeviceIdInAndDataTypeOrderByRecvTimeDesc(List.of(15L), "heart_rate"))
+                .thenReturn(List.of(record));
+
+        mockMvc.perform(get("/api/health-records/latest")
+                        .param("patientId", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.heart_rate.value").value("88"));
     }
 
     /**

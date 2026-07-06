@@ -103,8 +103,8 @@ public class GeoFenceRepository {
      */
     public List<GeoFence> listByPatient(Long patientId) {
         return jdbc.query(
-            "SELECT * FROM geo_fences WHERE patient_id = ? AND status='active' ORDER BY id DESC", 
-            MAPPER, 
+            "SELECT * FROM geo_fences WHERE patient_id = ? AND status='active' ORDER BY id DESC",
+            MAPPER,
             patientId
         );
     }

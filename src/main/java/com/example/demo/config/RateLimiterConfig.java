@@ -1,18 +1,16 @@
 package com.example.demo.config;
 
+import com.google.common.util.concurrent.RateLimiter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import com.google.common.util.concurrent.RateLimiter;
 
 @Configuration
 public class RateLimiterConfig {
 
-    /**
-     * 创建速率限制器，每秒允许10个请求
-     * @return 速率限制器
-     */
     @Bean
     public RateLimiter rateLimiter() {
-        return RateLimiter.create(10.0); // 每秒10个请求
+        // Dashboard and realtime pages intentionally load several API resources together.
+        // Keep a global safety cap, but avoid rejecting normal monitoring refresh bursts.
+        return RateLimiter.create(60.0);
     }
 }

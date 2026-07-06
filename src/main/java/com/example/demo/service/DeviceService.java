@@ -1,12 +1,14 @@
 package com.example.demo.service;
 
 import com.example.demo.model.Device;
+import com.example.demo.model.DeviceLocation;
 import com.example.demo.model.DeviceStatus;
 import com.example.demo.model.Patient;
 import com.example.demo.model.PatientDevice;
 import com.example.demo.model.dto.DeviceInfoDto;
 import com.example.demo.model.dto.PageResponse;
 import com.example.demo.repository.DeviceRepository;
+import com.example.demo.repository.DeviceLocationRepository;
 import com.example.demo.repository.DeviceStatusRepository;
 import com.example.demo.repository.PatientDeviceRepository;
 import com.example.demo.repository.PatientRepository;
@@ -26,6 +28,7 @@ import java.util.concurrent.TimeUnit;
 public class DeviceService {
 
     private final DeviceRepository deviceRepo;
+    private final DeviceLocationRepository locationRepo;
     private final DeviceStatusRepository statusRepo;
     private final PatientDeviceRepository patientDeviceRepo;
     private final PatientRepository patientRepo;
@@ -33,12 +36,14 @@ public class DeviceService {
     private final CacheService cacheService;
 
     public DeviceService(DeviceRepository deviceRepo,
+                         DeviceLocationRepository locationRepo,
                          DeviceStatusRepository statusRepo,
                          PatientDeviceRepository patientDeviceRepo,
                          PatientRepository patientRepo,
                          DownlinkManager downlinkManager,
                          CacheService cacheService) {
         this.deviceRepo = deviceRepo;
+        this.locationRepo = locationRepo;
         this.statusRepo = statusRepo;
         this.patientDeviceRepo = patientDeviceRepo;
         this.patientRepo = patientRepo;
@@ -129,6 +134,7 @@ public class DeviceService {
             DeviceStatus status = statusMap.get(device.getId());
             boolean realtimeOnline = onlineImeis.contains(device.getImei());
             dto.fillStatus(status, realtimeOnline);
+            fillLatestLocationAddress(dto, device.getId());
             Patient patient = devicePatientMap.get(device.getId());
             dto.fillPatient(patient);
             return dto;
@@ -167,6 +173,7 @@ public class DeviceService {
             DeviceStatus status = statusMap.get(device.getId());
             boolean realtimeOnline = onlineImeis.contains(device.getImei());
             dto.fillStatus(status, realtimeOnline);
+            fillLatestLocationAddress(dto, device.getId());
             return dto;
         }).toList();
 
@@ -184,6 +191,7 @@ public class DeviceService {
         Optional<DeviceStatus> status = statusRepo.findById(device.getId());
         boolean realtimeOnline = downlinkManager.getOnlineImeis().contains(device.getImei());
         dto.fillStatus(status.orElse(null), realtimeOnline);
+        fillLatestLocationAddress(dto, device.getId());
 
         List<PatientDevice> patientDevices = patientDeviceRepo.findByDeviceId(device.getId());
         if (!patientDevices.isEmpty()) {
@@ -205,6 +213,20 @@ public class DeviceService {
             map.put(status.getDeviceId(), status);
         }
         return map;
+    }
+
+    private void fillLatestLocationAddress(DeviceInfoDto dto, Long deviceId) {
+        if (dto == null || deviceId == null) {
+            return;
+        }
+        List<DeviceLocation> locations = locationRepo.listRecentValid(deviceId, 1);
+        if (locations == null || locations.isEmpty()) {
+            return;
+        }
+        String address = locations.get(0).getAddress();
+        if (address != null && !address.isBlank() && !"[]".equals(address.trim())) {
+            dto.setLastLocationAddress(address.trim());
+        }
     }
 
     /**

@@ -1,0 +1,73 @@
+# ============================================================================
+# Docker build context exclusions
+# ============================================================================
+# Used by both the frontend and backend build stages. Anything that is NOT
+# required to compile demo2.jar should live here.
+
+# VCS / IDE / project metadata
+.git
+.gitignore
+.github
+.idea
+.vscode
+.trae
+.claude
+.gradle
+
+# Build outputs (rebuilt inside the container)
+build/
+target/
+bin/
+
+# Large reference material and tooling not needed at runtime
+android/
+docs/
+devices/
+raw/
+mpband_data/
+lib/
+node/
+
+# Logs and editor scratch
+*.log
+*.iml
+*.swp
+*.swo
+*~
+
+# Local secrets / env files — must NEVER be baked into the image
+.env
+.env.local
+.env.*.local
+
+# Frontend build artefacts (rebuilt in the container)
+frontend/node_modules
+frontend/dist
+frontend/scripts
+frontend/.env
+
+# Pre-built jars (rebuilt in the container).
+# EXCEPT gradle-wrapper.jar which the Docker build needs to run Gradle.
+**/*.jar
+!gradle/wrapper/gradle-wrapper.jar
+
+# Project documentation that doesn't belong in the image
+HELP.md
+AGENTS.md
+CLAUDE.md
+README.md
+DESIGN.md
+LICENSE
+
+# CI / scripts that reference host paths
+auto_commit.ps1
+auto_push.bat
+build-frontend-and-backend.bat
+query
+debug.log
+
+# IMPORTANT: *.sql is intentionally NOT excluded. The Dockerfile copies
+# full_database_schema.sql, database_updates.sql and
+# geo_fence_schema_update.sql from the project root into the runtime
+# image at /docker-entrypoint-initdb.d/, so they must remain in the build
+# context.

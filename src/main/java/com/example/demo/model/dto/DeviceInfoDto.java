@@ -21,6 +21,7 @@ public class DeviceInfoDto {
     private Date lastLocationTime;
     private Double lastLatitude;
     private Double lastLongitude;
+    private String lastLocationAddress;
     private Integer batteryLevel;
     private Date createdAt;
     private Date updatedAt;
@@ -92,6 +93,8 @@ public class DeviceInfoDto {
     public void setLastLatitude(Double lastLatitude) { this.lastLatitude = lastLatitude; }
     public Double getLastLongitude() { return lastLongitude; }
     public void setLastLongitude(Double lastLongitude) { this.lastLongitude = lastLongitude; }
+    public String getLastLocationAddress() { return lastLocationAddress; }
+    public void setLastLocationAddress(String lastLocationAddress) { this.lastLocationAddress = lastLocationAddress; }
     public Integer getBatteryLevel() { return batteryLevel; }
     public void setBatteryLevel(Integer batteryLevel) { this.batteryLevel = batteryLevel; }
     public Date getCreatedAt() { return createdAt; }

@@ -97,7 +97,15 @@ ehthumbs.db
 .cache/
 .claude/
 .env
+.env.*.local
 CODE_REVIEW_REPORT.md
 FEATURE_REVIEW_REPORT.md
 TEST-PLAN.md
 docs/HOOKS.md
+
+# Docker
+# .env.docker is the COMMITTED template; users copy it to .env (which is
+# already gitignored above) and edit. Only the SQL/CNF files under docker/
+# are special-cased because *.sql is otherwise excluded.
+!docker/mysql/init/*.sql
+!docker/mysql/conf.d/*.cnf

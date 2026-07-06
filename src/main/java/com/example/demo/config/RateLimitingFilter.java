@@ -30,20 +30,21 @@ public class RateLimitingFilter implements Filter {
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         HttpServletResponse httpResponse = (HttpServletResponse) response;
 
-        // 只对API请求进行限流
+        // 鍙API璇锋眰杩涜闄愭祦
         if (httpRequest.getRequestURI().startsWith("/api/")) {
             if (rateLimiter.tryAcquire()) {
-                // 允许请求通过
+                // 鍏佽璇锋眰閫氳繃
                 chain.doFilter(request, response);
             } else {
-                // 限流，返回429状态码
+                // 闄愭祦锛岃繑鍥?29鐘舵€佺爜
                 log.warn("Rate limit exceeded for request: {}", httpRequest.getRequestURI());
                 httpResponse.setStatus(429); // SC_TOO_MANY_REQUESTS
+                httpResponse.setHeader("Retry-After", "1");
                 httpResponse.getWriter().write("Rate limit exceeded. Please try again later.");
                 return;
             }
         } else {
-            // 非API请求直接通过
+            // 闈濧PI璇锋眰鐩存帴閫氳繃
             chain.doFilter(request, response);
         }
     }

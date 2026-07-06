@@ -3,6 +3,7 @@ package com.example.demo.controller.api;
 import com.example.demo.model.HealthRecord;
 import com.example.demo.model.dto.PageResponse;
 import com.example.demo.repository.HealthRecordRepository;
+import com.example.demo.repository.PatientDeviceRepository;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
@@ -21,9 +22,11 @@ import java.util.stream.Collectors;
 public class HealthRecordController {
 
     private final HealthRecordRepository repo;
+    private final PatientDeviceRepository patientDeviceRepo;
 
-    public HealthRecordController(HealthRecordRepository repo) {
+    public HealthRecordController(HealthRecordRepository repo, PatientDeviceRepository patientDeviceRepo) {
         this.repo = repo;
+        this.patientDeviceRepo = patientDeviceRepo;
     }
 
     /**
@@ -44,11 +47,11 @@ public class HealthRecordController {
         if (patientId != null) {
             if (dataType != null) {
                 var pageable = PageRequest.of(effectivePage, effectiveSize, Sort.by(Sort.Direction.DESC, "recvTime"));
-                List<HealthRecord> records = repo.findByPatientIdAndDataTypeOrderByRecvTimeDesc(patientId, dataType);
+                List<HealthRecord> records = findRecordsByPatientAndType(patientId, dataType);
                 return ResponseEntity.ok(PageResponse.from(records, records.size(), pageable));
             } else {
                 var pageable = PageRequest.of(effectivePage, effectiveSize, Sort.by(Sort.Direction.DESC, "recvTime"));
-                List<HealthRecord> records = repo.findByPatientIdOrderByRecvTimeDesc(patientId);
+                List<HealthRecord> records = findRecordsByPatient(patientId);
                 return ResponseEntity.ok(PageResponse.from(records, records.size(), pageable));
             }
         } else if (imei != null) {
@@ -79,18 +82,28 @@ public class HealthRecordController {
     @GetMapping("/latest")
     public ResponseEntity<?> getLatestHealthRecords(@RequestParam Long patientId) {
         Map<String, Object> latest = new HashMap<>();
-        String[] types = {"temperature", "heart_rate", "blood_pressure", "spo2", "blood_oxygen"};
-        for (String type : types) {
-            Optional<HealthRecord> record = repo.findTopByPatientIdAndDataTypeOrderByRecvTimeDesc(patientId, type);
+        Map<String, List<String>> typeAliases = new LinkedHashMap<>();
+        typeAliases.put("temperature", List.of("temperature", "body_temperature"));
+        typeAliases.put("heart_rate", List.of("heart_rate"));
+        typeAliases.put("blood_pressure", List.of("blood_pressure"));
+        typeAliases.put("spo2", List.of("spo2", "blood_oxygen"));
+
+        for (Map.Entry<String, List<String>> alias : typeAliases.entrySet()) {
+            Optional<HealthRecord> record = Optional.empty();
+            for (String dataType : alias.getValue()) {
+                record = findLatestByPatientAndType(patientId, dataType);
+                if (record.isPresent()) {
+                    break;
+                }
+            }
             if (record.isPresent()) {
                 HealthRecord r = record.get();
-                Map<String, Object> entry = new HashMap<>();
-                entry.put("value", r.getValue());
-                entry.put("time", r.getRecvTime());
-                entry.put("unit", getUnitForType(type));
-                latest.put(type, entry);
+                Map<String, Object> entry = buildLatestEntry(r, alias.getKey());
+                latest.put(alias.getKey(), entry);
             }
         }
+        putLegacyLatestEntry(latest, patientId, "body_temperature", "temperature");
+        putLegacyLatestEntry(latest, patientId, "blood_oxygen", "spo2");
         return ResponseEntity.ok(latest);
     }
 
@@ -174,12 +187,90 @@ public class HealthRecordController {
 
     private String getUnitForType(String dataType) {
         return switch (dataType) {
-            case "temperature" -> "°C";
+            case "temperature", "body_temperature" -> "°C";
             case "heart_rate" -> "次/分";
             case "blood_pressure" -> "mmHg";
             case "spo2", "blood_oxygen" -> "%";
             default -> "";
         };
+    }
+
+    private Map<String, Object> buildLatestEntry(HealthRecord record, String dataType) {
+        Map<String, Object> entry = new HashMap<>();
+        entry.put("value", record.getValue());
+        entry.put("time", record.getRecvTime());
+        entry.put("unit", getUnitForType(dataType));
+        return entry;
+    }
+
+    private void putLegacyLatestEntry(Map<String, Object> latest, Long patientId, String legacyType, String fallbackKey) {
+        Optional<HealthRecord> legacyRecord = findLatestByPatientAndType(patientId, legacyType);
+        if (legacyRecord.isPresent()) {
+            latest.put(legacyType, buildLatestEntry(legacyRecord.get(), legacyType));
+        } else if (latest.containsKey(fallbackKey)) {
+            latest.put(legacyType, latest.get(fallbackKey));
+        }
+    }
+
+    private List<Long> getBoundDeviceIds(Long patientId) {
+        List<com.example.demo.model.PatientDevice> bindings = patientDeviceRepo.findByPatientId(patientId);
+        if (bindings == null || bindings.isEmpty()) {
+            return List.of();
+        }
+        return bindings.stream()
+                .filter(pd -> pd.getIsActive() == null || pd.getIsActive())
+                .map(pd -> pd.getDeviceId())
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private List<HealthRecord> findRecordsByPatient(Long patientId) {
+        List<HealthRecord> records = new ArrayList<>(repo.findByPatientIdOrderByRecvTimeDesc(patientId));
+        List<Long> deviceIds = getBoundDeviceIds(patientId);
+        if (!deviceIds.isEmpty()) {
+            records.addAll(repo.findByDeviceIdInOrderByRecvTimeDesc(deviceIds).stream()
+                    .filter(r -> r.getPatientId() == null || Objects.equals(r.getPatientId(), patientId))
+                    .toList());
+        }
+        return records.stream()
+                .sorted(Comparator.comparing(HealthRecord::getRecvTime, Comparator.nullsLast(Date::compareTo)).reversed())
+                .toList();
+    }
+
+    private List<HealthRecord> findRecordsByPatientAndType(Long patientId, String dataType) {
+        List<HealthRecord> records = new ArrayList<>(repo.findByPatientIdAndDataTypeOrderByRecvTimeDesc(patientId, dataType));
+        List<Long> deviceIds = getBoundDeviceIds(patientId);
+        if (!deviceIds.isEmpty()) {
+            records.addAll(repo.findByDeviceIdInAndDataTypeOrderByRecvTimeDesc(deviceIds, dataType).stream()
+                    .filter(r -> r.getPatientId() == null || Objects.equals(r.getPatientId(), patientId))
+                    .toList());
+        }
+        return records.stream()
+                .sorted(Comparator.comparing(HealthRecord::getRecvTime, Comparator.nullsLast(Date::compareTo)).reversed())
+                .toList();
+    }
+
+    private Optional<HealthRecord> findLatestByPatientAndType(Long patientId, String dataType) {
+        Optional<HealthRecord> byPatient = repo.findTopByPatientIdAndDataTypeOrderByRecvTimeDesc(patientId, dataType);
+        List<Long> deviceIds = getBoundDeviceIds(patientId);
+        Optional<HealthRecord> byDevice = Optional.empty();
+        if (!deviceIds.isEmpty()) {
+            byDevice = repo.findByDeviceIdInAndDataTypeOrderByRecvTimeDesc(deviceIds, dataType).stream()
+                    .filter(r -> r.getPatientId() == null || Objects.equals(r.getPatientId(), patientId))
+                    .findFirst();
+        }
+        if (byPatient.isEmpty()) {
+            return byDevice;
+        }
+        if (byDevice.isEmpty()) {
+            return byPatient;
+        }
+        Date patientTime = byPatient.get().getRecvTime();
+        Date deviceTime = byDevice.get().getRecvTime();
+        if (patientTime == null) return byDevice;
+        if (deviceTime == null) return byPatient;
+        return deviceTime.after(patientTime) ? byDevice : byPatient;
     }
 
     private Double parseDoubleSafe(String value) {

@@ -22,4 +22,6 @@ public interface HealthRecordRepository extends JpaRepository<HealthRecord, Long
 
     Page<HealthRecord> findByDeviceId(Long deviceId, Pageable pageable);
     List<HealthRecord> findByDeviceIdOrderByRecvTimeDesc(Long deviceId);
+    List<HealthRecord> findByDeviceIdInOrderByRecvTimeDesc(List<Long> deviceIds);
+    List<HealthRecord> findByDeviceIdInAndDataTypeOrderByRecvTimeDesc(List<Long> deviceIds, String dataType);
 }

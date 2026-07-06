@@ -1,0 +1,90 @@
+# ============================================================================
+# Smart Watch Monitoring System — host-network compose stack
+# ============================================================================
+# Single-service compose: the app container uses the host's network stack
+# (`network_mode: host`) so it can connect to the host's already-running
+# MySQL 8.0 via 127.0.0.1:3306. We do NOT run MySQL inside Docker because
+# the upstream image is unreachable from this server's IP range.
+#
+# Why host MySQL?
+#   - mysql-server-8.0 is already installed and running on this host
+#     (see /usr/sbin/mysqld, /etc/mysql/).
+#   - The `smart_watch` schema and `smart_user` account are already
+#     provisioned from a prior deployment, with 20 tables including users,
+#     devices, alarms, fences, patients, etc.
+#   - Saving the data avoids the upstream-image connectivity issue entirely.
+#
+# Ports exposed (because of network_mode: host, these bind directly to the
+# host — DO NOT change without freeing the host port first):
+#   - 8080 : HTTP API + Vue SPA
+#   - 9000 : Netty device comms (mpband)
+#   - 9090 : TCP echo (intentionally NOT opened in UFW by bootstrap.sh)
+#
+# To switch back to a dockerised MySQL later, replace the `app:` block with
+# the previous two-service layout (mysql + app on smart_net) and update
+# DB_URL to jdbc:mysql://mysql:3306/smart_watch.
+# ============================================================================
+
+name: smart-watch
+
+services:
+
+  # -------------------------------------------------------------------------
+  # Application — Spring Boot + embedded Vue SPA
+  # -------------------------------------------------------------------------
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: smart-watch:local
+    container_name: smart-watch-app
+    restart: unless-stopped
+    network_mode: host
+    # SIGTERM grace period — must be > spring.lifecycle.timeout-per-shutdown-phase
+    # (30s, set in application-docker.properties) so the JVM can drain HTTP
+    # requests and close Netty channels cleanly before docker sends SIGKILL.
+    stop_grace_period: 35s
+    stop_signal: SIGTERM
+    environment:
+      # Spring profile activates src/main/resources/application-docker.properties
+      # (ddl-auto=none, actuator exposure, mpband saveDir override).
+      SPRING_PROFILES_ACTIVE: docker
+
+      # Database connection — host MySQL on 127.0.0.1:3306.
+      # The schema, `smart_watch`, and `smart_user` account are already
+      # provisioned (see /usr/sbin/mysqld + SHOW DATABASES).
+      DB_URL: "jdbc:mysql://127.0.0.1:3306/${MYSQL_DATABASE:-smart_watch}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai&characterEncoding=utf8"
+      DB_USERNAME: ${MYSQL_USER:-smart_user}
+      DB_PASSWORD: ${MYSQL_PASSWORD:-smart123}
+
+      # Netty device port (9000) — Spring relaxed binding reads APP_MPBAND_PORT
+      # into @Value("${app.mpband.port}"). Same for the echo TCP port (9090).
+      APP_MPBAND_PORT: ${APP_MPBAND_PORT:-9000}
+      APP_TCP_PORT: ${APP_TCP_PORT:-9090}
+      APP_MPBAND_SAVEDIR: /app/mpband_data
+
+      # Third-party / device secrets.
+      AMAP_WEB_KEY: ${AMAP_WEB_KEY:-}
+      MPBAND_RESPONSE_KEY: ${MPBAND_RESPONSE_KEY:-}
+
+      # Redis cache stays off by default (DefaultCacheService NoOp).
+      APP_CACHE_REDIS_ENABLED: "false"
+
+      TZ: Asia/Shanghai
+
+      # Extra JVM flags appended to JAVA_TOOL_OPTIONS baked into the image.
+      JAVA_OPTS: >-
+        -Duser.timezone=Asia/Shanghai
+        -Dfile.encoding=UTF-8
+    volumes:
+      # Device raw frames and per-device logs survive container restarts.
+      - mpband_data:/app/mpband_data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 120s
+
+volumes:
+  mpband_data:

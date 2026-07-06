@@ -253,13 +253,17 @@
                   heart_rate: '心率',
                   blood_pressure: '血压',
                   spo2: '血氧'
-                }[scope.row.dataType] || scope.row.dataType }}
+                }[normalizeHealthDataType(scope.row.dataType)] || scope.row.dataType }}
               </template>
             </el-table-column>
             <el-table-column prop="value" label="数值" width="120" />
             <el-table-column prop="unit" label="单位" width="80" />
             <el-table-column prop="deviceId" label="设备ID" width="120" />
-            <el-table-column prop="time" label="记录时间" width="180" :formatter="formatDate" />
+            <el-table-column label="记录时间" width="180">
+              <template #default="scope">
+                {{ formatDate(getHealthRecordTime(scope.row)) }}
+              </template>
+            </el-table-column>
           </el-table>
         </el-card>
       </div>
@@ -533,9 +537,10 @@ const processHealthRecordsForChart = (records) => {
   }
   
   records.forEach(record => {
-    if (groupedData[record.dataType]) {
-      groupedData[record.dataType].push({
-        time: formatBeijingTime(record.time),
+    const dataType = normalizeHealthDataType(record.dataType)
+    if (groupedData[dataType]) {
+      groupedData[dataType].push({
+        time: formatBeijingTime(record.recvTime || record.time || record.createdAt),
         value: parseFloat(record.value)
       })
     }
@@ -552,12 +557,32 @@ const processHealthRecordsForChart = (records) => {
   spo2ChartData.value = groupedData.spo2
 }
 
+const normalizeHealthDataType = (dataType) => {
+  const aliases = {
+    body_temperature: 'temperature',
+    blood_oxygen: 'spo2'
+  }
+  return aliases[dataType] || dataType
+}
+
+const getHealthRecordTime = (record) => {
+  return record.recvTime || record.time || record.createdAt
+}
+
+const extractPageContent = (data) => {
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.content)) return data.content
+  if (Array.isArray(data?.data?.content)) return data.data.content
+  if (Array.isArray(data?.data)) return data.data
+  return []
+}
+
 // 获取健康记录
 const fetchHealthRecords = async (patientId) => {
   healthLoading.value = true
   try {
     const data = await healthApi.getHealthRecords(patientId, 20, 0)
-    healthRecords.value = Array.isArray(data) ? data : data.data || []
+    healthRecords.value = extractPageContent(data)
     // 处理健康记录，生成图表数据
     processHealthRecordsForChart(healthRecords.value)
   } catch (error) {

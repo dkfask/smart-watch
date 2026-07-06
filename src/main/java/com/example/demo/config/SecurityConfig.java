@@ -35,6 +35,11 @@ public class SecurityConfig {
             // 添加速率限制过滤器
             .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
             .authorizeHttpRequests(auth -> auth
+                // 放行 actuator health/info（Docker healthcheck 需要）
+                .requestMatchers(
+                    "/actuator/health", "/actuator/health/**",
+                    "/actuator/info", "/actuator/info/**"
+                ).permitAll()
                 // 放行页面与静态资源，避免在 forward 到 index.html 时被安全过滤器再次重定向到 /login
                 // 注意：不能在 PathPatternParser 下使用像 "/**/*.js" 这样的模式（"**" 后不能接额外数据），
                 // 否则运行时会抛出 PatternParseException: "No more pattern data allowed after {*...} or ** pattern element"。
