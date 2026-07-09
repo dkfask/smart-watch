@@ -3,8 +3,10 @@ package com.example.demo.service;
 import com.example.demo.model.Alarm;
 import com.example.demo.model.Device;
 import com.example.demo.model.HealthRecord;
+import com.example.demo.model.HeartbeatRecord;
 import com.example.demo.model.Patient;
 import com.example.demo.repository.DeviceRepository;
+import com.example.demo.repository.HeartbeatRecordRepository;
 import com.example.demo.repository.PatientRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -28,12 +31,13 @@ class HealthMonitorServiceTest {
     @Mock private AlarmService alarmService;
     @Mock private DeviceRepository deviceRepository;
     @Mock private PatientRepository patientRepository;
+    @Mock private HeartbeatRecordRepository heartbeatRecordRepository;
 
     private HealthMonitorService healthMonitorService;
 
     @BeforeEach
     void setUp() {
-        healthMonitorService = new HealthMonitorService(alarmService, deviceRepository, patientRepository);
+        healthMonitorService = new HealthMonitorService(alarmService, deviceRepository, patientRepository, heartbeatRecordRepository);
     }
 
     // === 血压测试 ===
@@ -238,6 +242,21 @@ class HealthMonitorServiceTest {
     @Test
     void checkHealthData_bodyTemperature_normal_noAlarm() {
         HealthRecord record = buildHealthRecord("body_temperature", "36.8");
+
+        healthMonitorService.checkHealthData(record);
+
+        verify(alarmService, never()).createAlarm(any());
+    }
+
+    @Test
+    void checkHealthData_bodyTemperature_abnormalButNotWorn_noAlarm() {
+        HealthRecord record = buildHealthRecord("body_temperature", "35.0");
+        record.setImei("359999000000001");
+        HeartbeatRecord wearStatus = new HeartbeatRecord();
+        wearStatus.setImei("359999000000001");
+        wearStatus.setRawPayload("{wear_flag=0, timestamp=2026-07-09 09:00:00}");
+        when(heartbeatRecordRepository.findByImeiOrderByRecvTimeDesc("359999000000001"))
+                .thenReturn(List.of(wearStatus));
 
         healthMonitorService.checkHealthData(record);
 

@@ -303,8 +303,9 @@ public class PacketProcessor {
 
     /** 处理 APWR 佩戴状态 */
     private void handleApWr(String payload, String clientInfo, String imei) {
-        Map<String, String> params = parseKeyValueParams(payload);
-        if (imei != null) params.put("imei", imei);
+        Map<String, String> params = parseWearStatusPayload(payload, imei);
+        String effectiveImei = params.getOrDefault("imei", imei);
+        saveHeartbeatData(params, effectiveImei);
     }
 
     // --------------------------- 数据保存方法 ---------------------------
@@ -534,6 +535,41 @@ public class PacketProcessor {
             m.put("raw", s);
         }
         return m;
+    }
+
+    private Map<String, String> parseWearStatusPayload(String payload, String socketImei) {
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("protocol", "APWR");
+
+        String normalizedPayload = payload == null ? "" : payload.trim();
+        if (normalizedPayload.startsWith(",")) {
+            normalizedPayload = normalizedPayload.substring(1).trim();
+        }
+        params.put("raw_payload", normalizedPayload);
+
+        if (normalizedPayload.contains("=")) {
+            params.putAll(parseKeyValueParams(normalizedPayload));
+        } else if (!normalizedPayload.isEmpty()) {
+            String[] parts = normalizedPayload.split(",", 3);
+            int index = 0;
+            if (parts.length > 0 && parts[0].trim().matches("\\d{15}")) {
+                params.put("imei", parts[0].trim());
+                index = 1;
+            } else if (socketImei != null && !socketImei.isBlank()) {
+                params.put("imei", socketImei);
+            }
+            if (parts.length > index) {
+                params.put("wear_flag", parts[index].trim());
+            }
+            if (parts.length > index + 1) {
+                params.put("timestamp", parts[index + 1].trim());
+            }
+        }
+
+        if (!params.containsKey("imei") && socketImei != null && !socketImei.isBlank()) {
+            params.put("imei", socketImei);
+        }
+        return params;
     }
 
     private Map<String, String> parseHealthPayload(String payload, Map<String, String> packetParams, String protocol) {
