@@ -1246,14 +1246,31 @@ public class MpbandServer implements SmartLifecycle {
         }
         
         // 去掉开头 'IW' + 协议号 'APxx' (共6位) 后再查找 15 位数字
+        // Only accept an IMEI when it is the explicit first payload field.
+        // AP01 location frames contain GPS/status digits such as
+        // "...2330.3806700601500008"; scanning the whole payload can mistake
+        // that status block for an IMEI and auto-create bogus devices.
         String s = raw;
         if (s.startsWith("IW") && s.length() > 6) {
             int end = s.endsWith(END_MARKER) ? s.length() - 1 : s.length();
             s = s.substring(6, end);
         }
+        if (s.startsWith(",")) {
+            s = s.substring(1);
+        }
+        int fieldEnd = s.length();
+        int comma = s.indexOf(',');
+        if (comma >= 0) {
+            fieldEnd = comma;
+        }
+        int amp = s.indexOf('&');
+        if (amp >= 0 && amp < fieldEnd) {
+            fieldEnd = amp;
+        }
+        String firstField = s.substring(0, fieldEnd).trim();
         
-        Matcher m = IMEI_PATTERN.matcher(s);
-        if (m.find()) {
+        Matcher m = IMEI_PATTERN.matcher(firstField);
+        if (m.matches()) {
             String imei = m.group(0);
             
             // 额外检查：确保提取的IMEI是有效的
