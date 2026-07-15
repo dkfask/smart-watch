@@ -194,45 +194,36 @@
             <!-- 体温趋势图 -->
             <el-tab-pane label="体温" name="temperature">
               <div class="chart-container">
-                <el-chart :height="300" :data="temperatureChartData">
-                  <el-line :x-field="'time'" :y-field="'value'" :smooth="true">
-                    <el-tooltip :show-markers="true" :show-content="true" />
-                    <el-line-style :color="'#ff6b6b'" />
-                  </el-line>
-                  <el-axis :orient="'left'" :title="'体温 (°C)'" />
-                  <el-axis :orient="'bottom'" :title="'时间'" :label-rotate="45" />
-                  <el-grid />
-                </el-chart>
+                <HealthTrendChart
+                  :data="temperatureChartData"
+                  title="体温"
+                  unit="°C"
+                  color="#ff6b6b"
+                />
               </div>
             </el-tab-pane>
             
             <!-- 心率趋势图 -->
             <el-tab-pane label="心率" name="heart_rate">
               <div class="chart-container">
-                <el-chart :height="300" :data="heartRateChartData">
-                  <el-line :x-field="'time'" :y-field="'value'" :smooth="true">
-                    <el-tooltip :show-markers="true" :show-content="true" />
-                    <el-line-style :color="'#4ecdc4'" />
-                  </el-line>
-                  <el-axis :orient="'left'" :title="'心率 (次/分)'" />
-                  <el-axis :orient="'bottom'" :title="'时间'" :label-rotate="45" />
-                  <el-grid />
-                </el-chart>
+                <HealthTrendChart
+                  :data="heartRateChartData"
+                  title="心率"
+                  unit="次/分"
+                  color="#4ecdc4"
+                />
               </div>
             </el-tab-pane>
             
             <!-- 血氧趋势图 -->
             <el-tab-pane label="血氧" name="spo2">
               <div class="chart-container">
-                <el-chart :height="300" :data="spo2ChartData">
-                  <el-line :x-field="'time'" :y-field="'value'" :smooth="true">
-                    <el-tooltip :show-markers="true" :show-content="true" />
-                    <el-line-style :color="'#95e1d3'" />
-                  </el-line>
-                  <el-axis :orient="'left'" :title="'血氧饱和度 (%)'" />
-                  <el-axis :orient="'bottom'" :title="'时间'" :label-rotate="45" />
-                  <el-grid />
-                </el-chart>
+                <HealthTrendChart
+                  :data="spo2ChartData"
+                  title="血氧"
+                  unit="%"
+                  color="#95e1d3"
+                />
               </div>
             </el-tab-pane>
           </el-tabs>
@@ -282,6 +273,7 @@ import { useRouter } from 'vue-router'
 import { patientApi } from '../api/patient'
 import { deviceApi } from '../api/device'
 import { healthApi } from '../api/health'
+import HealthTrendChart from '../components/HealthTrendChart.vue'
 import { isPatientMonitored } from '../utils/monitoring.mjs'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { formatBeijingTime } from '../utils/time'
@@ -538,17 +530,23 @@ const processHealthRecordsForChart = (records) => {
   
   records.forEach(record => {
     const dataType = normalizeHealthDataType(record.dataType)
-    if (groupedData[dataType]) {
+    const recordTime = record.recvTime || record.time || record.createdAt
+    const value = Number.parseFloat(record.value)
+    const timestamp = recordTime ? new Date(recordTime).getTime() : NaN
+    if (groupedData[dataType] && Number.isFinite(value) && Number.isFinite(timestamp)) {
       groupedData[dataType].push({
-        time: formatBeijingTime(record.recvTime || record.time || record.createdAt),
-        value: parseFloat(record.value)
+        time: formatBeijingTime(recordTime),
+        value,
+        timestamp
       })
     }
   })
   
   // 按时间排序
   Object.keys(groupedData).forEach(key => {
-    groupedData[key].sort((a, b) => new Date(a.time) - new Date(b.time))
+    groupedData[key] = groupedData[key]
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .map(({ timestamp, ...item }) => item)
   })
   
   // 将处理后的数据赋值给图表数据
@@ -558,11 +556,16 @@ const processHealthRecordsForChart = (records) => {
 }
 
 const normalizeHealthDataType = (dataType) => {
+  const normalized = String(dataType || '').trim().toLowerCase()
   const aliases = {
     body_temperature: 'temperature',
-    blood_oxygen: 'spo2'
+    temperature: 'temperature',
+    blood_oxygen: 'spo2',
+    spo2: 'spo2',
+    heart_rate: 'heart_rate',
+    heartrate: 'heart_rate'
   }
-  return aliases[dataType] || dataType
+  return aliases[normalized] || normalized
 }
 
 const getHealthRecordTime = (record) => {
