@@ -61,7 +61,12 @@
         <div class="illustration-content">
           <div class="illustration-title">智能手环定位系统</div>
           <div class="illustration-subtitle">实时定位 · 智能监控 · 数据分析</div>
-          <div class="illustration-image"></div>
+          <div class="illustration-image">
+            <img
+              :src="loginIllustration"
+              alt="成都东软学院与南江镇市第三人民医院联合标识"
+            />
+          </div>
           <div class="illustration-features">
             <div class="feature-item">
               <div class="feature-icon"></div>
@@ -87,6 +92,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { ElMessage } from 'element-plus'
+import loginIllustration from '../assets/images/Merged_Fastboot_Logo_240x240_8bpp.bmp?url'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -367,11 +373,10 @@ const handleLogin = async () => {
 }
 
 .illustration-image {
-  width: 300px;
-  height: 200px;
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  position: relative;
+  width: 240px;
+  height: 240px;
+  background-color: #000;
+  border-radius: 8px;
   overflow: hidden;
   display: flex;
   justify-content: center;
@@ -379,13 +384,11 @@ const handleLogin = async () => {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
 }
 
-.illustration-image::before {
-  content: '';
-  position: absolute;
+.illustration-image img {
   width: 100%;
   height: 100%;
-  background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
-  opacity: 0.6;
+  display: block;
+  object-fit: contain;
 }
 
 .illustration-features {
@@ -439,7 +442,7 @@ const handleLogin = async () => {
 
   .right-section {
     grid-row: 1;
-    min-height: 300px;
+    min-height: 500px;
   }
 
   .login-card {
@@ -460,8 +463,8 @@ const handleLogin = async () => {
   }
 
   .illustration-image {
-    width: 250px;
-    height: 160px;
+    width: 180px;
+    height: 180px;
   }
 
   .illustration-features {
