@@ -70,8 +70,12 @@ api.interceptors.response.use(
           ElMessage.error(`权限不足: ${message}`)
           break
         case 404:
-          console.error('资源不存在:', data)
-          ElMessage.error(`资源不存在: ${message}`)
+          // 最新位置暂时没有历史记录时，后端会返回 404；这是可处理的空状态，
+          // 由 locationApi 的统一错误处理和页面设备状态回退逻辑接管，不弹错误提示。
+          if (!isLatestLocationRequest(error.config?.url)) {
+            console.error('资源不存在:', data)
+            ElMessage.error(`资源不存在: ${message}`)
+          }
           break
         case 500:
           console.error('服务器内部错误:', data)
@@ -101,3 +105,11 @@ api.interceptors.response.use(
 )
 
 export default api
+
+const isLatestLocationRequest = (url = '') => {
+  const normalized = url.startsWith('/api') ? url.slice(4) : url
+  return normalized.includes('/locations/device/') &&
+    (normalized.includes('/latest') ||
+      normalized.includes('/latest-with-amap') ||
+      normalized.includes('/latest-with-address'))
+}

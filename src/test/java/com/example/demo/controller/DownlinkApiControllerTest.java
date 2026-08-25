@@ -21,6 +21,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.time.Instant;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -105,7 +106,7 @@ class DownlinkApiControllerTest {
         record.setImei("355932600124999");
         record.setLatitude(30.886866);
         record.setLongitude(103.594415);
-        record.setRecvTime(new Date());
+        record.setRecvTime(Date.from(Instant.parse("2026-06-03T08:00:00Z")));
         when(locationRecordRepository.findByImeiOrderByRecvTimeDesc("355932600124999")).thenReturn(List.of(record));
 
         mockMvc.perform(get("/api/downlink/history-track")

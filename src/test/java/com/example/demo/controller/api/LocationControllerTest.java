@@ -1,7 +1,9 @@
 package com.example.demo.controller.api;
 
 import com.example.demo.model.DeviceLocation;
+import com.example.demo.model.DeviceStatus;
 import com.example.demo.repository.DeviceLocationRepository;
+import com.example.demo.repository.DeviceStatusRepository;
 import com.example.demo.service.AmapLocationService;
 import com.example.demo.service.TrackingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,8 +21,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.when;
@@ -46,6 +50,7 @@ class LocationControllerTest {
     @Autowired private ObjectMapper objectMapper;
     @MockBean private TrackingService trackingService;
     @MockBean private DeviceLocationRepository locationRepo;
+    @MockBean private DeviceStatusRepository deviceStatusRepo;
     @MockBean private AmapLocationService amapLocationService;
     @MockBean private RateLimiter rateLimiter;
 
@@ -101,7 +106,7 @@ class LocationControllerTest {
         dl.setDeviceId(1L);
         dl.setLatitude(BigDecimal.valueOf(39.9));
         dl.setLongitude(BigDecimal.valueOf(116.4));
-        when(locationRepo.listRecent(1L, 20, 0)).thenReturn(List.of(dl));
+        when(locationRepo.listRecentValid(1L, 1)).thenReturn(List.of(dl));
 
         mockMvc.perform(get("/api/locations/device/1/latest"))
                 .andExpect(status().isOk());
@@ -112,7 +117,7 @@ class LocationControllerTest {
      */
     @Test
     void latest_notFound_returns404() throws Exception {
-        when(locationRepo.listRecent(1L, 20, 0)).thenReturn(Collections.emptyList());
+        when(locationRepo.listRecentValid(1L, 1)).thenReturn(Collections.emptyList());
 
         mockMvc.perform(get("/api/locations/device/1/latest"))
                 .andExpect(status().isNotFound());
@@ -128,7 +133,7 @@ class LocationControllerTest {
         dl.setImei("IMEI001");
         dl.setLatitude(BigDecimal.valueOf(39.9));
         dl.setLongitude(BigDecimal.valueOf(116.4));
-        when(locationRepo.listRecent(1L, 20, 0)).thenReturn(List.of(dl));
+        when(locationRepo.listRecentValid(1L, 1)).thenReturn(List.of(dl));
         when(amapLocationService.regeoAddress(39.9, 116.4)).thenReturn("\u5317\u4eac\u5e02\u4e1c\u57ce\u533a");
 
         mockMvc.perform(get("/api/locations/device/1/latest-with-address"))
@@ -166,7 +171,7 @@ class LocationControllerTest {
         valid.setLongitude(BigDecimal.valueOf(103.594415));
         valid.setAddress("\u56db\u5ddd\u7701\u6210\u90fd\u5e02\u90fd\u6c5f\u5830\u5e02\u9752\u57ce\u5c71\u9547\u6210\u90fd\u4e1c\u8f6f\u5b66\u9662C5\u5ea7");
 
-        when(locationRepo.listRecent(1L, 20, 0)).thenReturn(List.of(invalid, valid));
+        when(locationRepo.listRecentValid(1L, 1)).thenReturn(List.of(valid));
 
         mockMvc.perform(get("/api/locations/device/1/latest-with-address"))
                 .andExpect(status().isOk())
@@ -193,6 +198,30 @@ class LocationControllerTest {
                 .andExpect(jsonPath("$.data.batteryLevel").value(53))
                 .andExpect(jsonPath("$.data.latitude").value(0))
                 .andExpect(jsonPath("$.data.longitude").value(0));
+    }
+
+    @Test
+    void latestWithAmap_usesDeviceStatusWhenLocationRecordsAreMissing() throws Exception {
+        DeviceStatus status = new DeviceStatus();
+        status.setDeviceId(15L);
+        status.setImei("355932600124999");
+        status.setLastLatitude(30.886817);
+        status.setLastLongitude(103.594445);
+        status.setLastLocationTime(new Date());
+        status.setBatteryLevel(61);
+
+        when(locationRepo.listRecentValid(15L, 1)).thenReturn(Collections.emptyList());
+        when(locationRepo.listRecent(15L, 1, 0)).thenReturn(Collections.emptyList());
+        when(deviceStatusRepo.findById(15L)).thenReturn(Optional.of(status));
+        when(amapLocationService.regeoAddress(30.886817, 103.594445))
+                .thenReturn("四川省成都市都江堰市青城山镇成都东软学院");
+
+        mockMvc.perform(get("/api/locations/device/15/latest-with-amap"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.latitude").value(30.886817))
+                .andExpect(jsonPath("$.data.longitude").value(103.594445))
+                .andExpect(jsonPath("$.data.batteryLevel").value(61))
+                .andExpect(jsonPath("$.data.source").value("device-status"));
     }
 
     /**

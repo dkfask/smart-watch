@@ -332,13 +332,25 @@ const fetchPatientDetail = async () => {
 const fetchLatestLocation = async (deviceId = device.value?.id) => {
   if (!deviceId) return
 
+  const fallbackLocation = normalizeLocation({
+    latitude: device.value?.lastLatitude,
+    longitude: device.value?.lastLongitude,
+    address: device.value?.lastLocationAddress,
+    time: device.value?.lastLocationTime,
+    batteryLevel: device.value?.batteryLevel,
+    source: 'device-status'
+  })
+
   try {
     const loc = await locationApi.getLatestLocationWithAmap(deviceId)
-    latestLocation.value = normalizeLocation(loc)
+    latestLocation.value = normalizeLocation(loc) || fallbackLocation
     await nextTick()
     renderPatientMap()
   } catch (e) {
-    // 位置获取失败不影响病人详情展示。
+    // 没有 location_records 时，使用设备状态中的最后位置继续展示详情。
+    latestLocation.value = fallbackLocation
+    await nextTick()
+    renderPatientMap()
   }
 }
 

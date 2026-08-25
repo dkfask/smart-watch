@@ -3,6 +3,7 @@ package com.example.demo.controller.api;
 import com.example.demo.model.DeviceLocation;
 import com.example.demo.model.dto.PageResponse;
 import com.example.demo.repository.DeviceLocationRepository;
+import com.example.demo.repository.DeviceStatusRepository;
 import com.example.demo.service.AmapLocationService;
 import com.example.demo.service.TrackingService;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import java.math.BigDecimal;
 import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Map;
@@ -23,11 +25,16 @@ import java.util.Map;
 public class LocationController {
     private final TrackingService trackingService;
     private final DeviceLocationRepository locationRepo;
+    private final DeviceStatusRepository deviceStatusRepo;
     private final AmapLocationService amapLocationService;
 
-    public LocationController(TrackingService trackingService, DeviceLocationRepository locationRepo, AmapLocationService amapLocationService) {
+    public LocationController(TrackingService trackingService,
+                              DeviceLocationRepository locationRepo,
+                              DeviceStatusRepository deviceStatusRepo,
+                              AmapLocationService amapLocationService) {
         this.trackingService = trackingService;
         this.locationRepo = locationRepo;
+        this.deviceStatusRepo = deviceStatusRepo;
         this.amapLocationService = amapLocationService;
     }
 
@@ -135,8 +142,13 @@ public class LocationController {
         if (dl == null || dl.getLatitude() == null || dl.getLongitude() == null) {
             return false;
         }
-        double lat = dl.getLatitude().doubleValue();
-        double lng = dl.getLongitude().doubleValue();
+        return hasValidCoordinate(dl.getLatitude().doubleValue(), dl.getLongitude().doubleValue());
+    }
+
+    private static boolean hasValidCoordinate(Double lat, Double lng) {
+        if (lat == null || lng == null) {
+            return false;
+        }
         return lat >= -90 && lat <= 90 &&
                 lng >= -180 && lng <= 180 &&
                 !(Double.compare(lat, 0.0) == 0 && Double.compare(lng, 0.0) == 0);
@@ -188,13 +200,42 @@ public class LocationController {
     @GetMapping("/device/{deviceId}/latest-with-amap")
     public ResponseEntity<DeviceLocationDto> latestWithAmap(@PathVariable long deviceId) {
         DeviceLocation dl = latestValidLocation(deviceId);
-        if (dl == null) {
-            dl = latestAnyLocation(deviceId);
+        if (dl != null) {
+            return ResponseEntity.ok(toDto(dl, true));
         }
-        if (dl == null) {
-            return ResponseEntity.notFound().build();
+
+        // 设备状态表保存了最新一次定位，但历史 location_records 可能因清理、迁移或旧版本
+        // 数据链路缺失而为空。此时仍应返回设备状态中的位置，避免详情页误报 404。
+        DeviceLocationDto statusLocation = latestStatusLocation(deviceId);
+        if (statusLocation != null) {
+            return ResponseEntity.ok(statusLocation);
         }
-        return ResponseEntity.ok(toDto(dl, hasValidCoordinate(dl)));
+
+        // 保留旧数据兼容行为：只有无效坐标记录时，仍返回最近记录供前端展示电量等信息。
+        dl = latestAnyLocation(deviceId);
+        return dl == null ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok(toDto(dl, hasValidCoordinate(dl)));
+    }
+
+    private DeviceLocationDto latestStatusLocation(long deviceId) {
+        var status = deviceStatusRepo.findById(deviceId).orElse(null);
+        if (status == null || !hasValidCoordinate(status.getLastLatitude(), status.getLastLongitude())) {
+            return null;
+        }
+
+        double latitude = status.getLastLatitude();
+        double longitude = status.getLastLongitude();
+        DeviceLocationDto dto = new DeviceLocationDto();
+        dto.setDeviceId(deviceId);
+        dto.setImei(status.getImei());
+        dto.setLatitude(latitude);
+        dto.setLongitude(longitude);
+        dto.setTime(status.getLastLocationTime() == null ? null
+                : LocalDateTime.ofInstant(status.getLastLocationTime().toInstant(), ZoneId.systemDefault()));
+        dto.setSource("device-status");
+        dto.setBatteryLevel(status.getBatteryLevel());
+        dto.setAddress(normalizeAddress(amapLocationService.regeoAddress(latitude, longitude)));
+        return dto;
     }
 
     private DeviceLocationDto toDto(DeviceLocation dl, boolean resolveAddress) {
