@@ -98,7 +98,7 @@ UFW 是服务器内的防火墙，**云控制台的安全组/网络 ACL 是服�
 在阿里云 / AWS / 腾讯云控制台：
 
 - **入站**：放行 22（限定你的 IP 或公司 IP 段）、8080（公网）、9000（公网）。
-- **出站**：默认全放行（应用需要拉镜像、调用高德 API）。
+- **出站**：默认全放行（应用需要拉镜像、调用天地图 API 等）。
 - **3306**：**绝对不要**开（数据库仅容器内部访问）。
 - **9090**：不开。
 
@@ -155,11 +155,11 @@ docker compose -C ~/smart-watch exec mysql \
 docker compose -C ~/smart-watch restart app
 ```
 
-### 9. AMAP / MPBAND 密钥
+### 9. TIANDITU / MPBAND 密钥
 
-`AMAP_WEB_KEY` 和 `MPBAND_RESPONSE_KEY` 写在 `.env` 中。如果不小心提交了：
+`TIANDITU_KEY` 和 `MPBAND_RESPONSE_KEY` 写在 `.env` 中。如果不小心提交了：
 
-1. 立即在高德 / 设备控制台撤销该密钥。
+1. 立即在天地图 / 设备控制台撤销该密钥。
 2. 申请新密钥。
 3. 改 `.env`。
 4. `docker compose up -d app`。
@@ -272,7 +272,7 @@ docker events --since='24h' --until='0m'
 - [ ] 云控制台安全组最小化（不开 3306）
 - [ ] MySQL 端口在宿主机 127.0.0.1 而非 0.0.0.0
 - [ ] `.env` 权限 600
-- [ ] AMAP / MPBAND / JWT 密钥已轮换
+- [ ] TIANDITU / MPBAND / JWT 密钥已轮换
 - [ ] admin 默认密码已修改
 - [ ] 健康检查日志接入告警（Slack / 邮件）
 - [ ] 自动备份 cron 已部署

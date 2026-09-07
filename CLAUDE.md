@@ -256,16 +256,18 @@ gradlew.bat test jacocoTestReport -PskipFrontend=true
 | `spring.datasource.password` | `root` | Database password |
 | `app.mpband.port` | `9000` | Device communication port (Netty) |
 | `app.mpband.maxFrameLength` | `4096` | Max device message size |
+| `app.ai.api-key` | (set via env `AI_API_KEY`) | LLM key for the AI assistant; empty disables it (OpenAI-compatible, default DeepSeek) |
+| `app.ai.base-url` / `app.ai.model` | `https://api.deepseek.com` / `deepseek-chat` | AI provider endpoint and model (env `AI_BASE_URL` / `AI_MODEL`) |
+| `tianditu.key` | (set via env `TIANDITU_KEY`) | Tianditu token for Leaflet vector map and geocoding |
 | `server.compression.enabled` | `true` | Gzip compression |
 | `app.jwt.secret` | (set via env) | JWT signing key (never hardcode) |
-| `app.api.key` | (set via env) | Third-party API key (Amap, etc.) |
 
 **Environment Variables** (override properties):
 ```bash
 export SPRING_DATASOURCE_URL=jdbc:mysql://prod-db:3306/smart
 export SPRING_DATASOURCE_PASSWORD=secure_pwd
 export APP_JWT_SECRET=your_jwt_secret
-export APP_AMAP_API_KEY=your_amap_key
+export TIANDITU_KEY=your_tianditu_key
 ```
 
 ### Frontend (frontend/.env)
@@ -436,7 +438,7 @@ Key routing rules:
 完整容器化部署说明：[docker/README.md](docker/README.md)。
 
 ```bash
-cp .env.docker .env       # 编辑密码/端口/AMAP key
+cp .env.docker .env       # 编辑密码/端口/天地图 Token
 docker compose build      # 首次构建 ~5-10 分钟
 docker compose up -d      # 后台启动两个服务
 docker compose ps         # 等 mysql 与 app 都进入 healthy

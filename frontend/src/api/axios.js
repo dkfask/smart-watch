@@ -110,6 +110,5 @@ const isLatestLocationRequest = (url = '') => {
   const normalized = url.startsWith('/api') ? url.slice(4) : url
   return normalized.includes('/locations/device/') &&
     (normalized.includes('/latest') ||
-      normalized.includes('/latest-with-amap') ||
       normalized.includes('/latest-with-address'))
 }

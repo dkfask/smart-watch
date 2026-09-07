@@ -115,6 +115,7 @@ import { locationApi } from '../api/location'
 import { fenceApi } from '../api/fence'
 import { ElMessage } from 'element-plus'
 import { formatBeijingTime } from '../utils/time'
+import { addTiandituToMap } from '../utils/tianditu'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -386,11 +387,8 @@ const fetchHistoryLocations = async () => {
 const initMap = () => {
   map = L.map('history-map').setView([39.9042, 116.4074], 10) // 默认北京
 
-  // 添加瓦片图层（使用高德地图作为备用）
-  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
-    subdomains: ['1', '2', '3', '4'],
-    attribution: '© 高德地图'
-  }).addTo(map)
+  // 添加天地图图层
+  addTiandituToMap(map)
 }
 
 // 更新地图

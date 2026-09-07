@@ -6,8 +6,8 @@ import com.example.demo.repository.HealthRecordRepository;
 import com.example.demo.repository.HeartbeatRecordRepository;
 import com.example.demo.repository.LocationRecordRepository;
 import com.example.demo.repository.PatientDeviceRepository;
-import com.example.demo.service.AmapLocationService;
 import com.example.demo.service.HealthMonitorService;
+import com.example.demo.service.TiandituLocationService;
 import com.example.demo.service.TrackingService;
 import com.example.demo.socket.downlink.DownlinkManager;
 import org.junit.jupiter.api.Test;
@@ -50,7 +50,7 @@ class MpbandServerImeiExtractionTest {
                 mock(HealthRecordRepository.class),
                 mock(PatientDeviceRepository.class),
                 mock(DeviceStatusRepository.class),
-                mock(AmapLocationService.class),
+                mock(TiandituLocationService.class),
                 mock(HealthMonitorService.class),
                 mock(TrackingService.class)
         );

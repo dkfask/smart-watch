@@ -30,9 +30,9 @@ export const locationApi = {
       .catch(handleApiError)
   },
 
-  // 获取设备最新位置（带高德地址）
-  getLatestLocationWithAmap(deviceId) {
-    return api.get(`/locations/device/${deviceId}/latest-with-amap`)
+  // 获取设备最新位置（带详细地址）
+  getLatestLocationWithAddress(deviceId) {
+    return api.get(`/locations/device/${deviceId}/latest-with-address`)
       .then(handleApiResponse)
       .catch(handleApiError)
   },

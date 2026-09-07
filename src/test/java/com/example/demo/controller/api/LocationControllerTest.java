@@ -4,7 +4,7 @@ import com.example.demo.model.DeviceLocation;
 import com.example.demo.model.DeviceStatus;
 import com.example.demo.repository.DeviceLocationRepository;
 import com.example.demo.repository.DeviceStatusRepository;
-import com.example.demo.service.AmapLocationService;
+import com.example.demo.service.TiandituLocationService;
 import com.example.demo.service.TrackingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.util.concurrent.RateLimiter;
@@ -51,7 +51,7 @@ class LocationControllerTest {
     @MockBean private TrackingService trackingService;
     @MockBean private DeviceLocationRepository locationRepo;
     @MockBean private DeviceStatusRepository deviceStatusRepo;
-    @MockBean private AmapLocationService amapLocationService;
+    @MockBean private TiandituLocationService tiandituLocationService;
     @MockBean private RateLimiter rateLimiter;
 
     /**
@@ -134,7 +134,7 @@ class LocationControllerTest {
         dl.setLatitude(BigDecimal.valueOf(39.9));
         dl.setLongitude(BigDecimal.valueOf(116.4));
         when(locationRepo.listRecentValid(1L, 1)).thenReturn(List.of(dl));
-        when(amapLocationService.regeoAddress(39.9, 116.4)).thenReturn("\u5317\u4eac\u5e02\u4e1c\u57ce\u533a");
+        when(tiandituLocationService.regeoAddress(39.9, 116.4)).thenReturn("\u5317\u4eac\u5e02\u4e1c\u57ce\u533a");
 
         mockMvc.perform(get("/api/locations/device/1/latest-with-address"))
                 .andExpect(status().isOk());
@@ -181,7 +181,7 @@ class LocationControllerTest {
     }
 
     @Test
-    void latestWithAmap_returnsLatestRecordWhenOnlyInvalidCoordinateExists() throws Exception {
+    void latestWithAddress_returnsLatestRecordWhenOnlyInvalidCoordinateExists() throws Exception {
         DeviceLocation invalid = new DeviceLocation();
         invalid.setDeviceId(15L);
         invalid.setImei("355932600124999");
@@ -193,7 +193,7 @@ class LocationControllerTest {
         when(locationRepo.listRecent(15L, 20, 0)).thenReturn(List.of(invalid));
         when(locationRepo.listRecent(15L, 1, 0)).thenReturn(List.of(invalid));
 
-        mockMvc.perform(get("/api/locations/device/15/latest-with-amap"))
+        mockMvc.perform(get("/api/locations/device/15/latest-with-address"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.batteryLevel").value(53))
                 .andExpect(jsonPath("$.data.latitude").value(0))
@@ -201,7 +201,7 @@ class LocationControllerTest {
     }
 
     @Test
-    void latestWithAmap_usesDeviceStatusWhenLocationRecordsAreMissing() throws Exception {
+    void latestWithAddress_usesDeviceStatusWhenLocationRecordsAreMissing() throws Exception {
         DeviceStatus status = new DeviceStatus();
         status.setDeviceId(15L);
         status.setImei("355932600124999");
@@ -213,10 +213,10 @@ class LocationControllerTest {
         when(locationRepo.listRecentValid(15L, 1)).thenReturn(Collections.emptyList());
         when(locationRepo.listRecent(15L, 1, 0)).thenReturn(Collections.emptyList());
         when(deviceStatusRepo.findById(15L)).thenReturn(Optional.of(status));
-        when(amapLocationService.regeoAddress(30.886817, 103.594445))
+        when(tiandituLocationService.regeoAddress(30.886817, 103.594445))
                 .thenReturn("四川省成都市都江堰市青城山镇成都东软学院");
 
-        mockMvc.perform(get("/api/locations/device/15/latest-with-amap"))
+        mockMvc.perform(get("/api/locations/device/15/latest-with-address"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.latitude").value(30.886817))
                 .andExpect(jsonPath("$.data.longitude").value(103.594445))
@@ -229,7 +229,7 @@ class LocationControllerTest {
      */
     @Test
     void search_returnsResult() throws Exception {
-        when(amapLocationService.addressToLocation("\u5317\u4eac")).thenReturn(Map.of("lat", 39.9, "lng", 116.4));
+        when(tiandituLocationService.addressToLocation("\u5317\u4eac")).thenReturn(Map.of("lat", 39.9, "lng", 116.4));
 
         mockMvc.perform(get("/api/locations/search")
                         .param("address", "\u5317\u4eac"))

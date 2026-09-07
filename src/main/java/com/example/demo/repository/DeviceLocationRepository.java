@@ -1,7 +1,7 @@
 package com.example.demo.repository;
 
 import com.example.demo.model.DeviceLocation;
-import com.example.demo.service.AmapLocationService;
+import com.example.demo.service.TiandituLocationService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -19,11 +19,11 @@ import java.util.List;
 @Repository
 public class DeviceLocationRepository {
     private final JdbcTemplate jdbc;
-    private final AmapLocationService amapLocationService;
+    private final TiandituLocationService tiandituLocationService;
 
-    public DeviceLocationRepository(JdbcTemplate jdbc, AmapLocationService amapLocationService) { 
+    public DeviceLocationRepository(JdbcTemplate jdbc, TiandituLocationService tiandituLocationService) { 
         this.jdbc = jdbc; 
-        this.amapLocationService = amapLocationService;
+        this.tiandituLocationService = tiandituLocationService;
     }
 
     // 使用 location_records 的列名：id, device_id, imei, recv_time, gps_raw, extra_raw, latitude, longitude, speed, direction, address, source, battery_level
@@ -48,7 +48,7 @@ public class DeviceLocationRepository {
         // 获取地址信息
         final String address;
         if (dl.getLatitude() != null && dl.getLongitude() != null) {
-            address = amapLocationService.regeoAddress(dl.getLatitude().doubleValue(), dl.getLongitude().doubleValue());
+            address = tiandituLocationService.regeoAddress(dl.getLatitude().doubleValue(), dl.getLongitude().doubleValue());
         } else {
             address = null;
         }

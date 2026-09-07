@@ -1,6 +1,7 @@
 package com.example.demo.config;
 
 import com.example.demo.model.ApiResponse;
+import com.example.demo.service.AiChatClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -15,6 +16,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /**
+     * AI 助手异常：消息已是面向用户的中文提示，直接透传
+     */
+    @ExceptionHandler(AiChatClient.AiChatException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAiChatException(AiChatClient.AiChatException ex) {
+        log.warn("AI chat error: {}", ex.getMessage());
+        return new ResponseEntity<>(ApiResponse.error(503, ex.getMessage()), HttpStatus.SERVICE_UNAVAILABLE);
+    }
 
     /**
      * 处理所有异常

@@ -54,6 +54,14 @@
             <span v-show="!isSidebarCollapsed" class="nav-text">报警管理</span>
           </router-link>
         </div>
+
+        <div class="nav-section">
+          <div v-if="!isSidebarCollapsed" class="nav-section-title">智能服务</div>
+          <router-link to="/ai" class="nav-item" :class="{ active: activeMenu === '/ai' }">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8z"/></svg>
+            <span v-show="!isSidebarCollapsed" class="nav-text">AI 助手</span>
+          </router-link>
+        </div>
       </nav>
 
       <div class="sidebar-footer">
@@ -126,7 +134,8 @@ const pageTitle = computed(() => {
     '/devices': '设备管理',
     '/alarms': '报警管理',
     '/realtime': '实时定位',
-    '/fences': '电子围栏'
+    '/fences': '电子围栏',
+    '/ai': 'AI 助手'
   }
   if (route.path.startsWith('/patients/')) return '病人详情'
   if (route.path.startsWith('/devices/')) return '设备详情'

@@ -150,6 +150,7 @@ import { fenceApi } from '../api/fence'
 import { patientApi } from '../api/patient'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, InfoFilled } from '@element-plus/icons-vue'
+import { addTiandituToMap } from '../utils/tianditu'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import 'leaflet-draw'
@@ -220,9 +221,7 @@ const SELECTED_COLOR = '#FF6B6B'
  */
 const initMap = () => {
   map = L.map('fence-map', { center: [39.9042, 116.4074], zoom: 10, minZoom: 3, maxZoom: 18 })
-  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
-    subdomains: ['1', '2', '3', '4'], attribution: '&copy; 高德地图', maxZoom: 18
-  }).addTo(map)
+  addTiandituToMap(map)
   drawnItems = new L.FeatureGroup()
   map.addLayer(drawnItems)
   initDrawControl()

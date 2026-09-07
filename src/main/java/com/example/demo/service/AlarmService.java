@@ -10,6 +10,7 @@ import com.example.demo.repository.AlarmRepository;
 import com.example.demo.repository.AlertRepository;
 import com.example.demo.repository.DeviceRepository;
 import com.example.demo.repository.PatientRepository;
+import com.example.demo.service.TiandituLocationService;
 import com.example.demo.socket.WebSocketHandler;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -27,7 +28,7 @@ import java.util.Optional;
 public class AlarmService {
 
     private final AlarmRepository alarmRepository;
-    private final AmapLocationService amapLocationService;
+    private final TiandituLocationService tiandituLocationService;
     private final DeviceRepository deviceRepository;
     private final PatientRepository patientRepository;
     private final AlertRepository alertRepository;
@@ -35,18 +36,18 @@ public class AlarmService {
     /**
      * 构造器注入依赖
      * @param alarmRepository 报警仓库
-     * @param amapLocationService 地址逆解析服务
+     * @param tiandituLocationService 地址逆解析服务
      * @param deviceRepository 设备仓库
      * @param patientRepository 病人仓库
      * @param alertRepository 统一报警仓库
      */
     public AlarmService(AlarmRepository alarmRepository,
-                        AmapLocationService amapLocationService,
+                        TiandituLocationService tiandituLocationService,
                         DeviceRepository deviceRepository,
                         PatientRepository patientRepository,
                         AlertRepository alertRepository) {
         this.alarmRepository = alarmRepository;
-        this.amapLocationService = amapLocationService;
+        this.tiandituLocationService = tiandituLocationService;
         this.deviceRepository = deviceRepository;
         this.patientRepository = patientRepository;
         this.alertRepository = alertRepository;
@@ -61,7 +62,7 @@ public class AlarmService {
     @Transactional
     public Alarm createAlarm(Alarm alarm) {
         if (alarm.getLatitude() != null && alarm.getLongitude() != null) {
-            String address = amapLocationService.regeoAddress(alarm.getLatitude(), alarm.getLongitude());
+            String address = tiandituLocationService.regeoAddress(alarm.getLatitude(), alarm.getLongitude());
             alarm.setAddress(address);
         }
         

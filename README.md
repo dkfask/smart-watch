@@ -155,6 +155,34 @@ Debug APK：
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## AI 助手
+
+内置数据问答型 AI 助手（前端「AI 助手」页面，后端 `/api/ai/**`）：通过 function calling 实时查询设备、患者、告警、健康数据与设备定位后回答自然语言问题，支持 SSE 流式输出。
+
+### 配置
+
+后端对接 **OpenAI 兼容** 接口，默认 DeepSeek，全部通过环境变量配置：
+
+| 环境变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `AI_API_KEY` | 空 | 模型服务 API Key，**留空则 AI 功能停用** |
+| `AI_BASE_URL` | `https://api.deepseek.com` | OpenAI 兼容 base-url（GLM、DashScope 兼容模式、OpenAI 等均可） |
+| `AI_MODEL` | `deepseek-chat` | 模型名（需支持 function calling） |
+| `AI_ENABLED` | `true` | 总开关 |
+| `AI_TIMEOUT_SECONDS` | `120` | 单次请求超时 |
+
+本地开发可在启动前 `export AI_API_KEY=...`；Docker 部署在 `.env`（由 `.env.docker` 模板复制）中填写。密钥不得提交到仓库。
+
+### 使用
+
+1. 登录 Web 管理端，侧边栏「智能服务 → AI 助手」。
+2. 直接提问，例如：「现在有多少设备在线？」「张三最新的心率是多少？」「今天有哪些待处理告警？」。
+3. 助手只回答基于工具查询到的真实数据，查询不到会如实说明；健康与紧急情况提示仅供辅助，处置仍以人工为准。
+
+### 隐私边界
+
+工具返回给模型的数据经过字段白名单过滤：患者身份证号、电话等敏感字段不会进入模型上下文；会话历史仅保存在浏览器本地，服务端不落库。
+
 ## Docker 部署
 
 当前 Compose 使用 `network_mode: host`，应用连接宿主机的 MySQL。
@@ -172,7 +200,7 @@ chmod 600 .env
 MYSQL_DATABASE=smart_watch
 MYSQL_USER=smart_user
 MYSQL_PASSWORD=<数据库密码>
-AMAP_WEB_KEY=<高德 WebService Key>
+TIANDITU_KEY=<天地图 Token>
 MPBAND_RESPONSE_KEY=<设备网络定位 SDK Key>
 ```
 
@@ -203,9 +231,18 @@ docker compose down
 
 ## 地图与网络定位配置
 
+系统已全面切换为国家地理信息公共服务平台**天地图**（Tianditu）作为标准底图与逆地理编码引擎，坐标系为国家 2000 大地坐标系（CGCS2000，与手环原始 WGS-84 亚毫米级一致，无 GCJ-02 偏移）。
+
+### 天地图配置
+
+环境变量 `TIANDITU_KEY`（或前端 `VITE_TIANDITU_KEY`）用于配置天地图 API Token：
+- 系统内置了官方公共测试 Token，开箱即用。
+- 生产环境建议在 `.env` 中配置您自己在天地图控制台申请的应用 Token。
+- 前端页面在加载时会通过 `/api/config/map` 动态从后端同步 Key，实现一次配置全局生效。
+
 ### 地址逆地理解析
 
-`AMAP_WEB_KEY` 用于把经纬度转换为具体地址。若未配置或 Key 权限不足，页面会退回显示经纬度。
+通过天地图逆地理编码接口将经纬度转为详细中文地址。
 
 ### 手环网络定位
 
@@ -224,7 +261,7 @@ docker compose down
    [纬度@经度]
    ```
 
-系统会把该坐标以 `source=wifi` 入库，并通过高德接口解析地址。
+系统会把该坐标以 `source=wifi` 入库，并通过天地图接口解析地址。
 
 ## 测试手环模拟器
 
@@ -310,11 +347,11 @@ mvn clean package -DskipTests
 2. GPS 无效时确认报文末尾是否有 `[纬度@经度]`。
 3. 检查容器中的 `MPBAND_RESPONSE_KEY` 是否非空。
 4. 首次接入设备需要下发网络定位开关。
-5. 检查 `/api/locations/device/{id}/latest-with-amap` 返回值。
+5. 检查 `/api/locations/device/{id}/latest-with-address` 返回值。
 
 ### 页面只显示经纬度
 
-检查 `AMAP_WEB_KEY` 是否进入运行进程，以及高德 Key 是否具有逆地理编码权限。
+检查 `TIANDITU_KEY` 是否进入运行进程，以及天地图 Key 是否有效。
 
 ### 设备日志不更新
 

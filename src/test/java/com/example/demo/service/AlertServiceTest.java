@@ -29,7 +29,7 @@ import static org.mockito.Mockito.*;
 class AlertServiceTest {
 
     @Mock private AlertRepository alertRepository;
-    @Mock private AmapLocationService amapLocationService;
+    @Mock private TiandituLocationService tiandituLocationService;
     @Mock private DeviceRepository deviceRepository;
     @Mock private PatientRepository patientRepository;
 
@@ -37,31 +37,31 @@ class AlertServiceTest {
 
     @BeforeEach
     void setUp() {
-        alertService = new AlertService(alertRepository, amapLocationService, deviceRepository, patientRepository);
+        alertService = new AlertService(alertRepository, tiandituLocationService, deviceRepository, patientRepository);
     }
 
     /**
-     * 创建报警有坐标时调用高德API获取地址并设置
+     * 创建报警有坐标时调用天地图API获取地址并设置
      */
     @Test
     void createAlert_withCoordinates_fetchesAddress() {
         Alert alert = new Alert();
         alert.setLatitude(39.9087);
         alert.setLongitude(116.3975);
-        when(amapLocationService.regeoAddress(39.9087, 116.3975)).thenReturn("北京市东城区");
+        when(tiandituLocationService.regeoAddress(39.9087, 116.3975)).thenReturn("北京市东城区");
         Alert saved = new Alert();
         saved.setId(1L);
         when(alertRepository.save(any(Alert.class))).thenReturn(saved);
 
         Alert result = alertService.createAlert(alert);
 
-        verify(amapLocationService).regeoAddress(39.9087, 116.3975);
+        verify(tiandituLocationService).regeoAddress(39.9087, 116.3975);
         assertEquals("北京市东城区", alert.getAddress());
         assertNotNull(result);
     }
 
     /**
-     * 创建报警无坐标时不调用高德API
+     * 创建报警无坐标时不调用天地图API
      */
     @Test
     void createAlert_withoutCoordinates_doesNotFetchAddress() {
@@ -72,7 +72,7 @@ class AlertServiceTest {
 
         alertService.createAlert(alert);
 
-        verify(amapLocationService, never()).regeoAddress(anyDouble(), anyDouble());
+        verify(tiandituLocationService, never()).regeoAddress(anyDouble(), anyDouble());
     }
 
     /**

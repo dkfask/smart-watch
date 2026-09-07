@@ -2,7 +2,7 @@ package com.example.demo.repository;
 
 import com.example.demo.model.DeviceLocation;
 import com.example.demo.model.DeviceStatus;
-import com.example.demo.service.AmapLocationService;
+import com.example.demo.service.TiandituLocationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,14 +29,14 @@ import static org.mockito.Mockito.*;
 class JdbcRepositoryTest {
 
     @Mock private JdbcTemplate jdbc;
-    @Mock private AmapLocationService amapLocationService;
+    @Mock private TiandituLocationService tiandituLocationService;
 
     private DeviceLocationRepository locationRepo;
     private DeviceStatusRepository statusRepo;
 
     @BeforeEach
     void setUp() {
-        locationRepo = new DeviceLocationRepository(jdbc, amapLocationService);
+        locationRepo = new DeviceLocationRepository(jdbc, tiandituLocationService);
         statusRepo = new DeviceStatusRepository(jdbc);
     }
 
@@ -50,7 +50,7 @@ class JdbcRepositoryTest {
         dl.setImei("IMEI001");
         dl.setLatitude(BigDecimal.valueOf(39.9));
         dl.setLongitude(BigDecimal.valueOf(116.4));
-        when(amapLocationService.regeoAddress(39.9, 116.4)).thenReturn("北京市");
+        when(tiandituLocationService.regeoAddress(39.9, 116.4)).thenReturn("北京市");
         when(jdbc.update(any(PreparedStatementCreator.class), any(KeyHolder.class))).thenReturn(1);
 
         long id = locationRepo.insert(dl);

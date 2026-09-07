@@ -64,8 +64,13 @@ services:
       APP_MPBAND_SAVEDIR: /app/mpband_data
 
       # Third-party / device secrets.
-      AMAP_WEB_KEY: ${AMAP_WEB_KEY:-}
+      TIANDITU_KEY: ${TIANDITU_KEY:-}
       MPBAND_RESPONSE_KEY: ${MPBAND_RESPONSE_KEY:-}
+
+      # AI assistant (OpenAI-compatible, default DeepSeek). Empty key disables it.
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.deepseek.com}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-deepseek-chat}
 
       # Redis cache stays off by default (DefaultCacheService NoOp).
       APP_CACHE_REDIS_ENABLED: "false"

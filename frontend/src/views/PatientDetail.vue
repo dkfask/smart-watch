@@ -145,6 +145,7 @@ import { ref, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { addTiandituToMap } from '../utils/tianditu'
 import { patientApi } from '../api/patient'
 import { deviceApi } from '../api/device'
 import { alarmApi } from '../api/alarm'
@@ -342,7 +343,7 @@ const fetchLatestLocation = async (deviceId = device.value?.id) => {
   })
 
   try {
-    const loc = await locationApi.getLatestLocationWithAmap(deviceId)
+    const loc = await locationApi.getLatestLocationWithAddress(deviceId)
     latestLocation.value = normalizeLocation(loc) || fallbackLocation
     await nextTick()
     renderPatientMap()
@@ -411,10 +412,7 @@ const renderPatientMap = () => {
 
   if (!map) {
     map = L.map('patient-map').setView(latLng, 15)
-    L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
-      subdomains: ['1', '2', '3', '4'],
-      attribution: '© 高德地图'
-    }).addTo(map)
+    addTiandituToMap(map)
   } else {
     map.setView(latLng, 15)
   }

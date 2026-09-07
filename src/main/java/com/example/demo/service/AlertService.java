@@ -8,6 +8,7 @@ import com.example.demo.model.dto.AlarmStatsDto;
 import com.example.demo.repository.AlertRepository;
 import com.example.demo.repository.DeviceRepository;
 import com.example.demo.repository.PatientRepository;
+import com.example.demo.service.TiandituLocationService;
 import com.example.demo.socket.WebSocketHandler;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -29,23 +30,23 @@ import java.util.Optional;
 public class AlertService {
 
     private final AlertRepository alertRepository;
-    private final AmapLocationService amapLocationService;
+    private final TiandituLocationService tiandituLocationService;
     private final DeviceRepository deviceRepository;
     private final PatientRepository patientRepository;
 
     /**
      * 构造器注入依赖
      * @param alertRepository 报警仓库
-     * @param amapLocationService 地址逆解析服务
+     * @param tiandituLocationService 地址逆解析服务
      * @param deviceRepository 设备仓库
      * @param patientRepository 病人仓库
      */
     public AlertService(AlertRepository alertRepository,
-                        AmapLocationService amapLocationService,
+                        TiandituLocationService tiandituLocationService,
                         DeviceRepository deviceRepository,
                         PatientRepository patientRepository) {
         this.alertRepository = alertRepository;
-        this.amapLocationService = amapLocationService;
+        this.tiandituLocationService = tiandituLocationService;
         this.deviceRepository = deviceRepository;
         this.patientRepository = patientRepository;
     }
@@ -58,7 +59,7 @@ public class AlertService {
     @Transactional
     public Alert createAlert(Alert alert) {
         if (alert.getLatitude() != null && alert.getLongitude() != null) {
-            String address = amapLocationService.regeoAddress(alert.getLatitude(), alert.getLongitude());
+            String address = tiandituLocationService.regeoAddress(alert.getLatitude(), alert.getLongitude());
             alert.setAddress(address);
         }
         Alert saved = alertRepository.save(alert);

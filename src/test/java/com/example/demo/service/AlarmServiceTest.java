@@ -34,7 +34,7 @@ import static org.mockito.Mockito.*;
 class AlarmServiceTest {
 
     @Mock private AlarmRepository alarmRepository;
-    @Mock private AmapLocationService amapLocationService;
+    @Mock private TiandituLocationService tiandituLocationService;
     @Mock private DeviceRepository deviceRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private AlertRepository alertRepository;
@@ -43,18 +43,18 @@ class AlarmServiceTest {
 
     @BeforeEach
     void setUp() {
-        alarmService = new AlarmService(alarmRepository, amapLocationService, deviceRepository, patientRepository, alertRepository);
+        alarmService = new AlarmService(alarmRepository, tiandituLocationService, deviceRepository, patientRepository, alertRepository);
     }
 
     /**
-     * 创建报警有坐标时调用高德API获取地址
+     * 创建报警有坐标时调用天地图API获取地址
      */
     @Test
     void createAlarm_withCoordinates_fetchesAddress() {
         Alarm alarm = new Alarm();
         alarm.setLatitude(39.9087);
         alarm.setLongitude(116.3975);
-        when(amapLocationService.regeoAddress(39.9087, 116.3975)).thenReturn("北京市东城区");
+        when(tiandituLocationService.regeoAddress(39.9087, 116.3975)).thenReturn("北京市东城区");
         Alarm saved = new Alarm();
         saved.setId(1L);
         when(alarmRepository.save(any(Alarm.class))).thenReturn(saved);
@@ -64,26 +64,26 @@ class AlarmServiceTest {
 
         Alarm result = alarmService.createAlarm(alarm);
 
-        verify(amapLocationService).regeoAddress(39.9087, 116.3975);
+        verify(tiandituLocationService).regeoAddress(39.9087, 116.3975);
         assertEquals("北京市东城区", alarm.getAddress());
     }
 
     /**
-     * 创建报警无坐标时不调用高德API
+     * 创建报警无坐标时不调用天地图API
      */
     @Test
-    void createAlarm_withoutCoordinates_doesNotFetchAddress() {
+    void createAlarm_withoutCoordinates_skipsAddressFetch() {
         Alarm alarm = new Alarm();
-        alarm.setLatitude(null);
-        alarm.setLongitude(null);
-        when(alarmRepository.save(any(Alarm.class))).thenReturn(alarm);
+        Alarm saved = new Alarm();
+        saved.setId(1L);
+        when(alarmRepository.save(any(Alarm.class))).thenReturn(saved);
         Alert savedAlert = new Alert();
         savedAlert.setId(1L);
         when(alertRepository.save(any(Alert.class))).thenReturn(savedAlert);
 
         alarmService.createAlarm(alarm);
 
-        verify(amapLocationService, never()).regeoAddress(anyDouble(), anyDouble());
+        verify(tiandituLocationService, never()).regeoAddress(anyDouble(), anyDouble());
     }
 
     /**

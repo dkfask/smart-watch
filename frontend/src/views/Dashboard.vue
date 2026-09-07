@@ -166,6 +166,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { addTiandituToMap } from '../utils/tianditu'
 import { alarmApi } from '../api/alarm'
 import { deviceApi } from '../api/device'
 import { patientApi } from '../api/patient'
@@ -608,10 +609,7 @@ const resetView = () => { if (map) map.setView([39.9042, 116.4074], 11) }
 
 const initMap = () => {
   map = L.map('heatmap').setView([39.9042, 116.4074], 11)
-  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
-    subdomains: ['1', '2', '3', '4'],
-    attribution: '© 高德地图'
-  }).addTo(map)
+  addTiandituToMap(map)
 }
 
 onMounted(() => {

@@ -34,10 +34,12 @@ public class TileProxyController {
     private final HttpClient client;
     private final Map<String, String> providers = new HashMap<>();
 
-    public TileProxyController() {
+    public TileProxyController(com.example.demo.service.TiandituLocationService tiandituLocationService) {
         this.client = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(6))
                 .build();
+
+        String tk = tiandituLocationService.getKey();
 
         // 可选的 provider 模板；URL 中使用 {z},{x},{y},{ext} 占位
         providers.put("osm", "https://tile.openstreetmap.org/{z}/{x}/{y}.{ext}");
@@ -45,6 +47,9 @@ public class TileProxyController {
         providers.put("stamenWatercolor", "https://stamen-tiles-a.a.ssl.fastly.net/watercolor/{z}/{x}/{y}.{ext}");
         providers.put("cartoPositron", "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png");
         providers.put("esri", "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}");
+        // 天地图矢量底图与注记图层代理
+        providers.put("tiandituVec", "https://t0.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=" + tk);
+        providers.put("tiandituCva", "https://t0.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=" + tk);
     }
 
     @GetMapping("/{provider}/{z}/{x}/{y}.{ext}")

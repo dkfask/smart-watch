@@ -52,7 +52,8 @@ public class SecurityConfig {
                 ).permitAll()
                 // 允许无需认证的API
                 .requestMatchers(
-                    "/api/auth/login", "/api/auth/me", "/api/auth/logout"
+                    "/api/auth/login", "/api/auth/me", "/api/auth/logout",
+                    "/api/config/map"
                 ).permitAll()
                 // 需要ADMIN角色的API
                 .requestMatchers(
@@ -71,7 +72,8 @@ public class SecurityConfig {
                     "/api/health-records", "/api/health-records/**",
                     "/api/wearers", "/api/wearers/**",
                     "/api/downlink", "/api/downlink/**",
-                    "/api/locations", "/api/locations/**"
+                    "/api/locations", "/api/locations/**",
+                    "/api/ai", "/api/ai/**"
                 ).hasRole("USER")
                 // 其他API需要认证
                 .requestMatchers("/api/**").authenticated()

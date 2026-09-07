@@ -79,6 +79,7 @@ import { locationApi } from '../api/location'
 import { fenceApi } from '../api/fence'
 import { ElMessage } from 'element-plus'
 import { formatBeijingTime } from '../utils/time'
+import { addTiandituToMap } from '../utils/tianditu'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -328,7 +329,7 @@ const clearAllFences = () => {
 // 获取设备最新位置
 const fetchDeviceLatestLocation = async (deviceId) => {
   try {
-    const location = normalizeLocation(await locationApi.getLatestLocationWithAmap(deviceId))
+    const location = normalizeLocation(await locationApi.getLatestLocationWithAddress(deviceId))
     const device = findDevice(deviceId)
     const fallbackLocation = location || normalizeLocation({
       latitude: device?.lastLatitude,
@@ -451,11 +452,8 @@ const initMap = () => {
   // 创建地图实例
   map = L.map('realtime-map').setView([39.9042, 116.4074], 10) // 默认北京
 
-  // 添加瓦片图层（使用高德地图作为备用）
-  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
-    subdomains: ['1', '2', '3', '4'],
-    attribution: '© 高德地图'
-  }).addTo(map)
+  // 添加天地图图层
+  addTiandituToMap(map)
 }
 
 // 更新标记

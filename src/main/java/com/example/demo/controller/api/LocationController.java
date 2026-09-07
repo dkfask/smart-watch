@@ -4,7 +4,7 @@ import com.example.demo.model.DeviceLocation;
 import com.example.demo.model.dto.PageResponse;
 import com.example.demo.repository.DeviceLocationRepository;
 import com.example.demo.repository.DeviceStatusRepository;
-import com.example.demo.service.AmapLocationService;
+import com.example.demo.service.TiandituLocationService;
 import com.example.demo.service.TrackingService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,16 +26,16 @@ public class LocationController {
     private final TrackingService trackingService;
     private final DeviceLocationRepository locationRepo;
     private final DeviceStatusRepository deviceStatusRepo;
-    private final AmapLocationService amapLocationService;
+    private final TiandituLocationService tiandituLocationService;
 
     public LocationController(TrackingService trackingService,
                               DeviceLocationRepository locationRepo,
                               DeviceStatusRepository deviceStatusRepo,
-                              AmapLocationService amapLocationService) {
+                              TiandituLocationService tiandituLocationService) {
         this.trackingService = trackingService;
         this.locationRepo = locationRepo;
         this.deviceStatusRepo = deviceStatusRepo;
-        this.amapLocationService = amapLocationService;
+        this.tiandituLocationService = tiandituLocationService;
     }
 
     public static class ReportReq {
@@ -107,18 +107,6 @@ public class LocationController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(dl);
-    }
-
-    /**
-     * 获取设备最新位置（含地址）
-     */
-    @GetMapping("/device/{deviceId}/latest-with-address")
-    public ResponseEntity<DeviceLocationDto> getLatestLocationWithAddress(@PathVariable long deviceId) {
-        DeviceLocation dl = latestValidLocation(deviceId);
-        if (dl == null) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok(toDto(dl, true));
     }
 
     private DeviceLocation latestValidLocation(long deviceId) {
@@ -195,10 +183,10 @@ public class LocationController {
     }
 
     /**
-     * 获取设备最新位置含高德地址（兼容旧接口）
+     * 获取设备最新位置含地址
      */
-    @GetMapping("/device/{deviceId}/latest-with-amap")
-    public ResponseEntity<DeviceLocationDto> latestWithAmap(@PathVariable long deviceId) {
+    @GetMapping("/device/{deviceId}/latest-with-address")
+    public ResponseEntity<DeviceLocationDto> latestWithAddress(@PathVariable long deviceId) {
         DeviceLocation dl = latestValidLocation(deviceId);
         if (dl != null) {
             return ResponseEntity.ok(toDto(dl, true));
@@ -234,7 +222,7 @@ public class LocationController {
                 : LocalDateTime.ofInstant(status.getLastLocationTime().toInstant(), ZoneId.systemDefault()));
         dto.setSource("device-status");
         dto.setBatteryLevel(status.getBatteryLevel());
-        dto.setAddress(normalizeAddress(amapLocationService.regeoAddress(latitude, longitude)));
+        dto.setAddress(normalizeAddress(tiandituLocationService.regeoAddress(latitude, longitude)));
         return dto;
     }
 
@@ -243,7 +231,7 @@ public class LocationController {
         Double lng = dl.getLongitude() == null ? null : dl.getLongitude().doubleValue();
         String address = normalizeAddress(dl.getAddress());
         if (resolveAddress && lat != null && lng != null && address == null) {
-            address = amapLocationService.regeoAddress(lat, lng);
+            address = tiandituLocationService.regeoAddress(lat, lng);
             address = normalizeAddress(address);
         }
 
@@ -265,7 +253,7 @@ public class LocationController {
      */
     @GetMapping("/search")
     public ResponseEntity<?> searchLocation(@RequestParam String address) {
-        Map<String, Double> location = amapLocationService.addressToLocation(address);
+        Map<String, Double> location = tiandituLocationService.addressToLocation(address);
         if (location != null) {
             Map<String, Object> result = Map.of("address", address, "location", location);
             return ResponseEntity.ok(result);
@@ -282,7 +270,7 @@ public class LocationController {
                                       @RequestParam(required = false) String city,
                                       @RequestParam(required = false) Integer pageSize,
                                       @RequestParam(required = false) Integer page) {
-        List<Map<String, Object>> poiList = amapLocationService.searchPoi(keyword, city, pageSize, page);
+        List<Map<String, Object>> poiList = tiandituLocationService.searchPoi(keyword, city, pageSize, page);
         if (poiList != null) {
             return ResponseEntity.ok(poiList);
         } else {

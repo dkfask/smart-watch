@@ -63,6 +63,7 @@ import { locationApi } from '../api/location'
 import { patientApi } from '../api/patient'
 import { ElMessage } from 'element-plus'
 import { formatBeijingTime } from '../utils/time'
+import { addTiandituToMap } from '../utils/tianditu'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -111,7 +112,7 @@ const fetchPatientInfo = async () => {
 // 获取设备最新位置
 const fetchLatestLocation = async () => {
   try {
-    const locationData = await locationApi.getLatestLocationWithAmap(deviceId.value)
+    const locationData = await locationApi.getLatestLocationWithAddress(deviceId.value)
     latestLocation.value = locationData
     initMap()
   } catch (error) {
@@ -134,11 +135,8 @@ const initMap = () => {
   // 创建新地图实例
   map = L.map('device-map').setView([latestLocation.value.latitude, latestLocation.value.longitude], 15)
 
-  // 添加瓦片图层（使用高德地图作为备用）
-  L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
-    subdomains: ['1', '2', '3', '4'],
-    attribution: '© 高德地图'
-  }).addTo(map)
+  // 添加天地图图层
+  addTiandituToMap(map)
 
   // 创建自定义水滴图标
   const customIcon = L.divIcon({

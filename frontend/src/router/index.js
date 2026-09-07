@@ -62,6 +62,12 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/ai',
+    name: 'AiAssistant',
+    component: () => import('../views/AiAssistant.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     redirect: '/'
   }

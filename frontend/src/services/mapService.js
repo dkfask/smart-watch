@@ -58,18 +58,35 @@ export class MapService {
     // 创建地图实例
     this.map = L.map(containerId, finalOptions)
 
-    // 添加瓦片图层（使用高德地图）
-    this.tileLayer = L.tileLayer('https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}', {
-      subdomains: ['1', '2', '3', '4'],
-      attribution: '© 高德地图',
-      maxZoom: 18,
-      minZoom: 3,
-      tileSize: 256,
-      zoomOffset: 0,
-      reuseTiles: true, // 重用瓦片，减少网络请求
-      updateWhenIdle: true, // 空闲时更新，减少频繁渲染
-      tileCacheSize: 200 // 瓦片缓存大小
-    }).addTo(this.map)
+    // 添加瓦片图层（使用天地图标准矢量底图 + 注记）
+    const tiandituKey = import.meta.env.VITE_TIANDITU_KEY || ''
+    const subdomains = ['0', '1', '2', '3', '4', '5', '6', '7']
+
+    this.tileLayer = L.tileLayer(
+      `https://t{s}.tianditu.gov.cn/vec_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=vec&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=${tiandituKey}`,
+      {
+        subdomains,
+        attribution: '© 天地图 GS(2024)0082号',
+        maxZoom: 18,
+        minZoom: 3,
+        tileSize: 256,
+        zoomOffset: 0,
+        reuseTiles: true,
+        updateWhenIdle: true,
+        tileCacheSize: 200
+      }
+    ).addTo(this.map)
+
+    // 添加文字注记图层
+    L.tileLayer(
+      `https://t{s}.tianditu.gov.cn/cva_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=cva&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&tk=${tiandituKey}`,
+      {
+        subdomains,
+        maxZoom: 18,
+        minZoom: 3,
+        tileSize: 256
+      }
+    ).addTo(this.map)
 
     // 实现瓦片缓存
     this.tileLayer.on('tileload', (e) => {

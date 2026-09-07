@@ -39,7 +39,7 @@
 
 ```bash
 cp .env.docker .env
-# 用编辑器改密码、端口、AMAP key 等（至少改 MYSQL_ROOT_PASSWORD / MYSQL_PASSWORD）
+# 用编辑器改密码、端口、TIANDITU key 等（至少改 MYSQL_ROOT_PASSWORD / MYSQL_PASSWORD）
 ```
 
 ### 2. 构建镜像

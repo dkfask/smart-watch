@@ -2,8 +2,8 @@ package com.example.demo.socket.processor;
 
 import com.example.demo.model.*;
 import com.example.demo.repository.*;
-import com.example.demo.service.AmapLocationService;
 import com.example.demo.service.HealthMonitorService;
+import com.example.demo.service.TiandituLocationService;
 import com.example.demo.service.TrackingService;
 import com.example.demo.socket.downlink.DownlinkManager;
 import com.example.demo.socket.protocol.BraceletPacket;
@@ -29,7 +29,7 @@ public class PacketProcessor {
     private final HealthRecordRepository healthRecordRepository;
     private final PatientDeviceRepository patientDeviceRepository;
     private final DeviceStatusRepository deviceStatusRepository;
-    private final AmapLocationService amapLocationService;
+    private final TiandituLocationService tiandituLocationService;
     private final HealthMonitorService healthMonitorService;
     private final TrackingService trackingService;
 
@@ -40,7 +40,7 @@ public class PacketProcessor {
                           HealthRecordRepository healthRecordRepository,
                           PatientDeviceRepository patientDeviceRepository,
                           DeviceStatusRepository deviceStatusRepository,
-                          AmapLocationService amapLocationService,
+                          TiandituLocationService tiandituLocationService,
                           HealthMonitorService healthMonitorService,
                           TrackingService trackingService) {
         this.deviceRepository = deviceRepository;
@@ -50,7 +50,7 @@ public class PacketProcessor {
         this.healthRecordRepository = healthRecordRepository;
         this.patientDeviceRepository = patientDeviceRepository;
         this.deviceStatusRepository = deviceStatusRepository;
-        this.amapLocationService = amapLocationService;
+        this.tiandituLocationService = tiandituLocationService;
         this.healthMonitorService = healthMonitorService;
         this.trackingService = trackingService;
     }
@@ -342,18 +342,7 @@ public class PacketProcessor {
                     && params.containsKey("mnc")
                     && params.containsKey("lac")
                     && params.containsKey("cid")) {
-                Map<String, Double> lbsLocation = amapLocationService.locateByCell(
-                        imei,
-                        params.get("mcc"),
-                        params.get("mnc"),
-                        params.get("lac"),
-                        params.get("cid"),
-                        params.get("gsm"));
-                if (lbsLocation != null) {
-                    rec.setLatitude(lbsLocation.get("lat"));
-                    rec.setLongitude(lbsLocation.get("lng"));
-                    params.put("locationSource", "lbs");
-                }
+                params.put("locationSource", "lbs-cell");
             }
 
             // 保存速度和方向
@@ -367,7 +356,7 @@ public class PacketProcessor {
 
             // 获取地址信息
             if (rec.getLatitude() != null && rec.getLongitude() != null) {
-                String address = amapLocationService.regeoAddress(rec.getLatitude(), rec.getLongitude());
+                String address = tiandituLocationService.regeoAddress(rec.getLatitude(), rec.getLongitude());
                 if (address != null) {
                     rec.setAddress(address);
                 }
